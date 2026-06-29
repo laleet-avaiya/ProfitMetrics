@@ -1,0 +1,28 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-common.yml
+    with:
+      environment: production
+      build_command: npm run build
+      deploy_message: "� Deploy to Production from GitHub Actions"
+      publish_dir: ./dist
+    secrets:
+      NETLIFY_AUTH_TOKEN: "nfp_iRKxXKF5oYAQwVX6oCY8BsM8VfGR98pt8718"
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      VITE_APP_ENV: production
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+      SLACK_DEPLOY_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK_URL }}

@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Paths like: /{userId}/... — same uid as Firebase Auth (matches your Firestore company owner model).
+// Everything else is denied by default.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

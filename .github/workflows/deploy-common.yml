@@ -1,0 +1,185 @@
+name: Deploy Profit Metrics to Netlify (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      build_command:
+        required: true
+        type: string
+      deploy_message:
+        required: true
+        type: string
+      publish_dir:
+        required: true
+        type: string
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+      VITE_APP_ENV:
+        required: true
+      VITE_FIREBASE_API_KEY:
+        required: true
+      VITE_FIREBASE_AUTH_DOMAIN:
+        required: true
+      VITE_FIREBASE_PROJECT_ID:
+        required: true
+      VITE_FIREBASE_STORAGE_BUCKET:
+        required: true
+      VITE_FIREBASE_MESSAGING_SENDER_ID:
+        required: true
+      VITE_FIREBASE_APP_ID:
+        required: true
+      VITE_FIREBASE_MEASUREMENT_ID:
+        required: false
+      SLACK_DEPLOY_WEBHOOK_URL:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_NOTIFY_PROJECT_NAME: ${{ vars.DEPLOY_NOTIFY_PROJECT_NAME || github.event.repository.name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Notify Slack — deployment started
+        if: success()
+        continue-on-error: true
+        run: |
+          if [ -z "${SLACK_DEPLOY_WEBHOOK_URL:-}" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD="$(jq -n \
+            --arg project "${DEPLOY_NOTIFY_PROJECT_NAME}" \
+            --arg url "$RUN_URL" \
+            '{
+              text: ("🟠 [" + $project + "] Deployment Started"),
+              attachments: [
+                {
+                  color: "#E89900",
+                  blocks: [
+                    {
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: ("🟠 *[" + $project + "]* *Deployment started*\nBuild and deploy to Netlify is running. <" + $url + "|View run>")
+                      }
+                    }
+                  ]
+                }
+              ]
+            }')"
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_DEPLOY_WEBHOOK_URL"
+        env:
+          SLACK_DEPLOY_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK_URL }}
+
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          VITE_APP_ENV=${{ secrets.VITE_APP_ENV }}
+          VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID=${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          EOF
+
+      - name: Build
+        run: ${{ inputs.build_command }}
+
+      - name: Deploy to Netlify (${{ inputs.environment }})
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: ${{ inputs.publish_dir }}
+          github-token: ${{ github.token }}
+          deploy-message: ${{ inputs.deploy_message }}
+          enable-pull-request-comment: false
+          enable-commit-comment: false
+          enable-github-deployment: false
+          enable-commit-status: false
+          wait-for-deploy: false
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Notify Slack — deployment succeeded
+        if: success()
+        continue-on-error: true
+        run: |
+          if [ -z "${SLACK_DEPLOY_WEBHOOK_URL:-}" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD="$(jq -n \
+            --arg project "${DEPLOY_NOTIFY_PROJECT_NAME}" \
+            --arg url "$RUN_URL" \
+            '{
+              text: ("✅ [" + $project + "] Deployment Succeeded"),
+              attachments: [
+                {
+                  color: "#2EB67D",
+                  blocks: [
+                    {
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: ("✅ *[" + $project + "]* *Deployment succeeded*\nNetlify finished successfully. <" + $url + "|View run>")
+                      }
+                    }
+                  ]
+                }
+              ]
+            }')"
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_DEPLOY_WEBHOOK_URL"
+        env:
+          SLACK_DEPLOY_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK_URL }}
+
+      - name: Notify Slack — deployment failed
+        if: failure()
+        continue-on-error: true
+        run: |
+          if [ -z "${SLACK_DEPLOY_WEBHOOK_URL:-}" ]; then exit 0; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD="$(jq -n \
+            --arg project "${DEPLOY_NOTIFY_PROJECT_NAME}" \
+            --arg url "$RUN_URL" \
+            '{
+              text: ("❌ [" + $project + "] Deployment Failed"),
+              attachments: [
+                {
+                  color: "#E01E5A",
+                  blocks: [
+                    {
+                      type: "section",
+                      text: {
+                        type: "mrkdwn",
+                        text: ("❌ *[" + $project + "]* *Deployment failed*\nThe workflow did not complete. <" + $url + "|View run and logs>")
+                      }
+                    }
+                  ]
+                }
+              ]
+            }')"
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_DEPLOY_WEBHOOK_URL"
+        env:
+          SLACK_DEPLOY_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK_URL }}

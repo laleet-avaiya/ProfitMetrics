@@ -1,0 +1,376 @@
+@import "tailwindcss";
+
+/* Declare dark mode variant for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: contain;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Consistent gap between last form field and action buttons (see FormActions) */
+form fieldset {
+  display: block;
+  min-inline-size: 0;
+}
+
+/* Mobile App-like Animations */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slide-up-mobile {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-up-mobile {
+  animation: slide-up-mobile 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets for mobile devices */
+.safe-area-inset {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile-optimized scrollbar (screen only — must not affect @media print layout) */
+@media screen and (max-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Better touch targets on mobile — icon buttons only (avoid bloating inputs) */
+@media screen and (max-width: 1024px) {
+  button.icon-btn,
+  a.icon-btn {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+  }
+
+  /* Prevents iOS zoom on focus; scoped to form fields only */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Mobile-first responsive improvements (screen only — print uses A4 / documentPrintCss) */
+@media screen and (max-width: 640px) {
+  .mobile-padding {
+    padding: 1rem;
+  }
+
+  .modal-content {
+    margin: 0.5rem;
+    max-height: calc(100vh - 1rem);
+  }
+}
+
+/* Tablet optimizations (screen only) */
+@media screen and (min-width: 641px) and (max-width: 1024px) {
+  /* Tablet-specific adjustments */
+  .tablet-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop optimizations (screen only) */
+@media screen and (min-width: 1025px) {
+  /* Desktop-specific spacing and sizing */
+  .desktop-container {
+    max-width: 1920px;
+    margin: 0 auto;
+  }
+  
+  /* Desktop tables should have more spacing */
+  table {
+    font-size: 0.875rem;
+  }
+  
+  /* Desktop cards can be larger */
+  .desktop-card {
+    padding: 1.5rem;
+  }
+}
+
+/**
+ * Invoice & quotation line tables: stable column widths on screen and in print
+ * (matches documentPrintCss padding overrides for print).
+ */
+.invoice-table-wrap .invoice-print-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-print-table th:nth-child(1),
+.invoice-print-table td:nth-child(1) {
+  width: 51%;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.invoice-print-table th:nth-child(2),
+.invoice-print-table td:nth-child(2) {
+  width: 4%;
+  white-space: nowrap;
+}
+
+.invoice-print-table th:nth-child(3),
+.invoice-print-table td:nth-child(3) {
+  width: 12%;
+  white-space: nowrap;
+}
+
+.invoice-print-table th:nth-child(4),
+.invoice-print-table td:nth-child(4) {
+  width: 5%;
+  white-space: nowrap;
+}
+
+.invoice-print-table th:nth-child(5),
+.invoice-print-table td:nth-child(5) {
+  width: 10%;
+  white-space: nowrap;
+}
+
+.invoice-print-table th:nth-child(6),
+.invoice-print-table td:nth-child(6) {
+  width: 18%;
+  white-space: nowrap;
+}
+
+/* Invoice line tables (default + modern): wider numeric columns + wrap headers (avoids print overlap) */
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(1),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(1) {
+  width: 34%;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(2),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(2) {
+  width: 10%;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(3),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(3) {
+  width: 18%;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(4),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(4) {
+  width: 10%;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(5),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(5) {
+  width: 12%;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(6),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(6) {
+  width: 16%;
+}
+
+/* Headers: allow wrap on cols 2–3 and 5–6 only (col 4 VAT % must stay one line) */
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(2),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(3),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(5),
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(6) {
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table td:nth-child(n + 2):nth-child(-n + 6) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.invoice-table-wrap .invoice-print-line-table.invoice-print-table th:nth-child(4) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  letter-spacing: normal;
+}
+
+.invoice-table-wrap .invoice-print-th-vat-pct {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Professional print styles (reference: multi-page invoice / fixed footer) */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    height: auto !important;
+  }
+
+  /* Let content use full printable width (screen max-width constraints must not narrow A4 docs) */
+  main {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 210mm !important;
+    overflow: visible !important;
+  }
+
+  /*
+   * ThemeProvider sets documentElement.style.colorScheme to "dark" in dark mode.
+   * Without forcing light for print, Chromium/Safari often paint the print canvas
+   * (margins / backdrop) black or very dark even when body background is white.
+   */
+  html {
+    height: auto !important;
+    background: #fff !important;
+    color-scheme: light !important;
+  }
+
+  #root {
+    width: 100% !important;
+    min-width: 210mm !important;
+    max-width: none !important;
+    background: #fff !important;
+  }
+
+  /* Disable transitions and animations when printing */
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Page break: force break after element (e.g. each invoice page) */
+  .print\:page-break-after {
+    page-break-after: always;
+  }
+
+  .print\:page-break-after.always {
+    page-break-after: always;
+  }
+
+  .print-page:last-of-type {
+    page-break-after: auto;
+  }
+
+  .invoice-print-page-footer {
+    page-break-inside: avoid;
+  }
+
+  /* Avoid breaking rows and items across pages */
+  .invoice-item-row,
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+
+  .invoice-print-table,
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+}
