@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import {
+  Building2,
+  CheckCircle2,
+  Layers,
+  Receipt,
+  Sparkles,
+} from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
-import { FormActions } from '../../components/FormActions/FormActions';
+import { FormSection } from '../../components/FormSection/FormSection';
+import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -213,13 +221,23 @@ export function ExpenseFormPage() {
     }
   };
 
+  const cancelTo = isEditing && expense ? `/expenses/${expense.id}` : '/expenses';
+
+  const isReady =
+    !isEditing &&
+    Boolean(form.category) &&
+    form.description.trim().length > 0 &&
+    parseNumber(form.amount) > 0;
+
   if (loading) {
     return (
       <Layout>
         <PageShell>
-          <div className="py-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+          <div className="py-20 flex flex-col items-center justify-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+              <Receipt className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading expense…</p>
           </div>
         </PageShell>
       </Layout>
@@ -247,67 +265,97 @@ export function ExpenseFormPage() {
           description={
             isEditing
               ? 'Update expense details and input tax.'
-              : 'Record operating costs with optional GST/VAT input tax.'
+              : 'Record operating costs with optional GST/VAT input tax for reports.'
+          }
+          actions={
+            <div className="hidden lg:flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button type="submit" form="expense-form" variant="primary" loading={saving}>
+                {!isEditing && !saving ? (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Add expense
+                  </>
+                ) : isEditing ? (
+                  'Save changes'
+                ) : (
+                  'Add expense'
+                )}
+              </Button>
+            </div>
           }
         />
 
-        <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Expense date"
-              type="date"
-              value={form.expenseDate}
-              onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
-              required
-            />
-            <Select
-              label="Category"
-              value={form.category}
-              options={categoryOptions}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              error={errors.category}
-              required
-            />
-          </div>
-
-          <Input
-            label="Description"
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            error={errors.description}
-            required
-            placeholder="e.g. Amazon PPC campaign, Shopify app subscription"
-          />
-
-          <Input
-            label={`Amount paid (${currency})`}
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-            error={errors.amount}
-            required
-            placeholder="0.00"
-            helperText="Total you paid on the invoice or receipt"
-          />
-
-          <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Input tax (optional)</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Track {countryProfile.defaultTaxType === TaxType.GST ? 'GST' : 'VAT'} paid on this
-                expense for input credit vs output tax on sales in reports.
-              </p>
+        <form id="expense-form" onSubmit={handleSubmit} className="w-full space-y-5 pb-2">
+          <FormSection
+            icon={Receipt}
+            iconTone="indigo"
+            step={isEditing ? undefined : 1}
+            title="Expense details"
+            description="When it happened, category, and amount paid."
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              <div className="lg:col-span-3">
+                <Input
+                  label="Expense date"
+                  type="date"
+                  value={form.expenseDate}
+                  onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <Select
+                  label="Category"
+                  value={form.category}
+                  options={categoryOptions}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  error={errors.category}
+                  required
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <Input
+                  label={`Amount paid (${currency})`}
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                  error={errors.amount}
+                  required
+                  placeholder="0.00"
+                  helperText="Total on invoice or receipt"
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <Input
+                  label="Description"
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  error={errors.description}
+                  required
+                  placeholder="e.g. Amazon PPC, packaging"
+                />
+              </div>
             </div>
+          </FormSection>
+
+          <FormSection
+            icon={Layers}
+            iconTone="violet"
+            step={isEditing ? undefined : 2}
+            title="Input tax"
+            description={`Optional ${countryProfile.defaultTaxType === TaxType.GST ? 'GST' : 'VAT'} paid on this expense for input credit in reports.`}
+          >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Select
                 label="Tax type"
                 value={form.taxType}
                 options={taxTypeOptions}
-                onChange={(e) =>
-                  handleTaxTypeChange(e.target.value as ExpenseFormState['taxType'])
-                }
+                onChange={(e) => handleTaxTypeChange(e.target.value as ExpenseFormState['taxType'])}
               />
               {tracksTax && (
                 <>
@@ -341,7 +389,7 @@ export function ExpenseFormPage() {
               )}
             </div>
             {tracksTax && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label={`${formatExpenseTaxLabel(form.taxType)} amount (${currency})`}
                   type="number"
@@ -373,59 +421,83 @@ export function ExpenseFormPage() {
                 )}
               </div>
             )}
-          </div>
+          </FormSection>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Select
-                label="Vendor"
-                value={form.vendorId}
-                options={vendorOptions}
-                onChange={(e) => setForm((f) => ({ ...f, vendorId: e.target.value }))}
-              />
-              {legacyVendorLabel && !form.vendorId && (
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Previously saved as &quot;{legacyVendorLabel}&quot; — select a vendor to link it.
-                </p>
-              )}
-              <Link
-                to="/vendors/new"
-                className="inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-              >
-                Add vendor
-              </Link>
+          <FormSection
+            icon={Building2}
+            iconTone="emerald"
+            step={isEditing ? undefined : 3}
+            title="Vendor & notes"
+            description="Link a payee and add invoice reference or internal notes."
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              <div className="lg:col-span-4 space-y-1">
+                <Select
+                  label="Vendor"
+                  value={form.vendorId}
+                  options={vendorOptions}
+                  onChange={(e) => setForm((f) => ({ ...f, vendorId: e.target.value }))}
+                />
+                {legacyVendorLabel && !form.vendorId && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Previously saved as &quot;{legacyVendorLabel}&quot; — select a vendor to link it.
+                  </p>
+                )}
+                <Link
+                  to="/vendors/new"
+                  className="inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Add vendor
+                </Link>
+              </div>
+              <div className="lg:col-span-4">
+                <Input
+                  label="Reference"
+                  value={form.reference}
+                  onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
+                  placeholder="Optional — invoice or receipt #"
+                />
+              </div>
+              <div className="lg:col-span-4">
+                <Textarea
+                  label="Notes"
+                  optional
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional additional details"
+                  rows={2}
+                />
+              </div>
             </div>
-            <Input
-              label="Reference"
-              value={form.reference}
-              onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
-              placeholder="Optional — invoice or receipt #"
-            />
-          </div>
+          </FormSection>
 
-          <Textarea
-            label="Notes"
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="Optional additional details"
-            rows={2}
-          />
+          {isReady && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-3.5 py-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                <span className="font-medium">{form.description.trim()}</span> is ready — review input tax,
+                then add your expense.
+              </p>
+            </div>
+          )}
 
-          <FormActions layout="end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                navigate(isEditing && expense ? `/expenses/${expense.id}` : '/expenses')
-              }
-              disabled={saving}
-            >
+          <FormStickyActions className="lg:hidden">
+            <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" loading={saving}>
-              {isEditing ? 'Save changes' : 'Add expense'}
+              {!isEditing && !saving ? (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Add expense
+                </>
+              ) : isEditing ? (
+                'Save changes'
+              ) : (
+                'Add expense'
+              )}
             </Button>
-          </FormActions>
+          </FormStickyActions>
         </form>
       </PageShell>
     </Layout>

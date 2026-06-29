@@ -7,6 +7,8 @@ import {
   useState,
   type ChangeEvent,
   type ReactNode,
+  type TouchEvent,
+  type WheelEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
@@ -28,6 +30,74 @@ export interface SearchableSelectProps {
   id?: string;
   'aria-label'?: string;
   controlClassName?: string;
+}
+
+/** Above sticky footers, modals, and layout chrome */
+const MENU_Z_INDEX = 10050;
+const MENU_GAP = 4;
+const MENU_MIN_WIDTH = 200;
+const SEARCH_BLOCK_HEIGHT = 49;
+const DEFAULT_LIST_MAX = 208;
+const MIN_LIST_HEIGHT = 96;
+const STICKY_FOOTER_RESERVE = 80;
+
+interface MenuPosition {
+  top: number;
+  left: number;
+  width: number;
+  maxListHeight: number;
+}
+
+function getViewportSize() {
+  return {
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+    offsetTop: window.visualViewport?.offsetTop ?? 0,
+    offsetLeft: window.visualViewport?.offsetLeft ?? 0,
+  };
+}
+
+function computeMenuPosition(trigger: DOMRect): MenuPosition {
+  const { width: vw, height: vh, offsetTop, offsetLeft } = getViewportSize();
+  const menuWidth = Math.max(trigger.width, MENU_MIN_WIDTH);
+
+  let left = trigger.left - offsetLeft;
+  if (left + menuWidth > vw - 8) {
+    left = Math.max(8, vw - menuWidth - 8);
+  }
+
+  const spaceBelow = vh - (trigger.bottom - offsetTop) - MENU_GAP - STICKY_FOOTER_RESERVE;
+  const spaceAbove = trigger.top - offsetTop - MENU_GAP;
+
+  const listMaxBelow = Math.min(
+    DEFAULT_LIST_MAX,
+    Math.max(MIN_LIST_HEIGHT, spaceBelow - SEARCH_BLOCK_HEIGHT)
+  );
+  const listMaxAbove = Math.min(
+    DEFAULT_LIST_MAX,
+    Math.max(MIN_LIST_HEIGHT, spaceAbove - SEARCH_BLOCK_HEIGHT)
+  );
+
+  const openUp =
+    spaceBelow < SEARCH_BLOCK_HEIGHT + MIN_LIST_HEIGHT && listMaxAbove > listMaxBelow;
+
+  if (openUp) {
+    const maxListHeight = listMaxAbove;
+    const menuHeight = SEARCH_BLOCK_HEIGHT + maxListHeight;
+    return {
+      top: trigger.top - MENU_GAP - menuHeight,
+      left: left + offsetLeft,
+      width: menuWidth,
+      maxListHeight,
+    };
+  }
+
+  return {
+    top: trigger.bottom + MENU_GAP,
+    left: left + offsetLeft,
+    width: menuWidth,
+    maxListHeight: listMaxBelow,
+  };
 }
 
 function emitChange(onChange: SearchableSelectProps['onChange'], value: string) {
@@ -52,9 +122,7 @@ export function SearchableSelect({
   const searchRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number } | null>(
-    null
-  );
+  const [menuStyle, setMenuStyle] = useState<MenuPosition | null>(null);
 
   const selected = useMemo(
     () => options.find((option) => option.value === value),
@@ -70,26 +138,27 @@ export function SearchableSelect({
   const updateMenuPosition = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setMenuStyle({
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: Math.max(rect.width, 200),
-    });
+    setMenuStyle(computeMenuPosition(rect));
   }, []);
 
   const close = useCallback(() => {
     setOpen(false);
     setQuery('');
+    setMenuStyle(null);
   }, []);
 
   const openMenu = useCallback(() => {
     if (disabled) return;
-    updateMenuPosition();
     setOpen(true);
+    requestAnimationFrame(() => {
+      updateMenuPosition();
+    });
   }, [disabled, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return;
+
+    updateMenuPosition();
 
     const handleScrollOrResize = () => updateMenuPosition();
     const handlePointerDown = (event: MouseEvent) => {
@@ -108,12 +177,16 @@ export function SearchableSelect({
 
     window.addEventListener('scroll', handleScrollOrResize, true);
     window.addEventListener('resize', handleScrollOrResize);
+    window.visualViewport?.addEventListener('resize', handleScrollOrResize);
+    window.visualViewport?.addEventListener('scroll', handleScrollOrResize);
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('resize', handleScrollOrResize);
+      window.visualViewport?.removeEventListener('resize', handleScrollOrResize);
+      window.visualViewport?.removeEventListener('scroll', handleScrollOrResize);
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -128,6 +201,10 @@ export function SearchableSelect({
   const pick = (nextValue: string) => {
     emitChange(onChange, nextValue);
     close();
+  };
+
+  const stopListScrollPropagation = (event: WheelEvent | TouchEvent) => {
+    event.stopPropagation();
   };
 
   return (
@@ -161,16 +238,17 @@ export function SearchableSelect({
             <div
               id={listboxId}
               role="listbox"
+              data-searchable-select-menu
               style={{
                 position: 'fixed',
                 top: menuStyle.top,
                 left: menuStyle.left,
                 width: menuStyle.width,
-                zIndex: 9999,
+                zIndex: MENU_Z_INDEX,
               }}
-              className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
+              className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl ring-1 ring-black/5 dark:ring-white/10 flex flex-col"
             >
-              <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+              <div className="shrink-0 p-2 border-b border-gray-200 dark:border-gray-700">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   <input
@@ -183,7 +261,12 @@ export function SearchableSelect({
                   />
                 </div>
               </div>
-              <ul className="max-h-52 overflow-y-auto py-1">
+              <ul
+                className="searchable-select-list overflow-y-auto overscroll-contain py-1"
+                style={{ maxHeight: menuStyle.maxListHeight }}
+                onWheel={stopListScrollPropagation}
+                onTouchMove={stopListScrollPropagation}
+              >
                 {filtered.length === 0 ? (
                   <li className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 text-center">
                     No matches
@@ -198,7 +281,7 @@ export function SearchableSelect({
                           role="option"
                           aria-selected={isSelected}
                           onClick={() => pick(option.value)}
-                          className={`w-full text-left px-3 py-2 text-sm truncate transition-colors ${
+                          className={`w-full text-left px-3 py-2.5 text-sm truncate transition-colors touch-manipulation ${
                             isSelected
                               ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
                               : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'

@@ -198,7 +198,7 @@ export function PlatformListingEditor({
           return (
             <div
               key={listing.id}
-              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 overflow-hidden"
+              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30"
             >
               <button
                 type="button"

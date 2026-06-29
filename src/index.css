@@ -26,6 +26,13 @@ form fieldset {
   min-inline-size: 0;
 }
 
+/* SearchableSelect menu — scroll inside list without moving the page */
+.searchable-select-list {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 /* Mobile App-like Animations */
 @keyframes slide-down {
   from {

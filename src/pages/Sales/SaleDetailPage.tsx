@@ -1,9 +1,20 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import {
+  Calendar,
+  Layers,
+  Pencil,
+  Receipt,
+  ShoppingCart,
+  TrendingDown,
+  TrendingUp,
+  Truck,
+} from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
-import { DetailField, DetailGrid } from '../../components/DetailPage/DetailField';
+import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
+import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
+import { DetailSection } from '../../components/DetailPage/DetailSection';
+import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
-import { Card, CardHeader, StatCard } from '../../components/ui/Card';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
@@ -32,11 +43,13 @@ export function SaleDetailPage() {
     feeKind === PlatformFeeKind.PERCENT
       ? `${e?.platformFeePercent ?? 0}%`
       : formatMoney(e?.platformFee ?? 0, currency);
+  const profitPositive = (sale?.profit ?? 0) >= 0;
 
   return (
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading sale…"
+      loadingIcon={ShoppingCart}
       notFound={notFound}
       notFoundTitle="Sale not found"
       notFoundDescription="This order may have been deleted."
@@ -44,65 +57,88 @@ export function SaleDetailPage() {
       backLabel="Back to sales"
       title={sale ? `Order ${sale.orderId}` : 'Sale'}
       description={sale ? `${sale.productName} · ${sale.platform}` : undefined}
+      meta={
+        sale ? (
+          <DetailMetaRow>
+            <DetailMetaChip tone="indigo" icon={<Calendar className="w-3 h-3" />}>
+              {formatDateLocal(sale.orderDate)}
+            </DetailMetaChip>
+            <DetailMetaChip tone="gray">{sale.platform}</DetailMetaChip>
+            <DetailMetaChip tone="gray">Qty {sale.quantity}</DetailMetaChip>
+            <SaleStatusBadge status={sale.status} />
+          </DetailMetaRow>
+        ) : undefined
+      }
       actions={
         sale ? (
           <Button
             type="button"
             variant="outline"
-            size="sm"
             onClick={() => navigate(`/sales/${sale.id}/edit`)}
           >
             <Pencil className="w-4 h-4" />
-            Edit
+            Edit sale
           </Button>
         ) : null
       }
     >
       {sale && e && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <StatCard label="Revenue" value={formatMoney(sale.grossRevenue, currency)} />
-            <StatCard label="Total costs" value={formatMoney(sale.totalCosts, currency)} />
-            <StatCard
-              label="Profit"
-              value={formatMoney(sale.profit, currency)}
-              valueClassName={
-                sale.profit >= 0
+          <DetailStatStrip
+            stats={[
+              {
+                label: 'Revenue',
+                value: formatMoney(sale.grossRevenue, currency),
+                icon: Receipt,
+                tone: 'indigo',
+              },
+              {
+                label: 'Total costs',
+                value: formatMoney(sale.totalCosts, currency),
+                icon: Layers,
+                tone: 'slate',
+              },
+              {
+                label: 'Profit',
+                value: formatMoney(sale.profit, currency),
+                icon: profitPositive ? TrendingUp : TrendingDown,
+                tone: profitPositive ? 'emerald' : 'rose',
+                valueClassName: profitPositive
                   ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-red-600 dark:text-red-400'
-              }
-            />
-            <StatCard
-              label="Margin"
-              value={formatPercent(sale.profitMarginPercent)}
-              valueClassName={
-                sale.profit >= 0
+                  : 'text-rose-600 dark:text-rose-400',
+              },
+              {
+                label: 'Margin',
+                value: formatPercent(sale.profitMarginPercent),
+                tone: profitPositive ? 'emerald' : 'rose',
+                valueClassName: profitPositive
                   ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-red-600 dark:text-red-400'
-              }
-            />
-          </div>
+                  : 'text-rose-600 dark:text-rose-400',
+              },
+            ]}
+          />
 
-          <Card>
-            <CardHeader title="Order details" />
+          <DetailSection
+            icon={ShoppingCart}
+            iconTone="indigo"
+            title="Order details"
+            description="Marketplace order, product, and delivery info."
+          >
             <DetailGrid columns={3}>
-              <DetailField label="Order ID" value={sale.orderId} />
+              <DetailField label="Order ID" value={sale.orderId} valueClassName="font-mono text-xs" />
               <DetailField label="Order date" value={formatDateLocal(sale.orderDate)} />
               <DetailField label="Quantity" value={String(sale.quantity)} />
               <DetailField
                 label="Product"
                 value={
-                  <Link
-                    to={`/products/${sale.productId}`}
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
+                  <Link to={`/products/${sale.productId}`} className={detailLinkClass}>
                     {sale.productName}
                   </Link>
                 }
               />
               <DetailField label="Platform" value={sale.platform} />
               <DetailField label="Status" value={<SaleStatusBadge status={sale.status} />} />
-              <DetailField label="Tracking ID" value={sale.trackingId} />
+              <DetailField label="Tracking ID" value={sale.trackingId} valueClassName="font-mono text-xs" />
               {sale.status === SaleStatus.RETURNED && (
                 <>
                   <DetailField
@@ -111,9 +147,8 @@ export function SaleDetailPage() {
                   />
                   <DetailField
                     label="Return charges"
-                    value={
-                      sale.returnCharges ? formatMoney(sale.returnCharges, currency) : null
-                    }
+                    value={sale.returnCharges ? formatMoney(sale.returnCharges, currency) : null}
+                    valueClassName="tabular-nums font-medium"
                   />
                   <DetailField
                     label={`${pctLabel} (return)`}
@@ -125,11 +160,8 @@ export function SaleDetailPage() {
                   />
                   <DetailField
                     label="ITC (return charges)"
-                    value={
-                      sale.returnTaxAmount
-                        ? formatMoney(sale.returnTaxAmount, currency)
-                        : null
-                    }
+                    value={sale.returnTaxAmount ? formatMoney(sale.returnTaxAmount, currency) : null}
+                    valueClassName="tabular-nums"
                   />
                 </>
               )}
@@ -142,10 +174,9 @@ export function SaleDetailPage() {
                   <DetailField
                     label="Cancellation charges"
                     value={
-                      sale.cancellationCharges
-                        ? formatMoney(sale.cancellationCharges, currency)
-                        : null
+                      sale.cancellationCharges ? formatMoney(sale.cancellationCharges, currency) : null
                     }
+                    valueClassName="tabular-nums font-medium"
                   />
                   <DetailField
                     label={`${pctLabel} (cancellation)`}
@@ -162,40 +193,73 @@ export function SaleDetailPage() {
                         ? formatMoney(sale.cancellationTaxAmount, currency)
                         : null
                     }
+                    valueClassName="tabular-nums"
                   />
                 </>
               )}
             </DetailGrid>
-            {sale.notes && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <DetailField label="Notes" value={sale.notes} />
-              </div>
-            )}
-          </Card>
+            {sale.notes ? <DetailNotes>{sale.notes}</DetailNotes> : null}
+          </DetailSection>
 
-          <Card>
-            <CardHeader title="Economics & tax" description="Snapshot at time of sale" />
+          <DetailSection
+            icon={Layers}
+            iconTone="violet"
+            title="Economics & tax"
+            description="Cost snapshot recorded when this sale was logged."
+          >
             <DetailGrid columns={3}>
-              <DetailField label="Purchase price" value={formatMoney(e.purchasePrice, currency)} />
+              <DetailField
+                label="Purchase price"
+                value={formatMoney(e.purchasePrice, currency)}
+                valueClassName="tabular-nums font-medium"
+              />
               <DetailField
                 label={`${pctLabel} (purchase)`}
                 value={`${e.purchaseTaxPercentage ?? 0}% · Includes tax: ${amountIncludesTaxLabel(e.purchaseTaxMode)}`}
               />
-              <DetailField label="Selling price" value={formatMoney(e.sellingPrice, currency)} />
+              <DetailField
+                label="Selling price"
+                value={formatMoney(e.sellingPrice, currency)}
+                valueClassName="tabular-nums font-medium"
+              />
               <DetailField
                 label={`${pctLabel} (selling)`}
                 value={`${e.sellingTaxPercentage ?? e.taxPercentage}% · Includes tax: ${amountIncludesTaxLabel(e.sellingTaxMode ?? e.taxMode)}`}
               />
               <DetailField label="Platform fee" value={feeDisplay} />
-              <DetailField label="Delivery fee" value={formatMoney(e.shippingCost, currency)} />
-              <DetailField label="Platform fees (total)" value={formatMoney(sale.platformFees, currency)} />
-              <DetailField label="Output tax" value={formatMoney(e.taxAmount, currency)} />
+              <DetailField
+                label="Delivery fee"
+                value={formatMoney(e.shippingCost, currency)}
+                valueClassName="tabular-nums"
+              />
+              <DetailField
+                label="Platform fees (total)"
+                value={formatMoney(sale.platformFees, currency)}
+                valueClassName="tabular-nums font-medium"
+              />
+              <DetailField
+                label="Output tax"
+                value={formatMoney(e.taxAmount, currency)}
+                valueClassName="tabular-nums"
+              />
               <DetailField
                 label="Input tax (ITC)"
                 value={formatMoney(e.inputTaxAmount ?? 0, currency)}
+                valueClassName="tabular-nums text-emerald-700 dark:text-emerald-400"
               />
             </DetailGrid>
-          </Card>
+          </DetailSection>
+
+          {sale.trackingId ? (
+            <DetailSection
+              icon={Truck}
+              iconTone="amber"
+              title="Delivery"
+              description="Shipment tracking for this order."
+            >
+              <DetailField label="Tracking ID" value={sale.trackingId} valueClassName="font-mono text-sm" />
+            </DetailSection>
+          ) : null}
         </>
       )}
     </EntityDetailShell>

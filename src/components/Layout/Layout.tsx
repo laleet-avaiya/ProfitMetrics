@@ -242,41 +242,13 @@ export function Layout({ children }: LayoutProps) {
             ))}
 
             <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
-              {showSidebarSubscriptionDays && (
-                <Link
-                  to="/subscription"
-                  onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                  title={sidebarCollapsed ? subscriptionDaysLabel : undefined}
-                  className={`flex items-center gap-2 rounded-md text-xs font-medium transition-colors touch-manipulation ${
-                    sidebarCollapsed
-                      ? 'lg:justify-center lg:px-2 lg:py-2 mx-auto w-fit lg:w-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
-                      : 'mx-1 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-                  }`}
-                >
-                  <CreditCardIcon className="w-4 h-4 shrink-0" />
-                  <span className={sidebarCollapsed ? 'lg:hidden' : ''}>
-                    {subscriptionDaysLabel} on subscription
-                  </span>
-                  {sidebarCollapsed && (
-                    <span className="hidden lg:inline tabular-nums font-semibold">
-                      {subscriptionDaysLeft}
-                    </span>
-                  )}
-                </Link>
-              )}
               {accountNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
                   className={navLinkClass(isNavActive(location.pathname, item.path))}
-                  title={
-                    sidebarCollapsed
-                      ? item.path === '/subscription' && showSidebarSubscriptionDays
-                        ? subscriptionDaysLabel
-                        : item.label
-                      : undefined
-                  }
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
                   <span className={sidebarCollapsed ? 'lg:hidden' : ''}>{item.label}</span>
@@ -291,6 +263,28 @@ export function Layout({ children }: LayoutProps) {
             sidebarCollapsed ? 'lg:p-2 p-3' : 'p-3'
           }`}
         >
+          {showSidebarSubscriptionDays && (
+            <Link
+              to="/subscription"
+              onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
+              title={sidebarCollapsed ? subscriptionDaysLabel : undefined}
+              className={`flex items-center gap-2 rounded-md text-xs font-medium transition-colors touch-manipulation ${
+                sidebarCollapsed
+                  ? 'lg:justify-center lg:px-2 lg:py-2 w-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 hover:bg-amber-200/80 dark:hover:bg-amber-900/40'
+                  : 'px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+              }`}
+            >
+              <CreditCardIcon className="w-4 h-4 shrink-0" />
+              <span className={sidebarCollapsed ? 'lg:hidden' : ''}>
+                {subscriptionDaysLabel} on subscription
+              </span>
+              {sidebarCollapsed && (
+                <span className="hidden lg:inline tabular-nums font-semibold">
+                  {subscriptionDaysLeft}
+                </span>
+              )}
+            </Link>
+          )}
           <button
             onClick={toggleTheme}
             className={footerButtonClass('text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700')}

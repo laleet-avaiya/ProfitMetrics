@@ -1,12 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-interface FormSectionProps {
+interface DetailSectionProps {
   icon: LucideIcon;
-  iconTone?: 'indigo' | 'emerald' | 'amber' | 'violet';
+  iconTone?: 'indigo' | 'emerald' | 'amber' | 'violet' | 'rose';
   title: string;
   description?: string;
-  step?: number;
   children: ReactNode;
   className?: string;
   headerAction?: ReactNode;
@@ -21,18 +20,19 @@ const iconToneClasses = {
     'bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400 ring-1 ring-amber-200/60 dark:ring-amber-800/60',
   violet:
     'bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400 ring-1 ring-violet-200/60 dark:ring-violet-800/60',
+  rose:
+    'bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400 ring-1 ring-rose-200/60 dark:ring-rose-800/60',
 };
 
-export function FormSection({
+export function DetailSection({
   icon: Icon,
   iconTone = 'indigo',
   title,
   description,
-  step,
   children,
   className = '',
   headerAction,
-}: FormSectionProps) {
+}: DetailSectionProps) {
   return (
     <section
       className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm ${className}`.trim()}
@@ -44,11 +44,6 @@ export function FormSection({
           <Icon className="w-4 h-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          {step != null ? (
-            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-0.5">
-              Step {step}
-            </p>
-          ) : null}
           <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h2>
           {description ? (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{description}</p>

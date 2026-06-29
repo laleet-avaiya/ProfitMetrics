@@ -5,7 +5,8 @@ import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Select } from '../../components/Select/Select';
 import { Button } from '../../components/Button/Button';
-import { FormActions } from '../../components/FormActions/FormActions';
+import { FormSection } from '../../components/FormSection/FormSection';
+import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import {
@@ -24,6 +25,8 @@ import {
   Eye,
   EyeOff,
   UserCircle,
+  Layers,
+  Globe,
 } from 'lucide-react';
 
 type SettingsTab = 'company' | 'account';
@@ -213,9 +216,14 @@ export function Settings() {
   if (!company) {
     return (
       <Layout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-gray-600 dark:text-gray-400">Loading company information...</p>
-        </div>
+        <PageShell>
+          <div className="py-20 flex flex-col items-center justify-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading settings…</p>
+          </div>
+        </PageShell>
       </Layout>
     );
   }
@@ -223,7 +231,34 @@ export function Settings() {
   return (
     <Layout>
       <PageShell>
-        <PageHeader title="Settings" description="Company profile and account security" />
+        <PageHeader
+          title="Settings"
+          description={
+            activeTab === 'company'
+              ? 'Company profile, tax defaults, and branding.'
+              : 'Update your account password.'
+          }
+          actions={
+            activeTab === 'company' ? (
+              <div className="hidden lg:flex">
+                <Button type="submit" form="company-settings-form" variant="primary" loading={isLoading}>
+                  Save settings
+                </Button>
+              </div>
+            ) : user?.email ? (
+              <div className="hidden lg:flex">
+                <Button
+                  type="submit"
+                  form="account-password-form"
+                  variant="primary"
+                  loading={changingPassword}
+                >
+                  Update password
+                </Button>
+              </div>
+            ) : null
+          }
+        />
 
         <div
           className="flex flex-wrap gap-2 p-1 rounded-xl bg-gray-100 dark:bg-gray-700/40 border border-gray-200/80 dark:border-gray-600/80 w-full sm:w-fit"
@@ -265,38 +300,65 @@ export function Settings() {
         </div>
 
         {activeTab === 'company' && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <fieldset disabled={isLoading} className="min-w-0 border-0 p-0 m-0 space-y-4">
-                <Input
-                  label="Company Name"
-                  name="name"
-                  value={formData.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  required
-                  placeholder="Enter company name"
-                />
+          <form id="company-settings-form" onSubmit={handleSubmit} className="w-full space-y-5 pb-2">
+            <fieldset disabled={isLoading} className="min-w-0 border-0 p-0 m-0 space-y-5">
+              <FormSection
+                icon={Building2}
+                iconTone="indigo"
+                title="Company profile"
+                description="Legal name, country, and tax registration."
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                  <div className="lg:col-span-4">
+                    <Input
+                      label="Company name"
+                      name="name"
+                      value={formData.name}
+                      onChange={(e) => handleChange('name', e.target.value)}
+                      required
+                      placeholder="Enter company name"
+                    />
+                  </div>
+                  <div className="lg:col-span-4">
+                    <Select
+                      label="Business country"
+                      name="country"
+                      value={formData.country}
+                      onChange={(e) => handleChange('country', e.target.value)}
+                      options={COUNTRY_OPTIONS}
+                      required
+                      helperText="Updates currency and suggested tax defaults"
+                    />
+                  </div>
+                  <div className="lg:col-span-4">
+                    <Input
+                      label={localeProfile.taxIdLabel}
+                      name="trn"
+                      value={formData.trn}
+                      onChange={(e) => handleChange('trn', e.target.value)}
+                      placeholder={localeProfile.taxIdPlaceholder}
+                      maxLength={localeProfile.taxIdMaxLength}
+                    />
+                  </div>
+                  <div className="lg:col-span-12">
+                    <Input
+                      label="Address"
+                      name="address"
+                      value={formData.address}
+                      onChange={(e) => handleChange('address', e.target.value)}
+                      placeholder="Enter complete address"
+                    />
+                  </div>
+                </div>
+              </FormSection>
 
-                <Select
-                  label="Business country"
-                  name="country"
-                  value={formData.country}
-                  onChange={(e) => handleChange('country', e.target.value)}
-                  options={COUNTRY_OPTIONS}
-                  required
-                  helperText="Updates currency and suggested tax defaults for new products & sales"
-                />
-
-                <Input
-                  label={localeProfile.taxIdLabel}
-                  name="trn"
-                  value={formData.trn}
-                  onChange={(e) => handleChange('trn', e.target.value)}
-                  placeholder={localeProfile.taxIdPlaceholder}
-                  maxLength={localeProfile.taxIdMaxLength}
-                />
-
-                <div className="grid gap-4 sm:grid-cols-3">
+              <FormSection
+                icon={Layers}
+                iconTone="violet"
+                title="Tax defaults"
+                description="Applied to new product listings and sales."
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Select
                     label="Default tax type"
                     name="defaultTaxType"
@@ -331,42 +393,50 @@ export function Settings() {
                     onChange={(e) => handleChange('defaultTaxPercentage', e.target.value)}
                   />
                 </div>
+              </FormSection>
 
-                <Input
-                  label="Address"
-                  name="address"
-                  value={formData.address}
-                  onChange={(e) => handleChange('address', e.target.value)}
-                  placeholder="Enter complete address"
-                />
-                <Input
-                  label="Phone"
-                  name="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                  placeholder={localeProfile.phonePlaceholder}
-                />
-                <Input
-                  label="Phone 2"
-                  name="phone2"
-                  type="tel"
-                  value={formData.phone2}
-                  onChange={(e) => handleChange('phone2', e.target.value)}
-                  placeholder={localeProfile.phonePlaceholder}
-                />
-                <Input
-                  label="Company Email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  placeholder="company@example.com"
-                />
+              <FormSection
+                icon={UserCircle}
+                iconTone="emerald"
+                title="Contact & branding"
+                description="Phone, email, and logo shown in the sidebar."
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                  <div className="lg:col-span-4">
+                    <Input
+                      label="Phone"
+                      name="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handleChange('phone', e.target.value)}
+                      placeholder={localeProfile.phonePlaceholder}
+                    />
+                  </div>
+                  <div className="lg:col-span-4">
+                    <Input
+                      label="Phone 2"
+                      name="phone2"
+                      type="tel"
+                      value={formData.phone2}
+                      onChange={(e) => handleChange('phone2', e.target.value)}
+                      placeholder={localeProfile.phonePlaceholder}
+                    />
+                  </div>
+                  <div className="lg:col-span-4">
+                    <Input
+                      label="Company email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleChange('email', e.target.value)}
+                      placeholder="company@example.com"
+                    />
+                  </div>
+                </div>
 
-                <div>
+                <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Logo (Optional)
+                    Logo <span className="font-normal text-gray-500">(optional)</span>
                   </label>
                   <input
                     ref={fileInputRef}
@@ -384,12 +454,12 @@ export function Settings() {
                       loading={logoUploading}
                     >
                       <Upload className="w-4 h-4" />
-                      {formData.logo ? 'Change Logo' : 'Upload Logo'}
+                      {formData.logo ? 'Change logo' : 'Upload logo'}
                     </Button>
                     {formData.logo && (
                       <Button type="button" variant="outline" onClick={handleRemoveLogo} disabled={logoUploading}>
                         <X className="w-4 h-4" />
-                        Remove Logo
+                        Remove logo
                       </Button>
                     )}
                   </div>
@@ -405,45 +475,58 @@ export function Settings() {
                     </div>
                   )}
                 </div>
-              </fieldset>
+              </FormSection>
 
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Currency</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">All amounts in reports & forms</p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                    {localeProfile.currencyLabel}
-                  </p>
+              <FormSection
+                icon={Globe}
+                iconTone="amber"
+                title="Locale"
+                description="Derived from business country — updates when country changes."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      Currency
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                      {localeProfile.currencyLabel}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      All amounts in reports & forms
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      Timezone
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                      {localeProfile.timezone}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      For daily sales & reports
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Timezone</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">For daily sales & reports</p>
-                  <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                    {localeProfile.timezone}
-                  </p>
-                </div>
-              </div>
+              </FormSection>
+            </fieldset>
 
-              <FormActions layout="end" className="border-t border-gray-200 dark:border-gray-700">
-                <Button type="submit" variant="primary" loading={isLoading}>
-                  Save settings
-                </Button>
-              </FormActions>
-            </form>
-          </div>
+            <FormStickyActions className="lg:hidden">
+              <Button type="submit" variant="primary" loading={isLoading} className="w-full sm:w-auto">
+                Save settings
+              </Button>
+            </FormStickyActions>
+          </form>
         )}
 
         {activeTab === 'account' && user?.email && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Lock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Change password</h2>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Signed in as <span className="font-medium text-gray-800 dark:text-gray-200">{user.email}</span>
-            </p>
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
-              <fieldset disabled={changingPassword} className="min-w-0 border-0 p-0 m-0 space-y-4">
+          <form id="account-password-form" onSubmit={handleChangePasswordSubmit} className="w-full space-y-5 pb-2">
+            <FormSection
+              icon={Lock}
+              iconTone="indigo"
+              title="Change password"
+              description={`Signed in as ${user.email}`}
+            >
+              <fieldset disabled={changingPassword} className="min-w-0 border-0 p-0 m-0 space-y-3">
                 <Input
                   label="Current password"
                   type={showCurrentPassword ? 'text' : 'password'}
@@ -462,54 +545,57 @@ export function Settings() {
                     </button>
                   }
                 />
-                <Input
-                  label="New password"
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={passwordForm.newPassword}
-                  onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
-                  autoComplete="new-password"
-                  rightIcon={
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword((prev) => !prev)}
-                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                      aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
-                    >
-                      {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  }
-                />
-                <Input
-                  label="Confirm new password"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
-                  autoComplete="new-password"
-                  rightIcon={
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((prev) => !prev)}
-                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  }
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="New password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
+                    autoComplete="new-password"
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                        aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    }
+                  />
+                  <Input
+                    label="Confirm new password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
+                    autoComplete="new-password"
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    }
+                  />
+                </div>
                 {passwordError && <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>}
                 {passwordSuccess && (
                   <p className="text-sm text-green-600 dark:text-green-400">Password changed successfully.</p>
                 )}
               </fieldset>
-              <FormActions layout="end">
-                <Button type="submit" variant="primary" loading={changingPassword}>
-                  Update password
-                </Button>
-              </FormActions>
-            </form>
-          </div>
+            </FormSection>
+
+            <FormStickyActions className="lg:hidden">
+              <Button type="submit" variant="primary" loading={changingPassword} className="w-full sm:w-auto">
+                Update password
+              </Button>
+            </FormStickyActions>
+          </form>
         )}
       </PageShell>
     </Layout>
