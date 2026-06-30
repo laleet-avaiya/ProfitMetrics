@@ -19,7 +19,7 @@ export function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [country, setCountry] = useState<BusinessCountry>(BusinessCountry.UAE);
+  const [country, setCountry] = useState<BusinessCountry>(BusinessCountry.INDIA);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
