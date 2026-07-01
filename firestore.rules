@@ -11,6 +11,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == companyId;
     }
 
+    /** Read own docs; also allow get when doc does not exist yet (e.g. stock by productId). */
+    function canReadOwnDoc() {
+      return isAuthenticated()
+        && (resource == null || resource.data.companyId == request.auth.uid);
+    }
+
     function ownsDocument() {
       return isAuthenticated() && resource.data.companyId == request.auth.uid;
     }
@@ -25,47 +31,56 @@ service cloud.firestore {
     }
 
     match /products/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /sales/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /expenses/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /vendors/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /purchases/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /stock/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /customers/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /invoices/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 
     match /payments/{docId} {
-      allow read, update, delete: if ownsDocument();
+      allow read: if canReadOwnDoc();
+      allow update, delete: if ownsDocument();
       allow create: if createsForOwnCompany();
     }
 

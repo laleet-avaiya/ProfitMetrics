@@ -113,9 +113,14 @@ export function InvoiceFormPage() {
       return;
     }
     let cancelled = false;
-    previewNextInvoiceNumber(company.id, form.invoiceDate).then((num) => {
-      if (!cancelled) setNextInvoiceNumber(num);
-    });
+    previewNextInvoiceNumber(company.id, form.invoiceDate)
+      .then((num) => {
+        if (!cancelled) setNextInvoiceNumber(num);
+      })
+      .catch((err) => {
+        console.error('Failed to preview invoice number:', err);
+        if (!cancelled) setNextInvoiceNumber('');
+      });
     return () => {
       cancelled = true;
     };
