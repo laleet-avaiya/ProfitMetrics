@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Building2,
+  ClipboardList,
   Mail,
   Pencil,
   Phone,
@@ -18,14 +19,18 @@ import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { firestoreService } from '../../services/firestore';
+import type { Expense, PurchaseOrder } from '../../types';
+import { formatDateLocal } from '../../utils/date';
 import { formatMoney } from '../../utils/profit';
+import { buildVendorLedger } from '../../utils/vendorLedger';
 
 export function VendorDetailPage() {
   const { vendorId } = useParams<{ vendorId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
   const currency = company?.currency ?? 'AED';
-  const [expenseStats, setExpenseStats] = useState({ count: 0, total: 0 });
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const { entity: vendor, loading, notFound } = useEntityDetail({
     id: vendorId,
@@ -34,15 +39,41 @@ export function VendorDetailPage() {
   });
 
   useEffect(() => {
-    if (!company || !vendorId) return;
-    firestoreService.expenses.getAll(company.id).then((list) => {
-      const vendorExpenses = list.filter((e) => !e.deleted && e.vendorId === vendorId);
-      setExpenseStats({
-        count: vendorExpenses.length,
-        total: vendorExpenses.reduce((sum, e) => sum + e.amount, 0),
-      });
+    if (!company) return;
+    Promise.all([
+      firestoreService.purchases.getAll(company.id),
+      firestoreService.expenses.getAll(company.id),
+    ]).then(([purchaseList, expenseList]) => {
+      setPurchases(purchaseList.filter((p) => !p.deleted));
+      setExpenses(expenseList.filter((e) => !e.deleted));
     });
-  }, [company, vendorId]);
+  }, [company]);
+
+  const ledger = useMemo(() => {
+    if (!vendorId) {
+      return {
+        totalPurchases: 0,
+        totalPaid: 0,
+        balanceDue: 0,
+        openOrders: 0,
+        entries: [],
+      };
+    }
+    return buildVendorLedger(vendorId, purchases, expenses);
+  }, [vendorId, purchases, expenses]);
+
+  const vendorPurchases = useMemo(
+    () => purchases.filter((p) => p.vendorId === vendorId),
+    [purchases, vendorId]
+  );
+
+  const ledgerWithBalance = useMemo(() => {
+    let balance = 0;
+    return ledger.entries.map((entry) => {
+      balance += entry.debit - entry.credit;
+      return { ...entry, balance: Math.round(balance * 100) / 100 };
+    });
+  }, [ledger.entries]);
 
   const isActive = vendor?.status === 'active';
 
@@ -95,19 +126,33 @@ export function VendorDetailPage() {
           <DetailStatStrip
             stats={[
               {
-                label: 'Expenses',
-                value: String(expenseStats.count),
-                subtext: expenseStats.count === 1 ? 'Linked record' : 'Linked records',
-                icon: Receipt,
+                label: 'Purchase orders',
+                value: String(vendorPurchases.length),
+                subtext: `${ledger.openOrders} open`,
+                icon: ClipboardList,
                 tone: 'indigo',
               },
               {
+                label: 'Total purchases',
+                value: formatMoney(ledger.totalPurchases, currency),
+                subtext: 'All PO value',
+                icon: Receipt,
+                tone: 'slate',
+              },
+              {
                 label: 'Total paid',
-                value: formatMoney(expenseStats.total, currency),
-                subtext: 'All linked expenses',
+                value: formatMoney(ledger.totalPaid, currency),
+                subtext: 'Payments & expenses',
                 icon: Wallet,
                 tone: 'emerald',
                 valueClassName: 'text-emerald-700 dark:text-emerald-400',
+              },
+              {
+                label: 'Balance due',
+                value: formatMoney(ledger.balanceDue, currency),
+                subtext: 'Outstanding on POs',
+                icon: Building2,
+                tone: ledger.balanceDue > 0 ? 'amber' : 'emerald',
               },
             ]}
           />
@@ -176,43 +221,118 @@ export function VendorDetailPage() {
           </DetailSection>
 
           <DetailSection
+            icon={ClipboardList}
+            iconTone="indigo"
+            title="Purchase orders"
+            description="Orders placed with this vendor."
+            headerAction={
+              <Link
+                to={`/purchases/new?vendor=${vendor.id}`}
+                className={`text-xs font-medium ${detailLinkClass}`}
+              >
+                New PO →
+              </Link>
+            }
+          >
+            {vendorPurchases.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 uppercase">
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">PO #</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                      <th className="px-3 py-2 text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {vendorPurchases.slice(0, 10).map((po) => (
+                      <tr key={po.id}>
+                        <td className="px-3 py-2">{formatDateLocal(po.purchaseDate)}</td>
+                        <td className="px-3 py-2">
+                          <Link to={`/purchases/${po.id}`} className={detailLinkClass}>
+                            {po.poNumber}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatMoney(po.total, currency)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">
+                          {po.balanceDue > 0 ? formatMoney(po.balanceDue, currency) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No purchase orders yet.{' '}
+                <Link to={`/purchases/new?vendor=${vendor.id}`} className={detailLinkClass}>
+                  Create first PO
+                </Link>
+              </p>
+            )}
+          </DetailSection>
+
+          <DetailSection
+            icon={Wallet}
+            iconTone="emerald"
+            title="Vendor ledger"
+            description="Running balance from purchase orders, payments, and manual expenses."
+          >
+            {ledgerWithBalance.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 uppercase">
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Description</th>
+                      <th className="px-3 py-2 text-right">Debit</th>
+                      <th className="px-3 py-2 text-right">Credit</th>
+                      <th className="px-3 py-2 text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {ledgerWithBalance.map((entry) => (
+                      <tr key={entry.id}>
+                        <td className="px-3 py-2">{formatDateLocal(entry.date)}</td>
+                        <td className="px-3 py-2 capitalize">{entry.type}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{entry.description}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {entry.debit > 0 ? formatMoney(entry.debit, currency) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {entry.credit > 0 ? formatMoney(entry.credit, currency) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium">
+                          {formatMoney(entry.balance, currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No ledger activity yet.</p>
+            )}
+          </DetailSection>
+
+          <DetailSection
             icon={Receipt}
             iconTone="emerald"
             title="Related expenses"
             description="Operating costs linked to this vendor."
             headerAction={
-              expenseStats.count > 0 ? (
-                <Link
-                  to={`/expenses?vendor=${vendor.id}`}
-                  className={`text-xs font-medium ${detailLinkClass}`}
-                >
-                  View all →
-                </Link>
-              ) : (
-                <Link to={`/expenses/new?vendor=${vendor.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
-                  Add expense →
-                </Link>
-              )
+              <Link to={`/expenses?vendor=${vendor.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
+                View all →
+              </Link>
             }
           >
-            {expenseStats.count > 0 ? (
-              <div className="rounded-lg border border-emerald-200/70 dark:border-emerald-800/50 bg-emerald-50/40 dark:bg-emerald-950/20 px-4 py-4">
-                <p className="text-sm text-gray-800 dark:text-gray-200">
-                  <span className="font-semibold tabular-nums">{expenseStats.count}</span> expense
-                  {expenseStats.count === 1 ? '' : 's'} totalling{' '}
-                  <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                    {formatMoney(expenseStats.total, currency)}
-                  </span>
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                No expenses linked yet.{' '}
-                <Link to={`/expenses/new?vendor=${vendor.id}`} className={detailLinkClass}>
-                  Record the first expense
-                </Link>
-              </p>
-            )}
+            <Link to={`/expenses/new?vendor=${vendor.id}`} className={`text-sm ${detailLinkClass}`}>
+              Record manual expense →
+            </Link>
           </DetailSection>
         </>
       )}

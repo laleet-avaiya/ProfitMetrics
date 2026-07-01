@@ -21,6 +21,7 @@ export function ReportViewPage() {
     setCustomTo,
     dateRange,
     filteredSales,
+    filteredInvoices,
     filteredExpenses,
     summary,
     hasData,
@@ -56,6 +57,7 @@ export function ReportViewPage() {
               reportId={report.id as ReportId}
               currency={currency}
               filteredSales={filteredSales}
+              filteredInvoices={filteredInvoices}
               filteredExpenses={filteredExpenses}
               summary={summary}
               hasData={hasData}

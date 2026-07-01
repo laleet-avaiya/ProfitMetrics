@@ -31,6 +31,7 @@ import {
   formatExpenseTaxLabel,
   type ExpenseFormState,
 } from '../../utils/expenseHelpers';
+import { allocateNextExpenseNumber, previewNextExpenseNumber } from '../../utils/documentNumbers';
 import { formatMoney } from '../../utils/profit';
 import { getActiveVendors } from '../../utils/vendorHelpers';
 
@@ -69,6 +70,7 @@ export function ExpenseFormPage() {
     description?: string;
     amount?: string;
   }>({});
+  const [nextExpenseNumber, setNextExpenseNumber] = useState('');
 
   useEffect(() => {
     if (!company) return;
@@ -114,6 +116,20 @@ export function ExpenseFormPage() {
       cancelled = true;
     };
   }, [company, expenseId, isEditing, searchParams]);
+
+  useEffect(() => {
+    if (!company || isEditing) {
+      setNextExpenseNumber('');
+      return;
+    }
+    let cancelled = false;
+    previewNextExpenseNumber(company.id, form.expenseDate).then((num) => {
+      if (!cancelled) setNextExpenseNumber(num);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [company, isEditing, form.expenseDate]);
 
   const taxTypeOptions = useMemo((): { value: ExpenseFormState['taxType']; label: string }[] => {
     const suggested = countryProfile.defaultTaxType;
@@ -202,7 +218,18 @@ export function ExpenseFormPage() {
 
     setSaving(true);
     try {
-      const payload = buildExpenseFromForm(form, company.id, vendors, expense ?? undefined);
+      const expenseNumber =
+        isEditing && expense
+          ? expense.expenseNumber
+          : await allocateNextExpenseNumber(company.id, form.expenseDate);
+
+      const payload = buildExpenseFromForm(
+        form,
+        company.id,
+        vendors,
+        expenseNumber,
+        expense ?? undefined
+      );
 
       if (isEditing && expense) {
         await firestoreService.expenses.update(company.id, expense.id, payload);
@@ -297,6 +324,15 @@ export function ExpenseFormPage() {
             description="When it happened, category, and amount paid."
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              <div className="lg:col-span-3">
+                <Input
+                  label="Expense number"
+                  value={isEditing ? (expense?.expenseNumber ?? '—') : nextExpenseNumber}
+                  readOnly
+                  disabled
+                  helperText={isEditing ? 'Auto-assigned and cannot be changed' : 'Assigned automatically on save'}
+                />
+              </div>
               <div className="lg:col-span-3">
                 <Input
                   label="Expense date"

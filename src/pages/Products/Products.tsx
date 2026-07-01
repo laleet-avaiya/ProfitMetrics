@@ -25,8 +25,9 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
-import type { Product } from '../../types';
+import type { Product, ProductStock } from '../../types';
 import { computeLineEconomics, formatPercent, lineEconomicsInputFromListing } from '../../utils/profit';
+import { getStockMap } from '../../utils/stockHelpers';
 
 
 function averageListingMargin(product: Product): number | null {
@@ -47,6 +48,7 @@ export function Products() {
   const notification = useNotification();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [stockMap, setStockMap] = useState<Map<string, ProductStock>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -54,8 +56,12 @@ export function Products() {
     if (!company) return;
     setLoading(true);
     try {
-      const list = await firestoreService.products.getAll(company.id);
+      const [list, stockList] = await Promise.all([
+        firestoreService.products.getAll(company.id),
+        firestoreService.stock.getAll(company.id),
+      ]);
       setProducts(list.filter((p) => !p.deleted));
+      setStockMap(getStockMap(stockList));
     } catch (err) {
       console.error('Failed to load products:', err);
       notification.error('Failed to load products');
@@ -177,6 +183,7 @@ export function Products() {
                       <th className={tableHeadCellClass}>Product</th>
                       <th className={tableHeadCellClass}>SKU</th>
                       <th className={tableHeadCellClass}>Platforms</th>
+                      <th className={`${tableHeadCellClass} text-right`}>Stock</th>
                       <th className={`${tableHeadCellClass} text-right`}>Avg margin</th>
                       <th className={`${tableHeadCellClass} text-right`}>Actions</th>
                     </tr>
@@ -184,6 +191,7 @@ export function Products() {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {filtered.map((product) => {
                       const avgMargin = averageListingMargin(product);
+                      const stock = stockMap.get(product.id);
 
                       return (
                         <tr
@@ -206,6 +214,9 @@ export function Products() {
                             title={product.platformListings.map((l) => l.platform).join(', ')}
                           >
                             {product.platformListings.map((l) => l.platform).join(', ') || '—'}
+                          </td>
+                          <td className={`${tableCellClass} text-right tabular-nums font-medium`}>
+                            {stock?.quantityOnHand ?? 0}
                           </td>
                           <td className={`${tableCellClass} text-right tabular-nums`}>
                             {avgMargin != null ? (

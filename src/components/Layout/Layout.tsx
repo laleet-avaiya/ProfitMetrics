@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  FileText,
   LayoutDashboard,
   Package,
   ShoppingCart,
@@ -15,6 +16,9 @@ import {
   Info,
   CreditCard,
   LogOut,
+  ClipboardList,
+  Users,
+  Wallet,
   CreditCard as CreditCardIcon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -50,13 +54,17 @@ const navGroups: NavGroup[] = [
   },
   {
     items: [
-      { path: '/sales', label: 'Sales', icon: ShoppingCart },
+      { path: '/sales', label: 'Online sales', icon: ShoppingCart },
+      { path: '/invoices', label: 'Offline sales', icon: FileText },
+      { path: '/payments', label: 'Payments', icon: Wallet },
+      { path: '/purchases', label: 'Purchases', icon: ClipboardList },
       { path: '/expenses', label: 'Expenses', icon: Receipt },
     ],
   },
   {
     items: [
       { path: '/vendors', label: 'Vendors', icon: Building2 },
+      { path: '/customers', label: 'Customers', icon: Users },
       { path: '/products', label: 'Products', icon: Package },
     ],
   },

@@ -77,6 +77,12 @@ const DATE_FIELD_NAMES = new Set([
   'termsAcceptedAt',
   'usagePolicyAcceptedAt',
   'paidAt',
+  'purchaseDate',
+  'paymentDate',
+  'receivedAt',
+  'lastReceivedAt',
+  'invoiceDate',
+  'dueDate',
   'ts',
 ]);
 

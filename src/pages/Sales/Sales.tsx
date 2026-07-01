@@ -20,6 +20,7 @@ import {
 } from '../../utils/firestoreDates';
 import { formatMoney, formatPercent } from '../../utils/profit';
 import { deleteSaleLinkedExpenses } from '../../utils/saleExpenses';
+import { restoreSaleStock } from '../../utils/saleStock';
 import { getActiveProducts } from '../../utils/saleHelpers';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { SALE_STATUS_OPTIONS, normalizeSaleStatus } from '../../constants/saleStatuses';
@@ -141,8 +142,9 @@ export function Sales() {
           await firestoreService.sales.delete(company.id, sale.id);
           try {
             await deleteSaleLinkedExpenses(company.id, sale.id);
+            await restoreSaleStock(company.id, sale);
           } catch (syncErr) {
-            console.error('Failed to delete linked expenses:', syncErr);
+            console.error('Failed to delete linked records:', syncErr);
           }
           notification.success('Sale deleted');
           loadData();
@@ -156,8 +158,8 @@ export function Sales() {
 
   return (
     <SectionPage
-      title="Sales"
-      description="Log daily orders. Select a product and platform — costs auto-fill from your listing, then profit is calculated instantly."
+      title="Online sales"
+      description="Log daily marketplace orders. Select a product and platform — costs auto-fill from your listing, then profit is calculated instantly."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[

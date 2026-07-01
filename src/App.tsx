@@ -17,6 +17,18 @@ import { Expenses } from './pages/Expenses/Expenses';
 import { VendorFormPage } from './pages/Vendors/VendorFormPage';
 import { VendorDetailPage } from './pages/Vendors/VendorDetailPage';
 import { Vendors } from './pages/Vendors/Vendors';
+import { Customers } from './pages/Customers/Customers';
+import { CustomerFormPage } from './pages/Customers/CustomerFormPage';
+import { CustomerDetailPage } from './pages/Customers/CustomerDetailPage';
+import { Invoices } from './pages/Invoices/Invoices';
+import { InvoiceFormPage } from './pages/Invoices/InvoiceFormPage';
+import { InvoiceDetailPage } from './pages/Invoices/InvoiceDetailPage';
+import { Payments } from './pages/Payments/Payments';
+import { PaymentFormPage } from './pages/Payments/PaymentFormPage';
+import { PaymentDetailPage } from './pages/Payments/PaymentDetailPage';
+import { Purchases } from './pages/Purchases/Purchases';
+import { PurchaseFormPage } from './pages/Purchases/PurchaseFormPage';
+import { PurchaseDetailPage } from './pages/Purchases/PurchaseDetailPage';
 import { Reports } from './pages/Reports/Reports';
 import { ReportViewPage } from './pages/Reports/ReportViewPage';
 import { TermsPage } from './pages/Terms/TermsPage';
@@ -88,6 +100,14 @@ function App() {
         <Route path="/sales/new" element={<ProtectedRoute><SaleFormPage /></ProtectedRoute>} />
         <Route path="/sales/:saleId/edit" element={<ProtectedRoute><SaleFormPage /></ProtectedRoute>} />
         <Route path="/sales/:saleId" element={<ProtectedRoute><SaleDetailPage /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+        <Route path="/invoices/new" element={<ProtectedRoute><InvoiceFormPage /></ProtectedRoute>} />
+        <Route path="/invoices/:invoiceId/edit" element={<ProtectedRoute><InvoiceFormPage /></ProtectedRoute>} />
+        <Route path="/invoices/:invoiceId" element={<ProtectedRoute><InvoiceDetailPage /></ProtectedRoute>} />
+        <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+        <Route path="/payments/new" element={<ProtectedRoute><PaymentFormPage /></ProtectedRoute>} />
+        <Route path="/payments/:paymentId/edit" element={<ProtectedRoute><PaymentFormPage /></ProtectedRoute>} />
+        <Route path="/payments/:paymentId" element={<ProtectedRoute><PaymentDetailPage /></ProtectedRoute>} />
         <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
         <Route path="/expenses/new" element={<ProtectedRoute><ExpenseFormPage /></ProtectedRoute>} />
         <Route path="/expenses/:expenseId/edit" element={<ProtectedRoute><ExpenseFormPage /></ProtectedRoute>} />
@@ -96,6 +116,14 @@ function App() {
         <Route path="/vendors/new" element={<ProtectedRoute><VendorFormPage /></ProtectedRoute>} />
         <Route path="/vendors/:vendorId/edit" element={<ProtectedRoute><VendorFormPage /></ProtectedRoute>} />
         <Route path="/vendors/:vendorId" element={<ProtectedRoute><VendorDetailPage /></ProtectedRoute>} />
+        <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+        <Route path="/customers/new" element={<ProtectedRoute><CustomerFormPage /></ProtectedRoute>} />
+        <Route path="/customers/:customerId/edit" element={<ProtectedRoute><CustomerFormPage /></ProtectedRoute>} />
+        <Route path="/customers/:customerId" element={<ProtectedRoute><CustomerDetailPage /></ProtectedRoute>} />
+        <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
+        <Route path="/purchases/new" element={<ProtectedRoute><PurchaseFormPage /></ProtectedRoute>} />
+        <Route path="/purchases/:purchaseId/edit" element={<ProtectedRoute><PurchaseFormPage /></ProtectedRoute>} />
+        <Route path="/purchases/:purchaseId" element={<ProtectedRoute><PurchaseDetailPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/reports/:reportId" element={<ProtectedRoute><ReportViewPage /></ProtectedRoute>} />
         <Route

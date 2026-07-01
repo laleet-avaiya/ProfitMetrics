@@ -42,6 +42,7 @@ import { LineEconomicsPreview } from '../../components/LineEconomicsPreview/Line
 import { OutcomeChargeFields } from '../../components/OutcomeChargeFields/OutcomeChargeFields';
 import { utcToLocalDateInput } from '../../utils/firestoreDates';
 import { syncSaleExpenses } from '../../utils/saleExpenses';
+import { syncSaleStock, checkSaleStock } from '../../utils/saleStock';
 import { SALE_STATUS_OPTIONS, saleStatusLabel } from '../../constants/saleStatuses';
 import { emptyStateMessageClass, economicsFieldsColumnClass, economicsPreviewColumnClass, economicsSplitLayoutClass } from '../../constants/ui';
 
@@ -317,7 +318,21 @@ export function SaleFormPage() {
       );
 
       if (isEditing && sale) {
+        const stockCheck = await checkSaleStock(company.id, payload, sale);
+        if (!stockCheck.ok) {
+          notification.error(
+            `Insufficient stock. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
+          );
+          setSaving(false);
+          return;
+        }
         await firestoreService.sales.update(company.id, sale.id, payload);
+        try {
+          await syncSaleStock(company.id, payload, sale);
+        } catch (stockErr) {
+          console.error('Failed to sync sale stock:', stockErr);
+          notification.error('Sale saved but stock could not be updated.');
+        }
         try {
           await syncSaleExpenses(company.id, payload);
         } catch (syncErr) {
@@ -327,7 +342,21 @@ export function SaleFormPage() {
         notification.success('Sale updated');
         navigate(`/sales/${sale.id}`);
       } else {
+        const stockCheck = await checkSaleStock(company.id, payload);
+        if (!stockCheck.ok) {
+          notification.error(
+            `Insufficient stock. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
+          );
+          setSaving(false);
+          return;
+        }
         const created = await firestoreService.sales.create(company.id, payload);
+        try {
+          await syncSaleStock(company.id, created);
+        } catch (stockErr) {
+          console.error('Failed to sync sale stock:', stockErr);
+          notification.error('Sale saved but stock could not be updated.');
+        }
         try {
           await syncSaleExpenses(company.id, created);
         } catch (syncErr) {

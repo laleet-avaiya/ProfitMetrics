@@ -85,6 +85,7 @@ export function Expenses() {
       return (
         e.description.toLowerCase().includes(q) ||
         e.category.toLowerCase().includes(q) ||
+        (e.expenseNumber?.toLowerCase().includes(q) ?? false) ||
         (vendorDisplay?.toLowerCase().includes(q) ?? false) ||
         (e.reference?.toLowerCase().includes(q) ?? false)
       );
@@ -246,6 +247,7 @@ export function Expenses() {
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     <th className={tableHeadCellClass}>Date</th>
+                    <th className={tableHeadCellClass}>Number</th>
                     <th className={tableHeadCellClass}>Category</th>
                     <th className={tableHeadCellClass}>Description</th>
                     <th className={tableHeadCellClass}>Reference</th>
@@ -260,6 +262,9 @@ export function Expenses() {
                     <tr key={expense.id} className="bg-white dark:bg-gray-800">
                       <td className={`${tableCellClass} text-gray-700 dark:text-gray-300`}>
                         {formatDateLocal(expense.expenseDate)}
+                      </td>
+                      <td className={`${tableCellClass} font-mono text-xs text-gray-600 dark:text-gray-400`}>
+                        {expense.expenseNumber ?? '—'}
                       </td>
                       <td className={tableCellClass}>
                         <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">

@@ -88,6 +88,7 @@ export function buildExpenseFromForm(
   form: ExpenseFormState,
   companyId: string,
   vendors: Vendor[],
+  expenseNumber: string | undefined,
   existing?: Expense
 ): Expense {
   const now = nowUtc();
@@ -109,6 +110,7 @@ export function buildExpenseFromForm(
   return {
     id: existing?.id ?? createListingId(),
     companyId,
+    expenseNumber: expenseNumber ?? existing?.expenseNumber,
     expenseDate: localDateInputToUtc(form.expenseDate),
     category: form.category.trim(),
     description: form.description.trim(),

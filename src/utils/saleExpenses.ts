@@ -2,8 +2,9 @@ import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { firestoreService } from '../services/firestore';
 import type { Expense, Sale } from '../types';
 import { SaleExpenseKind, SaleStatus, TaxType } from '../types';
+import { allocateNextExpenseNumber } from './documentNumbers';
 import { createListingId } from './productDefaults';
-import { nowUtc } from './firestoreDates';
+import { nowUtc, utcToLocalDateInput } from './firestoreDates';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -145,12 +146,14 @@ function specForKind(sale: Sale, kind: SaleExpenseKind): SaleExpenseSpec | null 
 function expenseFromSpec(
   sale: Sale,
   spec: SaleExpenseSpec,
+  expenseNumber: string,
   existing?: Expense
 ): Expense {
   const now = nowUtc();
   return {
     id: existing?.id ?? createListingId(),
     companyId: sale.companyId,
+    expenseNumber,
     expenseDate: spec.expenseDate,
     category: spec.category,
     description: spec.description,
@@ -188,7 +191,10 @@ export async function syncSaleExpenses(companyId: string, sale: Sale): Promise<v
       continue;
     }
 
-    const expense = expenseFromSpec(sale, spec, existing);
+    const expenseNumber =
+      existing?.expenseNumber ??
+      (await allocateNextExpenseNumber(companyId, utcToLocalDateInput(spec.expenseDate)));
+    const expense = expenseFromSpec(sale, spec, expenseNumber, existing);
 
     if (existing) {
       await firestoreService.expenses.update(companyId, existing.id, expense);

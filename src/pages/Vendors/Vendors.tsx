@@ -25,10 +25,11 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Vendor } from '../../types';
+import type { Expense, PurchaseOrder, Vendor } from '../../types';
 import { formatMoney } from '../../utils/profit';
 import { nowUtc } from '../../utils/firestoreDates';
 import { sumExpensesByVendor } from '../../utils/vendorHelpers';
+import { sumPurchasesByVendor } from '../../utils/vendorLedger';
 
 type StatusFilter = 'active' | 'archived' | 'all';
 
@@ -40,6 +41,7 @@ export function Vendors() {
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -48,12 +50,14 @@ export function Vendors() {
     if (!company) return;
     setLoading(true);
     try {
-      const [vendorList, expenseList] = await Promise.all([
+      const [vendorList, expenseList, purchaseList] = await Promise.all([
         firestoreService.vendors.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
+        firestoreService.purchases.getAll(company.id),
       ]);
       setVendors(vendorList.filter((v) => !v.deleted));
       setExpenses(expenseList.filter((e) => !e.deleted));
+      setPurchases(purchaseList.filter((p) => !p.deleted));
     } catch (err) {
       console.error('Failed to load vendors:', err);
       notification.error('Failed to load vendors');
@@ -67,6 +71,7 @@ export function Vendors() {
   }, [loadData]);
 
   const expenseTotals = useMemo(() => sumExpensesByVendor(expenses), [expenses]);
+  const purchaseTotals = useMemo(() => sumPurchasesByVendor(purchases), [purchases]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -229,12 +234,14 @@ export function Vendors() {
                     <th className={tableHeadCellClass}>Status</th>
                     <th className={`${tableHeadCellClass} text-right`}>Expenses</th>
                     <th className={`${tableHeadCellClass} text-right`}>Total paid</th>
+                    <th className={`${tableHeadCellClass} text-right`}>PO balance</th>
                     <th className={`${tableHeadCellClass} text-right`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {filtered.map((vendor) => {
                     const totals = expenseTotals.get(vendor.id);
+                    const poTotals = purchaseTotals.get(vendor.id);
                     return (
                       <tr key={vendor.id} className="bg-white dark:bg-gray-800">
                         <td className={`${tableTruncateCellClass} font-medium text-gray-900 dark:text-white`}>
@@ -267,6 +274,11 @@ export function Vendors() {
                         </td>
                         <td className={`${tableCellClass} text-right tabular-nums font-medium text-gray-900 dark:text-white`}>
                           {formatMoney(totals?.total ?? 0, currency)}
+                        </td>
+                        <td className={`${tableCellClass} text-right tabular-nums text-rose-600 dark:text-rose-400`}>
+                          {(poTotals?.balanceDue ?? 0) > 0
+                            ? formatMoney(poTotals!.balanceDue, currency)
+                            : '—'}
                         </td>
                         <td className={tableCellClass}>
                           <div className="flex items-center justify-end gap-1">

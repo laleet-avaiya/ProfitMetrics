@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { emptyStateClass } from '../../constants/ui';
 import type { ReportId } from '../../constants/reportCatalog';
-import type { Expense, PeriodProfitSummary, Sale } from '../../types';
+import type { Expense, Invoice, PeriodProfitSummary, Sale } from '../../types';
 import { formatMoney, formatPercent } from '../../utils/profit';
 import {
   computeByExpenseCategory,
@@ -10,6 +10,7 @@ import {
   computeByProduct,
   computeTaxLedger,
   computeTrend,
+  filterOperatingExpenses,
   type TrendGranularity,
 } from '../../utils/reports';
 
@@ -84,6 +85,7 @@ interface ReportContentProps {
   reportId: ReportId;
   currency: string;
   filteredSales: Sale[];
+  filteredInvoices: Invoice[];
   filteredExpenses: Expense[];
   summary: PeriodProfitSummary;
   hasData: boolean;
@@ -93,32 +95,48 @@ export function ReportContent({
   reportId,
   currency,
   filteredSales,
+  filteredInvoices,
   filteredExpenses,
   summary,
   hasData,
 }: ReportContentProps) {
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
 
-  const byProduct = useMemo(() => computeByProduct(filteredSales), [filteredSales]);
-  const byPlatform = useMemo(() => computeByPlatform(filteredSales), [filteredSales]);
+  const operatingExpenses = useMemo(
+    () => filterOperatingExpenses(filteredExpenses),
+    [filteredExpenses]
+  );
+
+  const byProduct = useMemo(
+    () => computeByProduct(filteredSales, filteredInvoices),
+    [filteredSales, filteredInvoices]
+  );
+  const byPlatform = useMemo(
+    () => computeByPlatform(filteredSales, filteredInvoices),
+    [filteredSales, filteredInvoices]
+  );
   const byCategory = useMemo(
     () => computeByExpenseCategory(filteredExpenses),
     [filteredExpenses]
   );
   const taxLedger = useMemo(
-    () => computeTaxLedger(filteredSales, filteredExpenses),
-    [filteredSales, filteredExpenses]
+    () => computeTaxLedger(filteredSales, filteredInvoices, filteredExpenses),
+    [filteredSales, filteredInvoices, filteredExpenses]
   );
   const trend = useMemo(
-    () => computeTrend(filteredSales, filteredExpenses, trendGranularity),
-    [filteredSales, filteredExpenses, trendGranularity]
+    () => computeTrend(filteredSales, filteredInvoices, filteredExpenses, trendGranularity),
+    [filteredSales, filteredInvoices, filteredExpenses, trendGranularity]
   );
 
   const maxExpenseCategory = Math.max(...byCategory.map((c) => c.total), 1);
+  const operatingExpenseTotal = useMemo(
+    () => operatingExpenses.reduce((sum, e) => sum + e.amount, 0),
+    [operatingExpenses]
+  );
 
   if (!hasData) {
     return (
-      <EmptyReport message="No sales or expenses in this period. Adjust the date range or log more data." />
+      <EmptyReport message="No sales, invoices, or expenses in this period. Adjust the date range or log more data." />
     );
   }
 
@@ -126,20 +144,31 @@ export function ReportContent({
     case 'profit-loss': {
       const plLines = [
         { label: 'Gross revenue', value: summary.grossRevenue, emphasize: false },
+        ...(summary.offlineRevenue > 0
+          ? [
+              { label: '  Online sales', value: summary.onlineRevenue, emphasize: false, indent: true },
+              { label: '  Offline invoices', value: summary.offlineRevenue, emphasize: false, indent: true },
+            ]
+          : []),
         { label: 'Cost of goods (COGS)', value: -summary.totalCogs, emphasize: false },
-        { label: 'Shipping', value: -summary.totalShipping, emphasize: false },
-        { label: 'Platform fees', value: -summary.totalPlatformFees, emphasize: false },
+        { label: 'Shipping (online)', value: -summary.totalShipping, emphasize: false },
+        { label: 'Platform fees (online)', value: -summary.totalPlatformFees, emphasize: false },
         { label: 'Tax collected', value: -summary.totalTax, emphasize: false },
-        { label: 'Order profit', value: summary.grossProfit, emphasize: true },
+        { label: 'Order / invoice profit', value: summary.grossProfit, emphasize: true },
         { label: 'Operating expenses', value: -summary.totalExpenses, emphasize: false },
         { label: 'Net profit', value: summary.netProfit, emphasize: true },
       ];
+
+      const orderLabel =
+        summary.invoiceCount > 0
+          ? `${summary.onlineSaleCount} online · ${summary.invoiceCount} offline`
+          : String(summary.saleCount);
 
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Orders', value: String(summary.saleCount) },
+              { label: 'Orders / invoices', value: orderLabel },
               { label: 'Revenue', value: formatMoney(summary.grossRevenue, currency) },
               { label: 'Order profit', value: formatMoney(summary.grossProfit, currency) },
               {
@@ -172,7 +201,7 @@ export function ReportContent({
                       className={line.emphasize ? 'bg-gray-50 dark:bg-gray-900/40' : ''}
                     >
                       <td
-                        className={`px-4 py-2.5 ${line.emphasize ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}
+                        className={`px-4 py-2.5 ${line.emphasize ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'} ${'indent' in line && line.indent ? 'pl-8 text-xs' : ''}`}
                       >
                         {line.label}
                       </td>
@@ -199,6 +228,13 @@ export function ReportContent({
                 </tfoot>
               </table>
             </div>
+            {summary.excludedAutoExpenses > 0 && (
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                {formatMoney(summary.excludedAutoExpenses, currency)} in auto-generated sale fees and
+                inventory purchases is excluded from operating expenses (already in order profit or
+                stock).
+              </p>
+            )}
           </ReportSection>
         </div>
       );
@@ -206,16 +242,19 @@ export function ReportContent({
 
     case 'sales-by-product':
       return (
-        <ReportSection title="Sales by product">
+        <ReportSection
+          title="Sales by product"
+          description="Online orders and offline invoice line items combined."
+        >
           {byProduct.length === 0 ? (
-            <EmptyReport message="No sales in this period." />
+            <EmptyReport message="No sales or invoices in this period." />
           ) : (
             <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
                     <th className="px-3 py-2">Product</th>
-                    <th className="px-3 py-2 text-right">Orders</th>
+                    <th className="px-3 py-2 text-right">Lines</th>
                     <th className="px-3 py-2 text-right">Revenue</th>
                     <th className="px-3 py-2 text-right">Profit</th>
                     <th className="px-3 py-2 text-right">Margin</th>
@@ -252,16 +291,19 @@ export function ReportContent({
 
     case 'sales-by-platform':
       return (
-        <ReportSection title="Sales by platform">
+        <ReportSection
+          title="Sales by channel"
+          description="Online marketplaces vs offline sales."
+        >
           {byPlatform.length === 0 ? (
-            <EmptyReport message="No sales in this period." />
+            <EmptyReport message="No sales or invoices in this period." />
           ) : (
             <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                    <th className="px-3 py-2">Platform</th>
-                    <th className="px-3 py-2 text-right">Orders</th>
+                    <th className="px-3 py-2">Channel</th>
+                    <th className="px-3 py-2 text-right">Count</th>
                     <th className="px-3 py-2 text-right">Revenue</th>
                     <th className="px-3 py-2 text-right">Profit</th>
                     <th className="px-3 py-2 text-right">Margin</th>
@@ -298,7 +340,10 @@ export function ReportContent({
 
     case 'expense-breakdown':
       return (
-        <ReportSection title="Expense breakdown">
+        <ReportSection
+          title="Expense breakdown"
+          description="All expense categories. Items marked † are excluded from net profit (already in order profit or inventory)."
+        >
           {byCategory.length === 0 ? (
             <EmptyReport message="No expenses in this period." />
           ) : (
@@ -318,15 +363,20 @@ export function ReportContent({
                       <tr key={row.category}>
                         <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
                           {row.category}
+                          {row.excludedFromNetProfit ? (
+                            <span className="text-xs text-gray-400 ml-1">†</span>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-medium">
                           {formatMoney(row.total, currency)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-500 dark:text-gray-400">
-                          {summary.totalExpenses > 0
-                            ? formatPercent((row.total / summary.totalExpenses) * 100)
-                            : '—'}
+                          {operatingExpenseTotal > 0 && !row.excludedFromNetProfit
+                            ? formatPercent((row.total / operatingExpenseTotal) * 100)
+                            : row.excludedFromNetProfit
+                              ? '—'
+                              : '—'}
                         </td>
                       </tr>
                     ))}
@@ -339,7 +389,10 @@ export function ReportContent({
                     key={row.category}
                     className="grid grid-cols-[1fr_1fr_80px] gap-2 items-center text-xs"
                   >
-                    <span className="text-gray-700 dark:text-gray-300 truncate">{row.category}</span>
+                    <span className="text-gray-700 dark:text-gray-300 truncate">
+                      {row.category}
+                      {row.excludedFromNetProfit ? ' †' : ''}
+                    </span>
                     <div className="h-2 bg-gray-100 dark:bg-gray-900/50 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-amber-500 dark:bg-amber-400 rounded-full"
@@ -359,7 +412,11 @@ export function ReportContent({
 
     case 'tax-summary': {
       const taxLines = [
-        { label: 'Output tax (collected on sales)', value: taxLedger.outputTax, emphasize: false },
+        { label: 'Output tax — online sales', value: taxLedger.onlineOutputTax, emphasize: false },
+        ...(taxLedger.offlineOutputTax > 0
+          ? [{ label: 'Output tax — offline invoices', value: taxLedger.offlineOutputTax, emphasize: false }]
+          : []),
+        { label: 'Total output tax', value: taxLedger.outputTax, emphasize: true },
         { label: 'Input tax — purchase / COGS (ITC)', value: -taxLedger.saleInputTax, emphasize: false },
         { label: 'Input tax — expenses (ITC)', value: -taxLedger.expenseInputTax, emphasize: false },
         { label: 'Total input tax (ITC)', value: -taxLedger.inputTax, emphasize: true },
@@ -419,7 +476,8 @@ export function ReportContent({
             </div>
             <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
               Platform fees, delivery, and return/cancellation charges are tracked as expenses with
-              ITC. Purchase tax on COGS remains on sales.
+              ITC. Purchase tax on online COGS is on sales; inventory purchase payments are capitalized
+              in stock until sold.
             </p>
           </ReportSection>
         </div>
@@ -428,7 +486,7 @@ export function ReportContent({
 
     case 'trend':
       return (
-        <ReportSection title="Profit trend">
+        <ReportSection title="Profit trend" description="Online sales and offline invoices combined.">
           <div className="flex gap-2 mb-4">
             {(['daily', 'monthly'] as TrendGranularity[]).map((g) => (
               <button
@@ -470,7 +528,7 @@ export function ReportContent({
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Expenses
+                  Operating expenses
                 </p>
                 <TrendBars rows={trend} currency={currency} metric="expenses" />
               </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useNotification } from './useNotification';
 
@@ -23,6 +23,9 @@ export function useEntityDetail<T>({
   const notification = useNotification();
   const [entity, setEntity] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!id) {
@@ -64,7 +67,7 @@ export function useEntityDetail<T>({
     return () => {
       cancelled = true;
     };
-  }, [authLoading, company, errorMessage, fetch, id, isValid]);
+  }, [authLoading, company, errorMessage, fetch, id, isValid, reloadKey]);
 
-  return { entity, loading, notFound: !loading && !entity, reload: () => {} };
+  return { entity, loading, notFound: !loading && !entity, reload };
 }

@@ -1,15 +1,16 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, Layers, Package, Pencil, Tag } from 'lucide-react';
+import { ExternalLink, Layers, Package, Pencil, Tag, Warehouse } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
 import { DetailSection } from '../../components/DetailPage/DetailSection';
-import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
+import { DetailStatStrip, type DetailStatItem } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { firestoreService } from '../../services/firestore';
-import { PlatformFeeKind } from '../../types';
+import { PlatformFeeKind, type ProductStock } from '../../types';
 import { amountIncludesTaxLabel, resolveListingTax, taxPercentLabel } from '../../utils/listingTax';
 import {
   computeLineEconomics,
@@ -31,6 +32,13 @@ export function ProductDetailPage() {
     errorMessage: 'Failed to load product',
   });
 
+  const [stock, setStock] = useState<ProductStock | null>(null);
+
+  useEffect(() => {
+    if (!company || !productId) return;
+    firestoreService.stock.getByProductId(company.id, productId).then(setStock);
+  }, [company, productId]);
+
   const listings = product?.platformListings ?? [];
 
   const bestListing = listings.reduce<(typeof listings)[0] | null>((best, listing) => {
@@ -43,6 +51,41 @@ export function ProductDetailPage() {
   const bestPreview = bestListing
     ? computeLineEconomics(lineEconomicsInputFromListing(bestListing, 1))
     : null;
+
+  const statItems = useMemo((): DetailStatItem[] => {
+    const items: DetailStatItem[] = [
+      {
+        label: 'Stock on hand',
+        value: String(stock?.quantityOnHand ?? 0),
+        subtext: stock
+          ? `Avg cost ${formatMoney(stock.avgPurchasePrice, currency)}`
+          : 'No stock received yet',
+        icon: Warehouse,
+        tone: (stock?.quantityOnHand ?? 0) > 0 ? 'emerald' : 'slate',
+      },
+    ];
+    if (bestPreview && bestListing) {
+      items.push(
+        {
+          label: 'Best margin platform',
+          value: bestListing.platform,
+          subtext: 'Highest unit profit across listings',
+          icon: Layers,
+          tone: 'indigo',
+        },
+        {
+          label: 'Unit profit (ITC)',
+          value: formatMoney(bestPreview.profit, currency),
+          tone: bestPreview.profit >= 0 ? 'emerald' : 'rose',
+          valueClassName:
+            bestPreview.profit >= 0
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-rose-600 dark:text-rose-400',
+        }
+      );
+    }
+    return items;
+  }, [stock, bestPreview, bestListing, currency]);
 
   return (
     <EntityDetailShell
@@ -92,36 +135,32 @@ export function ProductDetailPage() {
     >
       {product && (
         <>
-          {bestPreview && bestListing ? (
-            <DetailStatStrip
-              stats={[
-                {
-                  label: 'Best margin platform',
-                  value: bestListing.platform,
-                  subtext: 'Highest unit profit across listings',
-                  icon: Layers,
-                  tone: 'indigo',
-                },
-                {
-                  label: 'Unit profit (ITC)',
-                  value: formatMoney(bestPreview.profit, currency),
-                  tone: bestPreview.profit >= 0 ? 'emerald' : 'rose',
-                  valueClassName:
-                    bestPreview.profit >= 0
-                      ? 'text-emerald-700 dark:text-emerald-400'
-                      : 'text-rose-600 dark:text-rose-400',
-                },
-                {
-                  label: 'Margin (ITC)',
-                  value: formatPercent(bestPreview.profitMarginPercent),
-                  tone: bestPreview.profit >= 0 ? 'emerald' : 'rose',
-                  valueClassName:
-                    bestPreview.profit >= 0
-                      ? 'text-emerald-700 dark:text-emerald-400'
-                      : 'text-rose-600 dark:text-rose-400',
-                },
-              ]}
-            />
+          <DetailStatStrip stats={statItems} />
+
+          {stock && stock.quantityOnHand > 0 ? (
+            <DetailSection
+              icon={Warehouse}
+              iconTone="emerald"
+              title="Inventory"
+              description="Weighted average stock from purchase receipts."
+            >
+              <DetailGrid columns={3}>
+                <DetailField label="Quantity" value={String(stock.quantityOnHand)} />
+                <DetailField
+                  label="Avg purchase price"
+                  value={formatMoney(stock.avgPurchasePrice, currency)}
+                />
+                <DetailField
+                  label="Avg selling price"
+                  value={formatMoney(stock.avgSellingPrice, currency)}
+                />
+                <DetailField
+                  label="Stock value"
+                  value={formatMoney(stock.totalValue, currency)}
+                  valueClassName="font-semibold"
+                />
+              </DetailGrid>
+            </DetailSection>
           ) : null}
 
           <DetailSection

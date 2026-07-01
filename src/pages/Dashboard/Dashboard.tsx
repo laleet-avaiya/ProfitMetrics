@@ -13,7 +13,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Sale } from '../../types';
+import type { Expense, Invoice, ProductStock, Sale } from '../../types';
 import { TaxType } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatExpenseTaxLabel } from '../../utils/expenseHelpers';
@@ -24,9 +24,11 @@ import {
   computeByProduct,
   computePeriodSummary,
   computeReturnStats,
+  computeStockSummary,
   computeTaxLedger,
   computeTrend,
   filterExpensesInRange,
+  filterInvoicesInRange,
   filterSalesInRange,
   getReportDateRange,
   trendGranularityForPreset,
@@ -43,6 +45,10 @@ import {
   Plus,
   RotateCcw,
   Target,
+  FileText,
+  ClipboardList,
+  Users,
+  Warehouse,
 } from 'lucide-react';
 
 function taxSummaryTitle(taxType: TaxType | undefined): string {
@@ -64,13 +70,25 @@ const quickLinks = [
     label: 'Products',
     path: '/products',
     icon: Package,
-    description: 'SKUs & platform pricing',
+    description: 'SKUs & stock',
   },
   {
-    label: 'Sales',
+    label: 'Online sales',
     path: '/sales',
     icon: ShoppingCart,
-    description: 'Log orders & profit',
+    description: 'Marketplace orders',
+  },
+  {
+    label: 'Invoices',
+    path: '/invoices',
+    icon: FileText,
+    description: 'Offline sales',
+  },
+  {
+    label: 'Purchases',
+    path: '/purchases',
+    icon: ClipboardList,
+    description: 'Vendor POs & stock',
   },
   {
     label: 'Expenses',
@@ -79,10 +97,16 @@ const quickLinks = [
     description: 'Operating costs',
   },
   {
+    label: 'Customers',
+    path: '/customers',
+    icon: Users,
+    description: 'AR & ledger',
+  },
+  {
     label: 'Vendors',
     path: '/vendors',
     icon: Building2,
-    description: 'Suppliers & payees',
+    description: 'Suppliers & AP',
   },
   {
     label: 'Reports',
@@ -106,7 +130,9 @@ export function Dashboard() {
   const currency = company?.currency ?? 'AED';
 
   const [sales, setSales] = useState<Sale[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [stock, setStock] = useState<ProductStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<ReportPreset>('month');
   const [customFrom, setCustomFrom] = useState('');
@@ -116,12 +142,16 @@ export function Dashboard() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, expensesList] = await Promise.all([
+      const [salesList, invoicesList, expensesList, stockList] = await Promise.all([
         firestoreService.sales.getAll(company.id),
+        firestoreService.invoices.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
+        firestoreService.stock.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
+      setInvoices(invoicesList.filter((i) => !i.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
+      setStock(stockList);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       notification.error('Failed to load dashboard data');
@@ -144,6 +174,11 @@ export function Dashboard() {
     [sales, dateRange]
   );
 
+  const filteredInvoices = useMemo(
+    () => filterInvoicesInRange(invoices, dateRange.from, dateRange.to),
+    [invoices, dateRange]
+  );
+
   const filteredExpenses = useMemo(
     () => filterExpensesInRange(expenses, dateRange.from, dateRange.to),
     [expenses, dateRange]
@@ -153,19 +188,22 @@ export function Dashboard() {
     () =>
       computePeriodSummary(
         filteredSales,
+        filteredInvoices,
         filteredExpenses,
         dateRange.label,
         dateRange.from,
         dateRange.to
       ),
-    [filteredSales, filteredExpenses, dateRange]
+    [filteredSales, filteredInvoices, filteredExpenses, dateRange]
   );
+
+  const stockSummary = useMemo(() => computeStockSummary(stock), [stock]);
 
   const returnStats = useMemo(() => computeReturnStats(filteredSales), [filteredSales]);
 
   const taxLedger = useMemo(
-    () => computeTaxLedger(filteredSales, filteredExpenses),
-    [filteredSales, filteredExpenses]
+    () => computeTaxLedger(filteredSales, filteredInvoices, filteredExpenses),
+    [filteredSales, filteredInvoices, filteredExpenses]
   );
 
   const hasTaxActivity =
@@ -182,23 +220,24 @@ export function Dashboard() {
   );
 
   const topProducts = useMemo(
-    () => computeByProduct(filteredSales).slice(0, 5),
-    [filteredSales]
+    () => computeByProduct(filteredSales, filteredInvoices).slice(0, 5),
+    [filteredSales, filteredInvoices]
   );
 
   const topPlatforms = useMemo(
-    () => computeByPlatform(filteredSales).slice(0, 5),
-    [filteredSales]
+    () => computeByPlatform(filteredSales, filteredInvoices).slice(0, 5),
+    [filteredSales, filteredInvoices]
   );
 
   const trendData = useMemo(
     () =>
       computeTrend(
         filteredSales,
+        filteredInvoices,
         filteredExpenses,
         trendGranularityForPreset(preset)
       ),
-    [filteredSales, filteredExpenses, preset]
+    [filteredSales, filteredInvoices, filteredExpenses, preset]
   );
 
   const recentSales = useMemo(
@@ -209,6 +248,14 @@ export function Dashboard() {
     [filteredSales]
   );
 
+  const recentInvoices = useMemo(
+    () =>
+      [...filteredInvoices]
+        .sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime())
+        .slice(0, RECENT_LIMIT),
+    [filteredInvoices]
+  );
+
   const recentExpenses = useMemo(
     () =>
       [...filteredExpenses]
@@ -217,9 +264,16 @@ export function Dashboard() {
     [filteredExpenses]
   );
 
-  const hasAnyData = sales.length > 0 || expenses.length > 0;
-  const hasPeriodData = summary.saleCount > 0 || filteredExpenses.length > 0;
+  const hasAnyData =
+    sales.length > 0 || invoices.length > 0 || expenses.length > 0 || stock.length > 0;
+  const hasPeriodData =
+    summary.saleCount > 0 || filteredExpenses.length > 0;
   const periodSubtext = dateRange.label;
+
+  const revenueSubtext =
+    summary.invoiceCount > 0
+      ? `${summary.onlineSaleCount} online · ${summary.invoiceCount} offline · ${periodSubtext}`
+      : `${summary.saleCount} order${summary.saleCount === 1 ? '' : 's'} · ${periodSubtext}`;
 
   return (
     <Layout>
@@ -233,6 +287,12 @@ export function Dashboard() {
                 <Button variant="primary" size="sm">
                   <Plus className="w-4 h-4" />
                   Log sale
+                </Button>
+              </Link>
+              <Link to="/invoices/new">
+                <Button variant="outline" size="sm">
+                  <Plus className="w-4 h-4" />
+                  New invoice
                 </Button>
               </Link>
               <Link to="/expenses">
@@ -295,12 +355,12 @@ export function Dashboard() {
                 <StatCard
                   label="Revenue"
                   value={formatMoney(summary.grossRevenue, currency)}
-                  subtext={`${summary.saleCount} order${summary.saleCount === 1 ? '' : 's'} · ${periodSubtext}`}
+                  subtext={revenueSubtext}
                 />
                 <StatCard
                   label="Order profit"
                   value={formatMoney(summary.grossProfit, currency)}
-                  subtext={`Before expenses · ${periodSubtext}`}
+                  subtext={`Online + offline · ${periodSubtext}`}
                   valueClassName={profitClass(summary.grossProfit)}
                 />
                 <StatCard
@@ -317,7 +377,19 @@ export function Dashboard() {
               </div>
 
               {hasPeriodData && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                      <Warehouse className="w-3 h-3" />
+                      Stock on hand
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-gray-900 dark:text-white">
+                      {formatMoney(stockSummary.totalValue, currency)}
+                    </p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                      {stockSummary.totalUnits} units · {stockSummary.productCount} products
+                    </p>
+                  </div>
                   <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
                     <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Target className="w-3 h-3" />
@@ -368,14 +440,20 @@ export function Dashboard() {
         {!loading && !hasPeriodData && (
           <Card className="py-8 flex flex-col items-center space-y-3">
             <p className={emptyStateMessageClass}>
-              No sales or expenses in{' '}
+              No sales, invoices, or expenses in{' '}
               <span className="font-medium">{dateRange.label.toLowerCase()}</span>.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <Link to="/sales/new">
                 <Button variant="primary" size="sm">
                   <ShoppingCart className="w-4 h-4" />
-                  Log first sale
+                  Log online sale
+                </Button>
+              </Link>
+              <Link to="/invoices/new">
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4" />
+                  Create invoice
                 </Button>
               </Link>
               <Link to="/products/new">
@@ -413,7 +491,11 @@ export function Dashboard() {
                   <StatCard
                     label="Output tax"
                     value={formatMoney(taxLedger.outputTax, currency)}
-                    subtext="Collected on sales"
+                    subtext={
+                      taxLedger.offlineOutputTax > 0
+                        ? 'Online + offline invoices'
+                        : 'Collected on sales'
+                    }
                     valueClassName="text-amber-700 dark:text-amber-400"
                   />
                   <StatCard
@@ -527,8 +609,8 @@ export function Dashboard() {
 
             <Card>
               <CardHeader
-                title="Sales by platform"
-                description="By order profit"
+                title="Sales by channel"
+                description="Online vs offline sales"
                 action={
                   topPlatforms.length > 0 ? (
                     <Link
@@ -553,10 +635,10 @@ export function Dashboard() {
         )}
 
         {!loading && hasPeriodData && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <Card>
               <CardHeader
-                title="Recent sales"
+                title="Recent online sales"
                 description={`Latest in ${dateRange.label.toLowerCase()}`}
                 action={
                   <Link
@@ -589,6 +671,44 @@ export function Dashboard() {
                           {formatMoney(sale.profit, currency)}
                         </p>
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Recent invoices"
+                description={`Offline sales · ${dateRange.label.toLowerCase()}`}
+                action={
+                  <Link
+                    to="/invoices"
+                    className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    View all
+                  </Link>
+                }
+              />
+              {recentInvoices.length === 0 ? (
+                <p className={`${emptyStateMessageClass} py-4 text-gray-500 dark:text-gray-400`}>
+                  No invoices in this period
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 dark:divide-gray-700 -mx-1">
+                  {recentInvoices.map((inv) => (
+                    <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5 px-1">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {inv.invoiceNumber}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDateLocal(inv.invoiceDate)} · {inv.customerName ?? 'Customer'}
+                        </p>
+                      </div>
+                      <p className={`shrink-0 text-sm font-semibold tabular-nums ${profitClass(inv.profit)}`}>
+                        {formatMoney(inv.profit, currency)}
+                      </p>
                     </li>
                   ))}
                 </ul>
@@ -649,16 +769,15 @@ export function Dashboard() {
                   Get started with {BRAND_NAME}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Add products with platform-specific costs (Amazon, Shopify, Noon, etc.), log daily
-                  sales, link vendors to expenses, and track returns. Your dashboard fills in as you
-                  go.
+                  Add products, log online marketplace sales, create offline invoices, record
+                  purchases to build stock, and track expenses. Your dashboard fills in as you go.
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {quickLinks.map((item) => (
             <Link
               key={item.path}

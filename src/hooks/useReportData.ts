@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useNotification } from './useNotification';
 import { firestoreService } from '../services/firestore';
-import type { Expense, Sale } from '../types';
+import type { Expense, Invoice, Sale } from '../types';
 import {
   computePeriodSummary,
   filterExpensesInRange,
+  filterInvoicesInRange,
   filterSalesInRange,
   getReportDateRange,
   type ReportPreset,
@@ -16,6 +17,7 @@ export function useReportData() {
   const notification = useNotification();
 
   const [sales, setSales] = useState<Sale[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<ReportPreset>('30d');
@@ -26,11 +28,13 @@ export function useReportData() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, expensesList] = await Promise.all([
+      const [salesList, invoicesList, expensesList] = await Promise.all([
         firestoreService.sales.getAll(company.id),
+        firestoreService.invoices.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
+      setInvoices(invoicesList.filter((i) => !i.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
     } catch (err) {
       console.error('Failed to load report data:', err);
@@ -38,7 +42,7 @@ export function useReportData() {
     } finally {
       setLoading(false);
     }
-  }, [company]);
+  }, [company, notification]);
 
   useEffect(() => {
     loadData();
@@ -54,6 +58,11 @@ export function useReportData() {
     [sales, dateRange]
   );
 
+  const filteredInvoices = useMemo(
+    () => filterInvoicesInRange(invoices, dateRange.from, dateRange.to),
+    [invoices, dateRange]
+  );
+
   const filteredExpenses = useMemo(
     () => filterExpensesInRange(expenses, dateRange.from, dateRange.to),
     [expenses, dateRange]
@@ -63,15 +72,19 @@ export function useReportData() {
     () =>
       computePeriodSummary(
         filteredSales,
+        filteredInvoices,
         filteredExpenses,
         dateRange.label,
         dateRange.from,
         dateRange.to
       ),
-    [filteredSales, filteredExpenses, dateRange]
+    [filteredSales, filteredInvoices, filteredExpenses, dateRange]
   );
 
-  const hasData = filteredSales.length > 0 || filteredExpenses.length > 0;
+  const hasData =
+    filteredSales.length > 0 ||
+    filteredInvoices.length > 0 ||
+    filteredExpenses.length > 0;
 
   return {
     currency: company?.currency ?? 'AED',
@@ -84,6 +97,7 @@ export function useReportData() {
     setCustomTo,
     dateRange,
     filteredSales,
+    filteredInvoices,
     filteredExpenses,
     summary,
     hasData,

@@ -11,13 +11,28 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Expense, Product, Sale, Vendor } from '../types';
+import type {
+  Customer,
+  Expense,
+  Invoice,
+  Payment,
+  Product,
+  ProductStock,
+  PurchaseOrder,
+  Sale,
+  Vendor,
+} from '../types';
 import { convertTimestamps, prepareDatesForFirestore } from '../utils/firestoreDates';
 
 const COLLECTION_PRODUCTS = 'products';
 const COLLECTION_SALES = 'sales';
 const COLLECTION_EXPENSES = 'expenses';
 const COLLECTION_VENDORS = 'vendors';
+const COLLECTION_PURCHASES = 'purchases';
+const COLLECTION_STOCK = 'stock';
+const COLLECTION_CUSTOMERS = 'customers';
+const COLLECTION_INVOICES = 'invoices';
+const COLLECTION_PAYMENTS = 'payments';
 
 function getDocId(companyId: string, id: string): string {
   return `${companyId}_${id}`;
@@ -147,5 +162,49 @@ export const firestoreService = {
     update: (companyId: string, id: string, updates: Partial<Vendor>) =>
       update(companyId, COLLECTION_VENDORS, id, updates),
     delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_VENDORS, id),
+  },
+  purchases: {
+    get: (companyId: string, id: string) => get<PurchaseOrder>(companyId, COLLECTION_PURCHASES, id),
+    getAll: (companyId: string) => getAll<PurchaseOrder>(companyId, COLLECTION_PURCHASES),
+    create: (companyId: string, purchase: PurchaseOrder) =>
+      create(companyId, COLLECTION_PURCHASES, purchase),
+    update: (companyId: string, id: string, updates: Partial<PurchaseOrder>) =>
+      update(companyId, COLLECTION_PURCHASES, id, updates),
+    delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_PURCHASES, id),
+  },
+  stock: {
+    get: (companyId: string, id: string) => get<ProductStock>(companyId, COLLECTION_STOCK, id),
+    getAll: (companyId: string) => getAll<ProductStock>(companyId, COLLECTION_STOCK),
+    getByProductId: async (companyId: string, productId: string) =>
+      get<ProductStock>(companyId, COLLECTION_STOCK, productId),
+    create: (companyId: string, stock: ProductStock) => create(companyId, COLLECTION_STOCK, stock),
+    update: (companyId: string, id: string, updates: Partial<ProductStock>) =>
+      update(companyId, COLLECTION_STOCK, id, updates),
+    delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_STOCK, id),
+  },
+  customers: {
+    get: (companyId: string, id: string) => get<Customer>(companyId, COLLECTION_CUSTOMERS, id),
+    getAll: (companyId: string) => getAll<Customer>(companyId, COLLECTION_CUSTOMERS),
+    create: (companyId: string, customer: Customer) =>
+      create(companyId, COLLECTION_CUSTOMERS, customer),
+    update: (companyId: string, id: string, updates: Partial<Customer>) =>
+      update(companyId, COLLECTION_CUSTOMERS, id, updates),
+    delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_CUSTOMERS, id),
+  },
+  invoices: {
+    get: (companyId: string, id: string) => get<Invoice>(companyId, COLLECTION_INVOICES, id),
+    getAll: (companyId: string) => getAll<Invoice>(companyId, COLLECTION_INVOICES),
+    create: (companyId: string, invoice: Invoice) => create(companyId, COLLECTION_INVOICES, invoice),
+    update: (companyId: string, id: string, updates: Partial<Invoice>) =>
+      update(companyId, COLLECTION_INVOICES, id, updates),
+    delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_INVOICES, id),
+  },
+  payments: {
+    get: (companyId: string, id: string) => get<Payment>(companyId, COLLECTION_PAYMENTS, id),
+    getAll: (companyId: string) => getAll<Payment>(companyId, COLLECTION_PAYMENTS),
+    create: (companyId: string, payment: Payment) => create(companyId, COLLECTION_PAYMENTS, payment),
+    update: (companyId: string, id: string, updates: Partial<Payment>) =>
+      update(companyId, COLLECTION_PAYMENTS, id, updates),
+    delete: (companyId: string, id: string) => softDelete(companyId, COLLECTION_PAYMENTS, id),
   },
 };

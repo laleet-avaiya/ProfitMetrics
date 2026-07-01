@@ -44,6 +44,31 @@ service cloud.firestore {
       allow create: if createsForOwnCompany();
     }
 
+    match /purchases/{docId} {
+      allow read, update, delete: if ownsDocument();
+      allow create: if createsForOwnCompany();
+    }
+
+    match /stock/{docId} {
+      allow read, update, delete: if ownsDocument();
+      allow create: if createsForOwnCompany();
+    }
+
+    match /customers/{docId} {
+      allow read, update, delete: if ownsDocument();
+      allow create: if createsForOwnCompany();
+    }
+
+    match /invoices/{docId} {
+      allow read, update, delete: if ownsDocument();
+      allow create: if createsForOwnCompany();
+    }
+
+    match /payments/{docId} {
+      allow read, update, delete: if ownsDocument();
+      allow create: if createsForOwnCompany();
+    }
+
     match /auditLogs/{logId} {
       allow create: if isAuthenticated()
         && request.resource.data.companyId == request.auth.uid
