@@ -79,10 +79,14 @@ export function computePurchaseLineTotals(
   const taxAmount = tracksTax
     ? computeTaxAmount(lineSubtotal, taxPercentage, taxMode)
     : 0;
+  const lineTotal =
+    tracksTax && taxMode === TaxMode.EXCLUSIVE
+      ? roundMoney(lineSubtotal + taxAmount)
+      : lineSubtotal;
   return {
     lineSubtotal,
     taxAmount: roundMoney(taxAmount),
-    lineTotal: roundMoney(lineSubtotal + taxAmount),
+    lineTotal,
   };
 }
 

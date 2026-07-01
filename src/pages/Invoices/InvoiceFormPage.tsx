@@ -31,7 +31,7 @@ import {
   type InvoiceFormState,
 } from '../../utils/invoiceHelpers';
 import { allocateNextInvoiceNumber, previewNextInvoiceNumber } from '../../utils/documentNumbers';
-import { applyInvoiceStock, restoreInvoiceStock } from '../../utils/invoiceStock';
+import { applyInvoiceStock, resyncInvoiceStock } from '../../utils/invoiceStock';
 import { formatMoney } from '../../utils/profit';
 import { emptyStateMessageClass } from '../../constants/ui';
 
@@ -191,15 +191,13 @@ export function InvoiceFormPage() {
       );
 
       if (isEditing && invoice) {
-        if (payload.status === InvoiceStatus.VOID && invoice.stockApplied) {
-          await restoreInvoiceStock(company.id, invoice);
-        }
         await firestoreService.invoices.update(company.id, invoice.id, payload);
-        if (shouldApplyInvoiceStock(payload)) {
-          const stockResult = await applyInvoiceStock(company.id, { ...payload, id: invoice.id });
-          if (!stockResult.ok) {
-            notification.error(`Insufficient stock for ${stockResult.productName}`);
-          }
+        const stockResult = await resyncInvoiceStock(company.id, invoice, {
+          ...payload,
+          id: invoice.id,
+        });
+        if (!stockResult.ok) {
+          notification.error(`Insufficient stock for ${stockResult.productName}`);
         }
         notification.success('Invoice updated');
         navigate(`/invoices/${invoice.id}`);

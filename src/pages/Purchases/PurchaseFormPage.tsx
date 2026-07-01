@@ -206,6 +206,12 @@ export function PurchaseFormPage() {
           await syncPurchaseStockReceipts(company.id, null, created);
         } catch (stockErr) {
           console.error('Stock sync after create:', stockErr);
+          notification.error(
+            stockErr instanceof Error ? stockErr.message : 'Purchase created but stock could not be updated'
+          );
+          setSaving(false);
+          navigate(`/purchases/${created.id}`);
+          return;
         }
         notification.success('Purchase order created');
         navigate(`/purchases/${created.id}`);

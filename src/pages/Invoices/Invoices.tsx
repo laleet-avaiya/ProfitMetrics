@@ -24,6 +24,7 @@ import { InvoiceStatus } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { dateFilterRange, isDateInRange, type DateFilter } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
+import { restoreInvoiceStock } from '../../utils/invoiceStock';
 
 type StatusFilter = 'all' | InvoiceStatus;
 
@@ -104,9 +105,17 @@ export function Invoices() {
       confirmLabel: 'Delete',
       variant: 'danger',
       onConfirm: async () => {
-        await firestoreService.invoices.delete(company.id, invoice.id);
-        notification.success('Invoice deleted');
-        loadData();
+        try {
+          if (invoice.stockApplied) {
+            await restoreInvoiceStock(company.id, invoice);
+          }
+          await firestoreService.invoices.delete(company.id, invoice.id);
+          notification.success('Invoice deleted');
+          loadData();
+        } catch (err) {
+          console.error(err);
+          notification.error('Failed to delete invoice');
+        }
       },
     });
   };

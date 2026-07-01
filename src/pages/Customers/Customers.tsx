@@ -18,7 +18,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Customer, Invoice } from '../../types';
-import { InvoiceStatus } from '../../types';
+import { isReportableInvoice } from '../../utils/reports';
 import { nowUtc } from '../../utils/firestoreDates';
 import { formatMoney } from '../../utils/profit';
 
@@ -61,7 +61,7 @@ export function Customers() {
   const invoiceStats = useMemo(() => {
     const map = new Map<string, { count: number; balanceDue: number }>();
     for (const inv of invoices) {
-      if (!inv.customerId || inv.status === InvoiceStatus.VOID) continue;
+      if (!inv.customerId || !isReportableInvoice(inv)) continue;
       const prev = map.get(inv.customerId) ?? { count: 0, balanceDue: 0 };
       map.set(inv.customerId, {
         count: prev.count + 1,

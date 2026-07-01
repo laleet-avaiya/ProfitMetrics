@@ -102,10 +102,14 @@ export function computeInvoiceLineTotals(
   const lineSubtotal = roundMoney(Math.max(0, quantity) * Math.max(0, unitPrice));
   const tracksTax = taxType !== TaxType.NONE && taxPercentage > 0;
   const taxAmount = tracksTax ? computeTaxAmount(lineSubtotal, taxPercentage, taxMode) : 0;
+  const lineTotal =
+    tracksTax && taxMode === TaxMode.EXCLUSIVE
+      ? roundMoney(lineSubtotal + taxAmount)
+      : lineSubtotal;
   return {
     lineSubtotal,
     taxAmount: roundMoney(taxAmount),
-    lineTotal: roundMoney(lineSubtotal + taxAmount),
+    lineTotal,
   };
 }
 

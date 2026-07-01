@@ -1,6 +1,7 @@
 import { firestoreService } from '../services/firestore';
 import type { Invoice } from '../types';
 import { InvoiceStatus } from '../types';
+import { shouldApplyInvoiceStock } from './invoiceHelpers';
 import { checkSaleStock } from './saleStock';
 import { deductStock, restoreStock } from './stockHelpers';
 import { nowUtc } from './firestoreDates';
@@ -58,6 +59,21 @@ export async function applyInvoiceStock(
     updatedAt: nowUtc(),
   });
 
+  return { ok: true };
+}
+
+/** Restore stock when invoice is voided or edited, then re-apply if needed. */
+export async function resyncInvoiceStock(
+  companyId: string,
+  previous: Invoice,
+  updated: Invoice
+): Promise<{ ok: true } | { ok: false; productName: string; available: number; needed: number }> {
+  if (previous.stockApplied) {
+    await restoreInvoiceStock(companyId, previous);
+  }
+  if (shouldApplyInvoiceStock(updated)) {
+    return applyInvoiceStock(companyId, { ...updated, stockApplied: false });
+  }
   return { ok: true };
 }
 

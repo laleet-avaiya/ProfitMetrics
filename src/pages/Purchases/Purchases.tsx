@@ -32,6 +32,7 @@ import {
 } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
 import { deletePurchaseLinkedExpenses } from '../../utils/purchaseExpenses';
+import { reverseAllPurchaseStock } from '../../utils/purchaseStock';
 
 type StatusFilter = 'all' | PurchaseOrderStatus;
 
@@ -138,6 +139,7 @@ export function Purchases() {
       variant: 'danger',
       onConfirm: async () => {
         try {
+          await reverseAllPurchaseStock(company.id, purchase);
           await deletePurchaseLinkedExpenses(company.id, purchase.id);
           await firestoreService.purchases.delete(company.id, purchase.id);
           notification.success('Purchase order deleted');

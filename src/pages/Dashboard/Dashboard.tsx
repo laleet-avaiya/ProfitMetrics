@@ -377,7 +377,7 @@ export function Dashboard() {
               </div>
 
               {hasPeriodData && (
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
                   <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
                     <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Warehouse className="w-3 h-3" />
@@ -601,7 +601,7 @@ export function Dashboard() {
                 items={topProducts.map((p) => ({
                   label: p.productName,
                   value: p.profit,
-                  sublabel: `${p.saleCount} order${p.saleCount === 1 ? '' : 's'} · ${formatPercent(p.marginPercent)} margin`,
+                  sublabel: `${p.saleCount} sale${p.saleCount === 1 ? '' : 's'} · ${formatPercent(p.marginPercent)} margin`,
                 }))}
                 currency={currency}
               />

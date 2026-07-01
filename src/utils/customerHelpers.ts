@@ -1,5 +1,5 @@
 import type { Customer, Invoice, Payment } from '../types';
-import { InvoiceStatus } from '../types';
+import { isReportableInvoice } from './reports';
 import { createListingId } from './productDefaults';
 import { nowUtc } from './firestoreDates';
 
@@ -99,7 +99,7 @@ export function buildCustomerLedger(
   payments: Payment[]
 ): CustomerLedgerResult {
   const customerInvoices = invoices.filter(
-    (i) => !i.deleted && i.customerId === customerId && i.status !== InvoiceStatus.VOID
+    (i) => !i.deleted && i.customerId === customerId && isReportableInvoice(i)
   );
   const customerPayments = payments.filter(
     (p) => !p.deleted && p.customerId === customerId

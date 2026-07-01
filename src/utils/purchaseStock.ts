@@ -8,7 +8,16 @@ export async function syncPurchaseStockReceipts(
   previous: PurchaseOrder | null,
   current: PurchaseOrder
 ): Promise<void> {
-  if (current.status === 'cancelled') return;
+  if (current.status === 'cancelled') {
+    if (previous) {
+      await reversePurchaseStockReceipts(companyId, previous, zeroReceivedLines(previous));
+    }
+    return;
+  }
+
+  if (previous) {
+    await reversePurchaseStockReceipts(companyId, previous, current);
+  }
 
   for (const line of current.lines) {
     const prevLine = previous?.lines.find((l) => l.id === line.id);
@@ -28,7 +37,14 @@ export async function syncPurchaseStockReceipts(
   }
 }
 
-/** Reverse stock when reducing received quantities (rare edit case). */
+function zeroReceivedLines(purchase: PurchaseOrder): PurchaseOrder {
+  return {
+    ...purchase,
+    lines: purchase.lines.map((l) => ({ ...l, quantityReceived: 0 })),
+  };
+}
+
+/** Reverse stock when reducing received quantities (edit or delete). */
 export async function reversePurchaseStockReceipts(
   companyId: string,
   previous: PurchaseOrder,
@@ -55,6 +71,14 @@ export async function reversePurchaseStockReceipts(
       updatedAt: new Date(),
     });
   }
+}
+
+/** Reverse all received stock when deleting a purchase order. */
+export async function reverseAllPurchaseStock(
+  companyId: string,
+  purchase: PurchaseOrder
+): Promise<void> {
+  await reversePurchaseStockReceipts(companyId, purchase, zeroReceivedLines(purchase));
 }
 
 export function lineReceivedDelta(
