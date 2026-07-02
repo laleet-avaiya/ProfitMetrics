@@ -54,7 +54,7 @@ function roundMoney(value: number): number {
 export function PurchaseDetailPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { canUpdate } = useModuleAccess(AppModule.PURCHASES);
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -185,7 +185,7 @@ export function PurchaseDetailPage() {
         updatedAt: updated.updatedAt,
       });
 
-      updated = await syncPurchaseExpenses(company.id, updated);
+      updated = await syncPurchaseExpenses(company.id, updated, user!.uid);
 
       setPaymentForm({
         paymentDate: utcToLocalDateInput(new Date()),

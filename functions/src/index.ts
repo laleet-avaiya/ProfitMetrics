@@ -162,7 +162,7 @@ export const processAiMessage = onCall(
     if (chatId) {
       chatRef = db.collection(COLLECTION_AI_CHATS).doc(getDocId(companyId, chatId));
       const chatSnap = await chatRef.get();
-      if (!chatSnap.exists || chatSnap.data()?.companyId !== companyId) {
+      if (!chatSnap.exists || chatSnap.data()?.companyId !== companyId || chatSnap.data()?.deleted === true) {
         throw new HttpsError('not-found', 'Chat not found.');
       }
     } else {

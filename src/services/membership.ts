@@ -6,14 +6,15 @@ import {
   query,
   setDoc,
   updateDoc,
-  deleteDoc,
   where,
   orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { CompanyInvite, CompanyMember } from '../types';
 import { CompanyRole, type CompanyRole as CompanyRoleType } from '../constants/roles';
+import { isNotDeleted } from '../models/softDelete';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
+import { appendAuditLog } from './auditLog';
 import { orgMembershipService } from './orgMembership';
 
 const COLLECTION_MEMBERS = 'companyMembers';
@@ -34,6 +35,9 @@ function mapMember(docId: string, data: Record<string, unknown>): CompanyMember 
     role: (converted.role as CompanyRoleType) ?? CompanyRole.VIEWER,
     status: converted.status === 'disabled' ? 'disabled' : 'active',
     invitedBy: converted.invitedBy ? String(converted.invitedBy) : undefined,
+    deleted: converted.deleted === true,
+    deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
+    deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -49,6 +53,9 @@ function mapInvite(docId: string, data: Record<string, unknown>): CompanyInvite 
     role: (converted.role as CompanyRoleType) ?? CompanyRole.VIEWER,
     invitedBy: String(converted.invitedBy ?? ''),
     status: status === 'accepted' || status === 'revoked' ? status : 'pending',
+    deleted: converted.deleted === true,
+    deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
+    deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -58,7 +65,9 @@ export const membershipService = {
   async getMember(companyId: string, userId: string): Promise<CompanyMember | null> {
     const snap = await getDoc(doc(db, COLLECTION_MEMBERS, getMemberDocId(companyId, userId)));
     if (!snap.exists()) return null;
-    return mapMember(snap.id, snap.data() as Record<string, unknown>);
+    const member = mapMember(snap.id, snap.data() as Record<string, unknown>);
+    if (member.status !== 'active' || !isNotDeleted(member)) return null;
+    return member;
   },
 
   async listMembers(companyId: string): Promise<CompanyMember[]> {
@@ -68,9 +77,11 @@ export const membershipService = {
       orderBy('createdAt', 'asc')
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((memberDoc) =>
-      mapMember(memberDoc.id, memberDoc.data() as Record<string, unknown>)
-    );
+    return snapshot.docs
+      .map((memberDoc) =>
+        mapMember(memberDoc.id, memberDoc.data() as Record<string, unknown>)
+      )
+      .filter((member) => member.status === 'active' && isNotDeleted(member));
   },
 
   async listInvites(companyId: string): Promise<CompanyInvite[]> {
@@ -81,9 +92,11 @@ export const membershipService = {
       orderBy('createdAt', 'desc')
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((inviteDoc) =>
-      mapInvite(inviteDoc.id, inviteDoc.data() as Record<string, unknown>)
-    );
+    return snapshot.docs
+      .map((inviteDoc) =>
+        mapInvite(inviteDoc.id, inviteDoc.data() as Record<string, unknown>)
+      )
+      .filter(isNotDeleted);
   },
 
   async createAdminMember(
@@ -171,15 +184,44 @@ export const membershipService = {
     );
   },
 
-  async removeMember(companyId: string, userId: string): Promise<void> {
-    await deleteDoc(doc(db, COLLECTION_MEMBERS, getMemberDocId(companyId, userId)));
+  async removeMember(companyId: string, userId: string, deletedBy: string): Promise<void> {
+    const now = nowUtc();
+    await updateDoc(
+      doc(db, COLLECTION_MEMBERS, getMemberDocId(companyId, userId)),
+      prepareDatesForFirestore({
+        status: 'disabled',
+        deleted: true,
+        deletedAt: now,
+        deletedBy,
+        updatedAt: now,
+      })
+    );
+    appendAuditLog(companyId, deletedBy, {
+      action: 'team.member_removed',
+      entityType: 'team',
+      entityId: userId,
+      summary: 'Team member removed',
+    });
   },
 
-  async revokeInvite(inviteId: string): Promise<void> {
+  async revokeInvite(inviteId: string, deletedBy: string, companyId: string): Promise<void> {
+    const now = nowUtc();
     await updateDoc(
       doc(db, COLLECTION_INVITES, inviteId),
-      prepareDatesForFirestore({ status: 'revoked', updatedAt: nowUtc() })
+      prepareDatesForFirestore({
+        status: 'revoked',
+        deleted: true,
+        deletedAt: now,
+        deletedBy,
+        updatedAt: now,
+      })
     );
+    appendAuditLog(companyId, deletedBy, {
+      action: 'team.invite_revoked',
+      entityType: 'team',
+      entityId: inviteId,
+      summary: 'Team invite revoked',
+    });
   },
 
   async acceptPendingInvites(
@@ -234,8 +276,10 @@ export const membershipService = {
       where('status', '==', 'active')
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((memberDoc) =>
-      mapMember(memberDoc.id, memberDoc.data() as Record<string, unknown>)
-    );
+    return snapshot.docs
+      .map((memberDoc) =>
+        mapMember(memberDoc.id, memberDoc.data() as Record<string, unknown>)
+      )
+      .filter(isNotDeleted);
   },
 };

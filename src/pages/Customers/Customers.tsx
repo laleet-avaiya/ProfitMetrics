@@ -29,7 +29,7 @@ type StatusFilter = 'active' | 'archived' | 'all';
 export function Customers() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.CUSTOMERS);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -106,7 +106,7 @@ export function Customers() {
       confirmLabel: 'Delete',
       variant: 'danger',
       onConfirm: async () => {
-        await firestoreService.customers.delete(company.id, customer.id);
+        await firestoreService.customers.delete(company.id, customer.id, user!.uid);
         notification.success('Customer deleted');
         reload();
       },

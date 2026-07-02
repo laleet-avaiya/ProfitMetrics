@@ -71,6 +71,7 @@ export interface Product {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Sales (orders) ─────────────────────────────────────────────────────────
@@ -184,6 +185,7 @@ export interface Sale {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Expenses ───────────────────────────────────────────────────────────────
@@ -212,6 +214,7 @@ export interface Vendor {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 export interface Expense {
@@ -249,6 +252,7 @@ export interface Expense {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Inventory stock (separate from Product catalog) ────────────────────────
@@ -270,6 +274,9 @@ export interface ProductStock {
   lastReceivedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  deleted?: boolean;
+  deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Purchase orders ─────────────────────────────────────────────────────────
@@ -352,6 +359,7 @@ export interface PurchaseOrder {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Customers (offline sales) ───────────────────────────────────────────────
@@ -372,6 +380,7 @@ export interface Customer {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Invoices (offline sales) ─────────────────────────────────────────────────
@@ -428,6 +437,7 @@ export interface Invoice {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Payments (invoice-linked or direct / marketplace payouts) ────────────────
@@ -466,6 +476,7 @@ export interface Payment {
   updatedAt: Date;
   deleted?: boolean;
   deletedAt?: Date;
+  deletedBy?: string;
 }
 
 // ─── Reporting aggregates ─────────────────────────────────────────────────────

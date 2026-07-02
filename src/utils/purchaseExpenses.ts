@@ -46,7 +46,8 @@ function expenseFromPayment(
 /** Create or update expenses for each payment on a purchase order. */
 export async function syncPurchaseExpenses(
   companyId: string,
-  purchase: PurchaseOrder
+  purchase: PurchaseOrder,
+  deletedBy: string
 ): Promise<PurchaseOrder> {
   const allExpenses = await firestoreService.expenses.getAll(companyId);
   const linked = allExpenses.filter(
@@ -79,7 +80,7 @@ export async function syncPurchaseExpenses(
 
   for (const expense of linked) {
     if (expense.purchasePaymentId && !paymentIds.has(expense.purchasePaymentId)) {
-      await firestoreService.expenses.delete(companyId, expense.id);
+      await firestoreService.expenses.delete(companyId, expense.id, deletedBy);
     }
   }
 
@@ -107,7 +108,8 @@ export async function syncPurchaseExpenses(
 /** Soft-delete all auto-generated expenses linked to a purchase order. */
 export async function deletePurchaseLinkedExpenses(
   companyId: string,
-  purchaseOrderId: string
+  purchaseOrderId: string,
+  deletedBy: string
 ): Promise<void> {
   const allExpenses = await firestoreService.expenses.getAll(companyId);
   const linked = allExpenses.filter(
@@ -115,6 +117,6 @@ export async function deletePurchaseLinkedExpenses(
   );
 
   await Promise.all(
-    linked.map((expense) => firestoreService.expenses.delete(companyId, expense.id))
+    linked.map((expense) => firestoreService.expenses.delete(companyId, expense.id, deletedBy))
   );
 }

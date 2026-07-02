@@ -1,3 +1,4 @@
+export * from './softDelete';
 export * from './org';
 export * from './orgMember';
 export * from './userProfile';

@@ -40,7 +40,7 @@ type StatusFilter = 'active' | 'archived' | 'all';
 export function Vendors() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.VENDORS);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -151,7 +151,7 @@ export function Vendors() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await firestoreService.vendors.delete(company.id, vendor.id);
+          await firestoreService.vendors.delete(company.id, vendor.id, user!.uid);
           notification.success('Vendor deleted');
           reload();
         } catch (err) {

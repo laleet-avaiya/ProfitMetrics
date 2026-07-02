@@ -74,7 +74,7 @@ export function Sales() {
     canUpdate: canUpdateInvoice,
     canDelete: canDeleteInvoice,
   } = useModuleAccess(AppModule.INVOICES);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -216,14 +216,14 @@ export function Sales() {
       onConfirm: async () => {
         try {
           if (row.kind === 'marketplace') {
-            await firestoreService.sales.delete(company.id, row.id);
-            await deleteSaleLinkedExpenses(company.id, row.id);
+            await firestoreService.sales.delete(company.id, row.id, user!.uid);
+            await deleteSaleLinkedExpenses(company.id, row.id, user!.uid);
             await restoreSaleStock(company.id, row.sale);
           } else {
             if (row.invoice.stockApplied) {
               await restoreInvoiceStock(company.id, row.invoice);
             }
-            await firestoreService.invoices.delete(company.id, row.id);
+            await firestoreService.invoices.delete(company.id, row.id, user!.uid);
           }
           notification.success('Sale deleted');
           await reload();

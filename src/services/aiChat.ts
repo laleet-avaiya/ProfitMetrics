@@ -5,14 +5,16 @@ import {
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
   orderBy,
   limit,
-  deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { AiChat, AiChatMessage } from '../types';
+import { isNotDeleted } from '../models/softDelete';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
+import { appendAuditLog } from './auditLog';
 
 const COLLECTION_AI_CHATS = 'aiChats';
 
@@ -26,6 +28,9 @@ function mapChat(id: string, data: Record<string, unknown>): AiChat {
     id,
     companyId: String(converted.companyId ?? ''),
     title: String(converted.title ?? 'New chat'),
+    deleted: converted.deleted === true,
+    deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
+    deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -50,11 +55,13 @@ export const aiChatService = {
       limit(50)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((chatDoc) => {
-      const data = chatDoc.data();
-      const id = String(data.id ?? chatDoc.id.replace(`${companyId}_`, ''));
-      return mapChat(id, data as Record<string, unknown>);
-    });
+    return snapshot.docs
+      .map((chatDoc) => {
+        const data = chatDoc.data();
+        const id = String(data.id ?? chatDoc.id.replace(`${companyId}_`, ''));
+        return mapChat(id, data as Record<string, unknown>);
+      })
+      .filter(isNotDeleted);
   },
 
   async createChat(companyId: string, title = 'New chat'): Promise<AiChat> {
@@ -76,15 +83,29 @@ export const aiChatService = {
     return chat;
   },
 
-  async deleteChat(companyId: string, chatId: string): Promise<void> {
-    const chatRef = doc(db, COLLECTION_AI_CHATS, getDocId(companyId, chatId));
-    const messagesRef = collection(chatRef, 'messages');
-    const messagesSnap = await getDocs(messagesRef);
-    await Promise.all(messagesSnap.docs.map((messageDoc) => deleteDoc(messageDoc.ref)));
-    await deleteDoc(chatRef);
+  async deleteChat(companyId: string, chatId: string, deletedBy: string): Promise<void> {
+    const now = nowUtc();
+    await updateDoc(
+      doc(db, COLLECTION_AI_CHATS, getDocId(companyId, chatId)),
+      prepareDatesForFirestore({
+        deleted: true,
+        deletedAt: now,
+        deletedBy,
+        updatedAt: now,
+      })
+    );
+    appendAuditLog(companyId, deletedBy, {
+      action: 'ai_chat.deleted',
+      entityType: 'ai_chat',
+      entityId: chatId,
+      summary: 'AI chat deleted',
+    });
   },
 
   async listMessages(companyId: string, chatId: string): Promise<AiChatMessage[]> {
+    const chat = await this.getChat(companyId, chatId);
+    if (!chat) return [];
+
     const messagesRef = collection(
       doc(db, COLLECTION_AI_CHATS, getDocId(companyId, chatId)),
       'messages'
@@ -101,6 +122,7 @@ export const aiChatService = {
     if (!chatDoc.exists()) return null;
     const data = chatDoc.data();
     const id = String(data.id ?? chatId);
-    return mapChat(id, data as Record<string, unknown>);
+    const chat = mapChat(id, data as Record<string, unknown>);
+    return isNotDeleted(chat) ? chat : null;
   },
 };

@@ -15,7 +15,7 @@ function getQuotaInfo(org: { aiMessageQuota?: number; aiMessagesUsed?: number } 
 export type AiSendingPhase = 'idle' | 'thinking' | 'analyzing';
 
 export function useAiAssistant() {
-  const { company, org, refreshSession } = useAuth();
+  const { company, org, refreshSession, user } = useAuth();
   const [chats, setChats] = useState<AiChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
@@ -86,7 +86,7 @@ export function useAiAssistant() {
       if (!companyId) return;
       setError(null);
       try {
-        await aiChatService.deleteChat(companyId, chatId);
+        await aiChatService.deleteChat(companyId, chatId, user!.uid);
         setChats((prev) => prev.filter((chat) => chat.id !== chatId));
         if (activeChatId === chatId) {
           setActiveChatId(null);
@@ -96,7 +96,7 @@ export function useAiAssistant() {
         setError(formatAiAssistantError(err, 'Unable to delete this chat. Please try again.'));
       }
     },
-    [companyId, activeChatId]
+    [companyId, activeChatId, user]
   );
 
   const sendMessage = useCallback(

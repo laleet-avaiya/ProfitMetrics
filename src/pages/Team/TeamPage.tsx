@@ -123,7 +123,7 @@ export function TeamPage() {
     }
 
     try {
-      await membershipService.removeMember(company.id, member.userId);
+      await membershipService.removeMember(company.id, member.userId, user!.uid);
       notification.success('Team member removed');
       await loadTeam();
     } catch (error) {
@@ -133,8 +133,9 @@ export function TeamPage() {
   };
 
   const handleRevokeInvite = async (invite: CompanyInvite) => {
+    if (!company || !user) return;
     try {
-      await membershipService.revokeInvite(invite.id);
+      await membershipService.revokeInvite(invite.id, user.uid, company.id);
       notification.success('Invite revoked');
       await loadTeam();
     } catch (error) {

@@ -33,7 +33,7 @@ type StatusFilter = 'all' | InvoiceStatus;
 export function Invoices() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.INVOICES);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
   const [searchParams] = useSearchParams();
@@ -111,7 +111,7 @@ export function Invoices() {
           if (invoice.stockApplied) {
             await restoreInvoiceStock(company.id, invoice);
           }
-          await firestoreService.invoices.delete(company.id, invoice.id);
+          await firestoreService.invoices.delete(company.id, invoice.id, user!.uid);
           notification.success('Invoice deleted');
           reload();
         } catch (err) {

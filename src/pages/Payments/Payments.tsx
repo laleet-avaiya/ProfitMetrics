@@ -35,7 +35,7 @@ type PlatformFilter = 'all' | string;
 export function Payments() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.PAYMENTS);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { summary: marketplaceSummary, getFilterPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -92,7 +92,7 @@ export function Payments() {
       confirmLabel: 'Delete',
       variant: 'danger',
       onConfirm: async () => {
-        await firestoreService.payments.delete(company.id, payment.id);
+        await firestoreService.payments.delete(company.id, payment.id, user!.uid);
         if (payment.invoiceId) {
           await syncInvoicePaymentRollup(company.id, payment.invoiceId);
         }

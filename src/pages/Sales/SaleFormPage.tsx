@@ -68,7 +68,7 @@ type SaleFormTab = 'order' | 'items' | 'delivery' | 'extras';
 export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { productPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
   const isEditing = Boolean(saleId);
@@ -346,7 +346,7 @@ export function SaleFormPage() {
           notification.error('Sale saved but stock could not be updated.');
         }
         try {
-          await syncSaleExpenses(company.id, payload);
+          await syncSaleExpenses(company.id, payload, user!.uid);
         } catch (syncErr) {
           console.error('Failed to sync sale expenses:', syncErr);
           notification.error('Sale saved but linked expenses could not be updated.');
@@ -370,7 +370,7 @@ export function SaleFormPage() {
           notification.error('Sale saved but stock could not be updated.');
         }
         try {
-          await syncSaleExpenses(company.id, created);
+          await syncSaleExpenses(company.id, created, user!.uid);
         } catch (syncErr) {
           console.error('Failed to sync sale expenses:', syncErr);
           notification.error('Sale saved but linked expenses could not be created.');

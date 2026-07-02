@@ -52,10 +52,12 @@ async function getCollection<T extends Record<string, unknown>>(
   if (cached) return cached as T[];
 
   const snapshot = await db.collection(collectionName).where('companyId', '==', companyId).get();
-  const rows = snapshot.docs.map((docSnap) => {
-    const data = docSnap.data() as T;
-    return { ...data, id: (data.id as string | undefined) ?? docSnap.id };
-  });
+  const rows = snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data() as T;
+      return { ...data, id: (data.id as string | undefined) ?? docSnap.id };
+    })
+    .filter((row) => !row.deleted);
   cache.set(cacheKey, rows);
   return rows;
 }

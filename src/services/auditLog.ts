@@ -10,12 +10,37 @@ export type AuditAction =
   | 'quotation.created'
   | 'quotation.updated'
   | 'quotation.deleted'
+  | 'product.deleted'
+  | 'sale.deleted'
+  | 'expense.deleted'
+  | 'vendor.deleted'
+  | 'purchase.deleted'
+  | 'stock.deleted'
+  | 'customer.deleted'
+  | 'payment.deleted'
+  | 'team.member_removed'
+  | 'team.invite_revoked'
+  | 'ai_chat.deleted'
   | 'company.created'
   | 'company.updated'
   | 'auth.password_changed'
   | 'auth.sign_out';
 
-export type AuditEntityType = 'invoice' | 'quotation' | 'company' | 'auth';
+export type AuditEntityType =
+  | 'invoice'
+  | 'quotation'
+  | 'product'
+  | 'sale'
+  | 'expense'
+  | 'vendor'
+  | 'purchase'
+  | 'stock'
+  | 'customer'
+  | 'payment'
+  | 'team'
+  | 'ai_chat'
+  | 'company'
+  | 'auth';
 
 export interface AuditLogPayload {
   action: AuditAction;

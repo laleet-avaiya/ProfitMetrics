@@ -64,7 +64,7 @@ function paymentTone(status: PurchaseOrder['paymentStatus']): string {
 export function Purchases() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.PURCHASES);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
   const [searchParams] = useSearchParams();
@@ -142,8 +142,8 @@ export function Purchases() {
       onConfirm: async () => {
         try {
           await reverseAllPurchaseStock(company.id, purchase);
-          await deletePurchaseLinkedExpenses(company.id, purchase.id);
-          await firestoreService.purchases.delete(company.id, purchase.id);
+          await deletePurchaseLinkedExpenses(company.id, purchase.id, user!.uid);
+          await firestoreService.purchases.delete(company.id, purchase.id, user!.uid);
           notification.success('Purchase order deleted');
           reload();
         } catch (err) {

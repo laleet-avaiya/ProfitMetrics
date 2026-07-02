@@ -35,7 +35,7 @@ import { getExpenseVendorDisplay } from '../../utils/vendorHelpers';
 export function Expenses() {
   const navigate = useNavigate();
   const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.EXPENSES);
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,7 +117,7 @@ export function Expenses() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await firestoreService.expenses.delete(company.id, expense.id);
+          await firestoreService.expenses.delete(company.id, expense.id, user!.uid);
           notification.success('Expense deleted');
           reload();
         } catch (err) {

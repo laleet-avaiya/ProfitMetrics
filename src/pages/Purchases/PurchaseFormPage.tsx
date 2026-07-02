@@ -60,7 +60,7 @@ export function PurchaseFormPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const isEditing = Boolean(purchaseId);
   const currency = company?.currency ?? 'AED';
@@ -227,7 +227,7 @@ export function PurchaseFormPage() {
         }
         await firestoreService.purchases.update(company.id, purchase.id, payload);
         if (payload.payments.length > 0) {
-          await syncPurchaseExpenses(company.id, { ...purchase, ...payload });
+          await syncPurchaseExpenses(company.id, { ...purchase, ...payload }, user!.uid);
         }
         notification.success('Purchase order updated');
         navigate(`/purchases/${purchase.id}`);

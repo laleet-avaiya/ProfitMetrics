@@ -72,14 +72,33 @@ service cloud.firestore {
 
     function canUpdateModuleDoc(module) {
       return ownsDocument()
-        && hasModulePermission(resource.data.companyId, module, 'update')
-        && maintainsCompanyId();
+        && maintainsCompanyId()
+        && deletedFieldChangeAllowed(module)
+        && (
+          (hasModulePermission(resource.data.companyId, module, 'update')
+            && request.resource.data.deleted != true)
+          || isSoftDeleteUpdate(module)
+        );
+    }
+
+    function isSoftDeleting() {
+      return resource.data.deleted != true && request.resource.data.deleted == true;
+    }
+
+    function isSoftDeleteUpdate(module) {
+      return isSoftDeleting()
+        && request.resource.data.deletedBy == request.auth.uid
+        && hasModulePermission(resource.data.companyId, module, 'delete');
+    }
+
+    function deletedFieldChangeAllowed(module) {
+      if (request.resource.data.deleted == resource.data.deleted) return true;
+      if (resource.data.deleted == true) return false;
+      return isSoftDeleteUpdate(module);
     }
 
     function canDeleteModuleDoc(module) {
-      return ownsDocument()
-        && hasModulePermission(resource.data.companyId, module, 'delete')
-        && maintainsCompanyId();
+      return false;
     }
 
     function maintainsCompanyId() {
@@ -206,8 +225,14 @@ service cloud.firestore {
         && resource.data.userId != request.auth.uid
         && request.resource.data.orgId == resource.data.orgId
         && request.resource.data.userId == resource.data.userId
-        && request.resource.data.role in ['admin', 'member'];
-      allow delete: if isOrgAdmin(resource.data.orgId) && resource.data.userId != request.auth.uid;
+        && request.resource.data.role in ['admin', 'member']
+        && (
+          resource.data.deleted == request.resource.data.deleted
+          || (request.resource.data.deleted == true
+            && request.resource.data.deletedBy == request.auth.uid
+            && request.resource.data.status == 'disabled')
+        );
+      allow delete: if false;
     }
 
     match /companies/{companyId} {
@@ -219,8 +244,14 @@ service cloud.firestore {
         && request.resource.data.id == companyId;
       allow update: if hasModulePermission(companyId, 'settings', 'update')
         && companyOrgIdUnchanged()
-        && companyCreatedByUnchanged();
-      allow delete: if isCompanyAdmin(companyId) || isOrgAdmin(resource.data.orgId);
+        && companyCreatedByUnchanged()
+        && (
+          resource.data.deleted == request.resource.data.deleted
+          || (request.resource.data.deleted == true
+            && request.resource.data.deletedBy == request.auth.uid
+            && isOrgAdmin(resource.data.orgId))
+        );
+      allow delete: if false;
     }
 
     match /companyRoles/{roleDocId} {
@@ -244,9 +275,15 @@ service cloud.firestore {
         && resource.data.userId != request.auth.uid
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.userId == resource.data.userId
-        && request.resource.data.role in ['admin', 'manager', 'viewer'];
-      allow delete: if hasModulePermission(resource.data.companyId, 'team', 'delete')
-        && resource.data.userId != request.auth.uid;
+        && request.resource.data.role in ['admin', 'manager', 'viewer']
+        && (
+          resource.data.deleted == request.resource.data.deleted
+          || (request.resource.data.deleted == true
+            && request.resource.data.deletedBy == request.auth.uid
+            && request.resource.data.status == 'disabled'
+            && hasModulePermission(resource.data.companyId, 'team', 'delete'))
+        );
+      allow delete: if false;
     }
 
     match /companyInvites/{inviteId} {
@@ -257,8 +294,13 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.role in ['admin', 'manager', 'viewer'];
       allow update: if hasModulePermission(resource.data.companyId, 'team', 'update')
-        || isAcceptingInvite();
-      allow delete: if hasModulePermission(resource.data.companyId, 'team', 'delete');
+        || isAcceptingInvite()
+        || (hasModulePermission(resource.data.companyId, 'team', 'delete')
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'revoked'
+          && request.resource.data.deleted == true
+          && request.resource.data.deletedBy == request.auth.uid);
+      allow delete: if false;
     }
 
     match /products/{docId} {
@@ -335,7 +377,7 @@ service cloud.firestore {
     match /aiChats/{docId} {
       allow read: if canReadModuleDoc('ai_assistant');
       allow update: if canUpdateModuleDoc('ai_assistant');
-      allow delete: if canDeleteModuleDoc('ai_assistant');
+      allow delete: if false;
       allow create: if canCreateModule('ai_assistant');
 
       match /messages/{messageId} {

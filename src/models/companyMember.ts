@@ -1,6 +1,7 @@
 import type { CompanyRole } from '../constants/roles';
+import type { SoftDeletable } from './softDelete';
 
-export interface CompanyMember {
+export interface CompanyMember extends SoftDeletable {
   id: string;
   companyId: string;
   userId: string;

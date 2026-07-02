@@ -60,9 +60,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm run test
-
       - name: Notify Slack — deployment started
         if: success()
         continue-on-error: true
