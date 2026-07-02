@@ -31,25 +31,45 @@ service cloud.firestore {
       return isActiveMember(companyId) && memberRole(companyId) == 'admin';
     }
 
-    function canWriteCompany(companyId) {
-      return isActiveMember(companyId) && memberRole(companyId) in ['admin', 'manager'];
+    function rolePermissionsPath(companyId, role) {
+      return /databases/$(database)/documents/companyRoles/$(companyId + '_' + role);
     }
 
-    function canReadCompanyDoc() {
+    function hasModulePermission(companyId, module, action) {
+      return isActiveMember(companyId)
+        && (
+          memberRole(companyId) == 'admin'
+          || get(rolePermissionsPath(companyId, memberRole(companyId))).data.permissions[module + '.' + action] == true
+        );
+    }
+
+    function canReadModuleDoc(module) {
       return isAuthenticated()
-        && (resource == null || isActiveMember(resource.data.companyId));
+        && (resource == null || hasModulePermission(resource.data.companyId, module, 'view'));
     }
 
-    function ownsDocument() {
-      return isAuthenticated() && isActiveMember(resource.data.companyId);
+    function canCreateModule(module) {
+      return hasModulePermission(request.resource.data.companyId, module, 'create');
     }
 
-    function createsForMemberCompany() {
-      return canWriteCompany(request.resource.data.companyId);
+    function canUpdateModuleDoc(module) {
+      return ownsDocument()
+        && hasModulePermission(resource.data.companyId, module, 'update')
+        && maintainsCompanyId();
+    }
+
+    function canDeleteModuleDoc(module) {
+      return ownsDocument()
+        && hasModulePermission(resource.data.companyId, module, 'delete')
+        && maintainsCompanyId();
     }
 
     function maintainsCompanyId() {
       return request.resource.data.companyId == resource.data.companyId;
+    }
+
+    function ownsDocument() {
+      return isAuthenticated() && isActiveMember(resource.data.companyId);
     }
 
     function companyQuotaFieldsUnchanged() {
@@ -73,7 +93,11 @@ service cloud.firestore {
 
     function ownsParentAiChat(chatDocId) {
       return isAuthenticated()
-        && isActiveMember(get(/databases/$(database)/documents/aiChats/$(chatDocId)).data.companyId);
+        && hasModulePermission(
+          get(/databases/$(database)/documents/aiChats/$(chatDocId)).data.companyId,
+          'ai_assistant',
+          'view'
+        );
     }
 
     function authEmail() {
@@ -113,110 +137,128 @@ service cloud.firestore {
     }
 
     match /companies/{companyId} {
-      allow read: if isActiveMember(companyId);
+      allow read: if hasModulePermission(companyId, 'settings', 'view');
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.id == companyId;
-      allow update: if isCompanyAdmin(companyId) && companyQuotaFieldsUnchanged() && companyOwnerUnchanged();
+      allow update: if hasModulePermission(companyId, 'settings', 'update') && companyQuotaFieldsUnchanged() && companyOwnerUnchanged();
       allow delete: if isCompanyAdmin(companyId) && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /companyRoles/{roleDocId} {
+      allow read: if isAuthenticated() && isActiveMember(resource.data.companyId);
+      allow create: if isCompanyAdmin(request.resource.data.companyId);
+      allow update: if isCompanyAdmin(resource.data.companyId) && resource.data.role != 'admin';
+      allow delete: if false;
     }
 
     match /companyMembers/{memberId} {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        isActiveMember(resource.data.companyId)
+        hasModulePermission(resource.data.companyId, 'team', 'view')
       );
       allow create: if isBootstrapAdminMember(memberId)
         || isSelfJoinViaInvite(memberId)
-        || (isCompanyAdmin(request.resource.data.companyId)
+        || (hasModulePermission(request.resource.data.companyId, 'team', 'create')
           && request.resource.data.status == 'active'
           && request.resource.data.role in ['admin', 'manager', 'viewer']);
-      allow update: if isCompanyAdmin(resource.data.companyId)
+      allow update: if hasModulePermission(resource.data.companyId, 'team', 'update')
         && resource.data.userId != request.auth.uid
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.role in ['admin', 'manager', 'viewer'];
-      allow delete: if isCompanyAdmin(resource.data.companyId) && resource.data.userId != request.auth.uid;
+      allow delete: if hasModulePermission(resource.data.companyId, 'team', 'delete')
+        && resource.data.userId != request.auth.uid;
     }
 
     match /companyInvites/{inviteId} {
       allow read: if isAuthenticated() && (
-        isCompanyAdmin(resource.data.companyId) || inviteEmailMatchesAuth()
+        hasModulePermission(resource.data.companyId, 'team', 'view') || inviteEmailMatchesAuth()
       );
-      allow create: if isCompanyAdmin(request.resource.data.companyId)
+      allow create: if hasModulePermission(request.resource.data.companyId, 'team', 'create')
         && request.resource.data.status == 'pending'
         && request.resource.data.role in ['admin', 'manager', 'viewer'];
-      allow update: if isCompanyAdmin(resource.data.companyId)
+      allow update: if hasModulePermission(resource.data.companyId, 'team', 'update')
         || isAcceptingInvite();
-      allow delete: if isCompanyAdmin(resource.data.companyId);
+      allow delete: if hasModulePermission(resource.data.companyId, 'team', 'delete');
     }
 
     match /products/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('products');
+      allow update: if canUpdateModuleDoc('products');
+      allow delete: if canDeleteModuleDoc('products');
+      allow create: if canCreateModule('products');
     }
 
     match /sales/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('sales');
+      allow update: if canUpdateModuleDoc('sales');
+      allow delete: if canDeleteModuleDoc('sales');
+      allow create: if canCreateModule('sales');
     }
 
     match /expenses/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('expenses');
+      allow update: if canUpdateModuleDoc('expenses');
+      allow delete: if canDeleteModuleDoc('expenses');
+      allow create: if canCreateModule('expenses');
     }
 
     match /vendors/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('vendors');
+      allow update: if canUpdateModuleDoc('vendors');
+      allow delete: if canDeleteModuleDoc('vendors');
+      allow create: if canCreateModule('vendors');
     }
 
     match /purchases/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('purchases');
+      allow update: if canUpdateModuleDoc('purchases');
+      allow delete: if canDeleteModuleDoc('purchases');
+      allow create: if canCreateModule('purchases');
     }
 
     match /stock/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('products');
+      allow update: if canUpdateModuleDoc('products');
+      allow delete: if canDeleteModuleDoc('products');
+      allow create: if canCreateModule('products');
     }
 
     match /customers/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('customers');
+      allow update: if canUpdateModuleDoc('customers');
+      allow delete: if canDeleteModuleDoc('customers');
+      allow create: if canCreateModule('customers');
     }
 
     match /invoices/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('invoices');
+      allow update: if canUpdateModuleDoc('invoices');
+      allow delete: if canDeleteModuleDoc('invoices');
+      allow create: if canCreateModule('invoices');
     }
 
     match /payments/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('payments');
+      allow update: if canUpdateModuleDoc('payments');
+      allow delete: if canDeleteModuleDoc('payments');
+      allow create: if canCreateModule('payments');
     }
 
     match /auditLogs/{logId} {
       allow create: if isAuthenticated()
         && isActiveMember(request.resource.data.companyId)
         && request.resource.data.userId == request.auth.uid;
-      allow read: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
+      allow read: if isAuthenticated() && hasModulePermission(resource.data.companyId, 'team', 'view');
       allow update, delete: if false;
     }
 
     match /aiChats/{docId} {
-      allow read: if canReadCompanyDoc();
-      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
-      allow create: if createsForMemberCompany();
+      allow read: if canReadModuleDoc('ai_assistant');
+      allow update: if canUpdateModuleDoc('ai_assistant');
+      allow delete: if canDeleteModuleDoc('ai_assistant');
+      allow create: if canCreateModule('ai_assistant');
 
       match /messages/{messageId} {
         allow read, delete: if ownsParentAiChat(docId);

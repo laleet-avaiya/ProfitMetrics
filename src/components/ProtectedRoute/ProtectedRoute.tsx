@@ -3,19 +3,21 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { hasLegalConsent } from '../../utils/legalConsent';
-import type { Permission } from '../../constants/roles';
+import type { AppModule, PermissionAction } from '../../constants/permissions';
 import { LoadingView } from '../AppLoader/AppLoader';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   requireLegalConsent?: boolean;
-  requiredPermission?: Permission;
+  module?: AppModule;
+  action?: PermissionAction;
 }
 
 export function ProtectedRoute({
   children,
   requireLegalConsent = true,
-  requiredPermission,
+  module,
+  action = 'view',
 }: ProtectedRouteProps) {
   const { user, company, membership, loading } = useAuth();
   const { can } = usePermissions();
@@ -36,7 +38,7 @@ export function ProtectedRoute({
     return <Navigate to="/no-company" replace />;
   }
 
-  if (requiredPermission && !can(requiredPermission)) {
+  if (module && !can(module, action)) {
     return <Navigate to="/" replace />;
   }
 

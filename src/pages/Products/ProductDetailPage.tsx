@@ -7,8 +7,10 @@ import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/Det
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip, type DetailStatItem } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
 import { PlatformFeeKind, type ProductStock } from '../../types';
 import { amountIncludesTaxLabel, resolveListingTax, taxPercentLabel } from '../../utils/listingTax';
@@ -24,6 +26,7 @@ export function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.PRODUCTS);
   const currency = company?.currency ?? 'AED';
 
   const { entity: product, loading, notFound } = useEntityDetail({
@@ -120,7 +123,7 @@ export function ProductDetailPage() {
         ) : undefined
       }
       actions={
-        product ? (
+        product && canUpdate ? (
           <Button
             type="button"
             variant="outline"

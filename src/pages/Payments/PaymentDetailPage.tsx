@@ -6,8 +6,10 @@ import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/Det
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { paymentKindLabel } from '../../constants/paymentKinds';
 import { paymentModeLabel } from '../../constants/paymentModes';
 import { firestoreService } from '../../services/firestore';
@@ -19,6 +21,7 @@ export function PaymentDetailPage() {
   const { paymentId } = useParams<{ paymentId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.PAYMENTS);
   const currency = company?.currency ?? 'AED';
 
   const { entity: payment, loading, notFound } = useEntityDetail({
@@ -47,7 +50,7 @@ export function PaymentDetailPage() {
         ) : undefined
       }
       actions={
-        payment ? (
+        payment && canUpdate ? (
           <Button variant="outline" onClick={() => navigate(`/payments/${payment.id}/edit`)}>
             <Pencil className="w-4 h-4" />
             Edit

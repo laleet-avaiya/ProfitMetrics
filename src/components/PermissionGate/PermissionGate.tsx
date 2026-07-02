@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
-import type { Permission } from '../../constants/roles';
+import type { AppModule, PermissionAction } from '../../constants/permissions';
 
 interface PermissionGateProps {
-  permission: Permission;
+  module: AppModule;
+  action: PermissionAction;
   children: ReactNode;
   fallback?: ReactNode;
 }
 
-export function PermissionGate({ permission, children, fallback = null }: PermissionGateProps) {
+export function PermissionGate({ module, action, children, fallback = null }: PermissionGateProps) {
   const { can } = usePermissions();
-  return can(permission) ? children : fallback;
+  return can(module, action) ? children : fallback;
 }

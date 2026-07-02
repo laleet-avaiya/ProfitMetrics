@@ -22,7 +22,8 @@ import {
   tableTruncateCellClass,
   tableWrapClass,
 } from '../../constants/ui';
-import { usePermissions } from '../../hooks/usePermissions';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
@@ -45,7 +46,7 @@ function averageListingMargin(product: Product): number | null {
 
 export function Products() {
   const navigate = useNavigate();
-  const { canWrite } = usePermissions();
+  const { canCreate, canUpdate } = useModuleAccess(AppModule.PRODUCTS);
   const { summary: marketplaceSummary } = useCompanyMarketplaces();
 
   const emptyData = useMemo(
@@ -138,7 +139,7 @@ export function Products() {
             searchPlaceholder="Search by name, SKU, or category"
             searchAriaLabel="Search products"
             actions={
-              canWrite ? (
+              canCreate ? (
                 <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
                   <Plus className="w-4 h-4" />
                   Add product
@@ -236,7 +237,7 @@ export function Products() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {canWrite ? (
+                              {canUpdate ? (
                                 <button
                                   type="button"
                                   onClick={() => openEdit(product)}

@@ -8,6 +8,8 @@ import { Select } from '../../components/Select/Select';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
+import { FormTabs } from '../../components/ui/FormTabs';
+import { RolePermissionsEditor } from '../../components/Team/RolePermissionsEditor';
 import {
   tableCellClass,
   tableClass,
@@ -16,14 +18,19 @@ import {
   tableWrapClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
+import { useModuleAccess, usePermissions } from '../../hooks/usePermissions';
 import { useNotification } from '../../hooks/useNotification';
 import { membershipService } from '../../services/membership';
 import type { CompanyInvite, CompanyMember } from '../../types';
+import { AppModule } from '../../constants/permissions';
 import { COMPANY_ROLE_OPTIONS, CompanyRole, roleLabel } from '../../constants/roles';
+
+type TeamTab = 'members' | 'permissions';
 
 export function TeamPage() {
   const { user, company } = useAuth();
   const notification = useNotification();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.TEAM);
 
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [invites, setInvites] = useState<CompanyInvite[]>([]);
@@ -31,6 +38,8 @@ export function TeamPage() {
   const [saving, setSaving] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<CompanyMember['role']>(CompanyRole.MANAGER);
+  const [activeTab, setActiveTab] = useState<TeamTab>('members');
+  const { isAdmin } = usePermissions();
 
   const loadTeam = useCallback(async () => {
     if (!company) return;
@@ -149,9 +158,25 @@ export function TeamPage() {
       <PageShell>
         <PageHeader
           title="Team"
-          description="Invite teammates and manage their roles. Admins can manage users; managers can edit data; viewers have read-only access."
+          description="Invite teammates, manage roles, and configure module permissions per role."
         />
 
+        <FormTabs
+          ariaLabel="Team sections"
+          tabs={[
+            { id: 'members' as const, label: 'Members', icon: Users },
+            ...(isAdmin
+              ? [{ id: 'permissions' as const, label: 'Role permissions', icon: Shield }]
+              : []),
+          ]}
+          active={activeTab}
+          onChange={(id) => setActiveTab(id as TeamTab)}
+        />
+
+        {activeTab === 'permissions' && isAdmin ? (
+          <RolePermissionsEditor />
+        ) : (
+          <>
         <Card className="p-5 space-y-4">
           <div className="flex items-center gap-2 text-gray-900 dark:text-white font-medium">
             <UserPlus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -165,6 +190,7 @@ export function TeamPage() {
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="teammate@company.com"
               required
+              disabled={!canCreate}
             />
             <Select
               label="Role"
@@ -174,8 +200,9 @@ export function TeamPage() {
                 value: option.value,
                 label: option.label,
               }))}
+              disabled={!canCreate}
             />
-            <Button type="submit" variant="primary" loading={saving}>
+            <Button type="submit" variant="primary" loading={saving} disabled={!canCreate}>
               Send invite
             </Button>
           </form>
@@ -222,7 +249,7 @@ export function TeamPage() {
                               <Shield className="w-4 h-4" />
                               {roleLabel(member.role)}
                             </span>
-                          ) : (
+                          ) : canUpdate ? (
                             <Select
                               label=""
                               aria-label={`Role for ${member.email}`}
@@ -235,10 +262,15 @@ export function TeamPage() {
                                 label: option.label,
                               }))}
                             />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-sm">
+                              <Shield className="w-4 h-4" />
+                              {roleLabel(member.role)}
+                            </span>
                           )}
                         </td>
                         <td className={tableCellClass}>
-                          {!isSelf ? (
+                          {!isSelf && canDelete ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -280,14 +312,16 @@ export function TeamPage() {
                       <td className={tableCellClass}>{invite.email}</td>
                       <td className={tableCellClass}>{roleLabel(invite.role)}</td>
                       <td className={tableCellClass}>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => void handleRevokeInvite(invite)}
-                          className="text-red-600 hover:text-red-700 dark:text-red-400"
-                        >
-                          Revoke
-                        </Button>
+                        {canDelete ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => void handleRevokeInvite(invite)}
+                            className="text-red-600 hover:text-red-700 dark:text-red-400"
+                          >
+                            Revoke
+                          </Button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -296,6 +330,8 @@ export function TeamPage() {
             </div>
           </div>
         ) : null}
+          </>
+        )}
       </PageShell>
     </Layout>
   );

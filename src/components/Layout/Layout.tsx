@@ -29,7 +29,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { roleLabel } from '../../constants/roles';
-import type { Permission } from '../../constants/roles';
+import { AppModule } from '../../constants/permissions';
 import { BRAND_LOGO_ICON, BRAND_NAME } from '../../constants/brand';
 import {
   getSubscriptionDaysRemaining,
@@ -46,7 +46,7 @@ interface NavItem {
   path: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  permission?: Permission;
+  module?: (typeof AppModule)[keyof typeof AppModule];
 }
 
 interface NavSection {
@@ -57,38 +57,38 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     items: [
-      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/reports', label: 'Reports', icon: BarChart3 },
-      { path: '/ai-assistant', label: 'AI Assistant', icon: Bot },
+      { path: '/', label: 'Dashboard', icon: LayoutDashboard, module: AppModule.DASHBOARD },
+      { path: '/reports', label: 'Reports', icon: BarChart3, module: AppModule.REPORTS },
+      { path: '/ai-assistant', label: 'AI Assistant', icon: Bot, module: AppModule.AI_ASSISTANT },
     ],
   },
   {
     title: 'Sales',
     items: [
-      { path: '/customers', label: 'Customers', icon: Users },
-      { path: '/sales', label: 'Sales', icon: ShoppingCart },
-      { path: '/payments', label: 'Payments', icon: Wallet },
+      { path: '/customers', label: 'Customers', icon: Users, module: AppModule.CUSTOMERS },
+      { path: '/sales', label: 'Sales', icon: ShoppingCart, module: AppModule.SALES },
+      { path: '/payments', label: 'Payments', icon: Wallet, module: AppModule.PAYMENTS },
     ],
   },
   {
     title: 'Purchase',
     items: [
-      { path: '/purchases', label: 'Purchases', icon: ClipboardList },
-      { path: '/expenses', label: 'Expenses', icon: Receipt },
-      { path: '/vendors', label: 'Vendors', icon: Building2 },
+      { path: '/purchases', label: 'Purchases', icon: ClipboardList, module: AppModule.PURCHASES },
+      { path: '/expenses', label: 'Expenses', icon: Receipt, module: AppModule.EXPENSES },
+      { path: '/vendors', label: 'Vendors', icon: Building2, module: AppModule.VENDORS },
     ],
   },
   {
     title: 'Inventory',
-    items: [{ path: '/products', label: 'Products', icon: Package }],
+    items: [{ path: '/products', label: 'Products', icon: Package, module: AppModule.PRODUCTS }],
   },
   {
     title: 'Account',
     items: [
-      { path: '/team', label: 'Team', icon: UserCog, permission: 'manage_team' },
-      { path: '/configuration', label: 'Configuration', icon: SlidersHorizontal, permission: 'manage_company' },
-      { path: '/subscription', label: 'Subscription', icon: CreditCard, permission: 'manage_subscription' },
-      { path: '/settings', label: 'Settings', icon: Settings },
+      { path: '/team', label: 'Team', icon: UserCog, module: AppModule.TEAM },
+      { path: '/configuration', label: 'Configuration', icon: SlidersHorizontal, module: AppModule.CONFIGURATION },
+      { path: '/subscription', label: 'Subscription', icon: CreditCard, module: AppModule.SUBSCRIPTION },
+      { path: '/settings', label: 'Settings', icon: Settings, module: AppModule.SETTINGS },
       { path: '/about', label: 'About', icon: Info },
     ],
   },
@@ -270,7 +270,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
                   </p>
                 ) : null}
                 {section.items
-                  .filter((item) => !item.permission || can(item.permission))
+                  .filter((item) => !item.module || can(item.module, 'view'))
                   .map((item) => (
                   <Link
                     key={item.path}

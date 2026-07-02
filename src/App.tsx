@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute/ProtectedRoute';
-import { WriteRoute, AdminRoute, CompanyAdminRoute } from './components/ProtectedRoute/RoleRoutes';
+import { ModuleRoute, ModuleWriteRoute } from './components/ProtectedRoute/RoleRoutes';
+import { AppModule } from './constants/permissions';
 import { Login } from './components/Login/Login';
 import { Signup } from './components/Signup/Signup';
 import { ForgotPassword } from './components/ForgotPassword/ForgotPassword';
@@ -65,95 +66,57 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/login"
-          element={
-            <>
-              <AuthRedirect />
-              <Login />
-            </>
-          }
-        />
-        <Route
-          path="/signup"
-          element={
-            <>
-              <AuthRedirect />
-              <Signup />
-            </>
-          }
-        />
-        <Route
-          path="/forgot-password"
-          element={
-            <>
-              <AuthRedirect />
-              <ForgotPassword />
-            </>
-          }
-        />
+        <Route path="/login" element={<><AuthRedirect /><Login /></>} />
+        <Route path="/signup" element={<><AuthRedirect /><Signup /></>} />
+        <Route path="/forgot-password" element={<><AuthRedirect /><ForgotPassword /></>} />
 
         <Route path="/no-company" element={<ProtectedRoute requireLegalConsent={false}><NoCompanyPage /></ProtectedRoute>} />
         <Route path="/create-company" element={<ProtectedRoute requireLegalConsent={false}><CreateCompanyPage /></ProtectedRoute>} />
 
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-        <Route path="/products/new" element={<WriteRoute><ProductFormPage /></WriteRoute>} />
-        <Route path="/products/:productId/edit" element={<WriteRoute><ProductFormPage /></WriteRoute>} />
-        <Route path="/products/:productId" element={<ProtectedRoute><ProductDetailPage /></ProtectedRoute>} />
-        <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-        <Route path="/sales/new" element={<WriteRoute><SaleFormPage /></WriteRoute>} />
-        <Route path="/sales/:saleId/edit" element={<WriteRoute><SaleFormPage /></WriteRoute>} />
-        <Route path="/sales/:saleId/print" element={<ProtectedRoute><SalePrintPage /></ProtectedRoute>} />
-        <Route path="/sales/:saleId" element={<ProtectedRoute><SaleDetailPage /></ProtectedRoute>} />
-        <Route path="/invoices" element={<ProtectedRoute><InvoicesRedirect /></ProtectedRoute>} />
-        <Route path="/invoices/new" element={<WriteRoute><InvoiceFormPage /></WriteRoute>} />
-        <Route path="/invoices/:invoiceId/edit" element={<WriteRoute><InvoiceFormPage /></WriteRoute>} />
-        <Route path="/invoices/:invoiceId/print" element={<ProtectedRoute><InvoicePrintPage /></ProtectedRoute>} />
-        <Route path="/invoices/:invoiceId" element={<ProtectedRoute><InvoiceDetailPage /></ProtectedRoute>} />
-        <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-        <Route path="/payments/new" element={<WriteRoute><PaymentFormPage /></WriteRoute>} />
-        <Route path="/payments/:paymentId/edit" element={<WriteRoute><PaymentFormPage /></WriteRoute>} />
-        <Route path="/payments/:paymentId" element={<ProtectedRoute><PaymentDetailPage /></ProtectedRoute>} />
-        <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-        <Route path="/expenses/new" element={<WriteRoute><ExpenseFormPage /></WriteRoute>} />
-        <Route path="/expenses/:expenseId/edit" element={<WriteRoute><ExpenseFormPage /></WriteRoute>} />
-        <Route path="/expenses/:expenseId" element={<ProtectedRoute><ExpenseDetailPage /></ProtectedRoute>} />
-        <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
-        <Route path="/vendors/new" element={<WriteRoute><VendorFormPage /></WriteRoute>} />
-        <Route path="/vendors/:vendorId/edit" element={<WriteRoute><VendorFormPage /></WriteRoute>} />
-        <Route path="/vendors/:vendorId" element={<ProtectedRoute><VendorDetailPage /></ProtectedRoute>} />
-        <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-        <Route path="/customers/new" element={<WriteRoute><CustomerFormPage /></WriteRoute>} />
-        <Route path="/customers/:customerId/edit" element={<WriteRoute><CustomerFormPage /></WriteRoute>} />
-        <Route path="/customers/:customerId" element={<ProtectedRoute><CustomerDetailPage /></ProtectedRoute>} />
-        <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
-        <Route path="/purchases/new" element={<WriteRoute><PurchaseFormPage /></WriteRoute>} />
-        <Route path="/purchases/:purchaseId/edit" element={<WriteRoute><PurchaseFormPage /></WriteRoute>} />
-        <Route path="/purchases/:purchaseId" element={<ProtectedRoute><PurchaseDetailPage /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-        <Route path="/reports/:reportId" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-        <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
-        <Route path="/team" element={<AdminRoute><TeamPage /></AdminRoute>} />
-        <Route
-          path="/terms/accept"
-          element={
-            <ProtectedRoute requireLegalConsent={false}>
-              <TermsAcceptancePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/terms"
-          element={
-            <ProtectedRoute requireLegalConsent={false}>
-              <TermsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/configuration" element={<CompanyAdminRoute><Configuration /></CompanyAdminRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/subscription" element={<ProtectedRoute requiredPermission="manage_subscription"><Subscription /></ProtectedRoute>} />
+        <Route path="/" element={<ModuleRoute module={AppModule.DASHBOARD}><Dashboard /></ModuleRoute>} />
+        <Route path="/products" element={<ModuleRoute module={AppModule.PRODUCTS}><Products /></ModuleRoute>} />
+        <Route path="/products/new" element={<ModuleWriteRoute module={AppModule.PRODUCTS} action="create"><ProductFormPage /></ModuleWriteRoute>} />
+        <Route path="/products/:productId/edit" element={<ModuleWriteRoute module={AppModule.PRODUCTS} action="update"><ProductFormPage /></ModuleWriteRoute>} />
+        <Route path="/products/:productId" element={<ModuleRoute module={AppModule.PRODUCTS}><ProductDetailPage /></ModuleRoute>} />
+        <Route path="/sales" element={<ModuleRoute module={AppModule.SALES}><Sales /></ModuleRoute>} />
+        <Route path="/sales/new" element={<ModuleWriteRoute module={AppModule.SALES} action="create"><SaleFormPage /></ModuleWriteRoute>} />
+        <Route path="/sales/:saleId/edit" element={<ModuleWriteRoute module={AppModule.SALES} action="update"><SaleFormPage /></ModuleWriteRoute>} />
+        <Route path="/sales/:saleId/print" element={<ModuleRoute module={AppModule.SALES}><SalePrintPage /></ModuleRoute>} />
+        <Route path="/sales/:saleId" element={<ModuleRoute module={AppModule.SALES}><SaleDetailPage /></ModuleRoute>} />
+        <Route path="/invoices" element={<ModuleRoute module={AppModule.INVOICES}><InvoicesRedirect /></ModuleRoute>} />
+        <Route path="/invoices/new" element={<ModuleWriteRoute module={AppModule.INVOICES} action="create"><InvoiceFormPage /></ModuleWriteRoute>} />
+        <Route path="/invoices/:invoiceId/edit" element={<ModuleWriteRoute module={AppModule.INVOICES} action="update"><InvoiceFormPage /></ModuleWriteRoute>} />
+        <Route path="/invoices/:invoiceId/print" element={<ModuleRoute module={AppModule.INVOICES}><InvoicePrintPage /></ModuleRoute>} />
+        <Route path="/invoices/:invoiceId" element={<ModuleRoute module={AppModule.INVOICES}><InvoiceDetailPage /></ModuleRoute>} />
+        <Route path="/payments" element={<ModuleRoute module={AppModule.PAYMENTS}><Payments /></ModuleRoute>} />
+        <Route path="/payments/new" element={<ModuleWriteRoute module={AppModule.PAYMENTS} action="create"><PaymentFormPage /></ModuleWriteRoute>} />
+        <Route path="/payments/:paymentId/edit" element={<ModuleWriteRoute module={AppModule.PAYMENTS} action="update"><PaymentFormPage /></ModuleWriteRoute>} />
+        <Route path="/payments/:paymentId" element={<ModuleRoute module={AppModule.PAYMENTS}><PaymentDetailPage /></ModuleRoute>} />
+        <Route path="/expenses" element={<ModuleRoute module={AppModule.EXPENSES}><Expenses /></ModuleRoute>} />
+        <Route path="/expenses/new" element={<ModuleWriteRoute module={AppModule.EXPENSES} action="create"><ExpenseFormPage /></ModuleWriteRoute>} />
+        <Route path="/expenses/:expenseId/edit" element={<ModuleWriteRoute module={AppModule.EXPENSES} action="update"><ExpenseFormPage /></ModuleWriteRoute>} />
+        <Route path="/expenses/:expenseId" element={<ModuleRoute module={AppModule.EXPENSES}><ExpenseDetailPage /></ModuleRoute>} />
+        <Route path="/vendors" element={<ModuleRoute module={AppModule.VENDORS}><Vendors /></ModuleRoute>} />
+        <Route path="/vendors/new" element={<ModuleWriteRoute module={AppModule.VENDORS} action="create"><VendorFormPage /></ModuleWriteRoute>} />
+        <Route path="/vendors/:vendorId/edit" element={<ModuleWriteRoute module={AppModule.VENDORS} action="update"><VendorFormPage /></ModuleWriteRoute>} />
+        <Route path="/vendors/:vendorId" element={<ModuleRoute module={AppModule.VENDORS}><VendorDetailPage /></ModuleRoute>} />
+        <Route path="/customers" element={<ModuleRoute module={AppModule.CUSTOMERS}><Customers /></ModuleRoute>} />
+        <Route path="/customers/new" element={<ModuleWriteRoute module={AppModule.CUSTOMERS} action="create"><CustomerFormPage /></ModuleWriteRoute>} />
+        <Route path="/customers/:customerId/edit" element={<ModuleWriteRoute module={AppModule.CUSTOMERS} action="update"><CustomerFormPage /></ModuleWriteRoute>} />
+        <Route path="/customers/:customerId" element={<ModuleRoute module={AppModule.CUSTOMERS}><CustomerDetailPage /></ModuleRoute>} />
+        <Route path="/purchases" element={<ModuleRoute module={AppModule.PURCHASES}><Purchases /></ModuleRoute>} />
+        <Route path="/purchases/new" element={<ModuleWriteRoute module={AppModule.PURCHASES} action="create"><PurchaseFormPage /></ModuleWriteRoute>} />
+        <Route path="/purchases/:purchaseId/edit" element={<ModuleWriteRoute module={AppModule.PURCHASES} action="update"><PurchaseFormPage /></ModuleWriteRoute>} />
+        <Route path="/purchases/:purchaseId" element={<ModuleRoute module={AppModule.PURCHASES}><PurchaseDetailPage /></ModuleRoute>} />
+        <Route path="/reports" element={<ModuleRoute module={AppModule.REPORTS}><Reports /></ModuleRoute>} />
+        <Route path="/reports/:reportId" element={<ModuleRoute module={AppModule.REPORTS}><Reports /></ModuleRoute>} />
+        <Route path="/ai-assistant" element={<ModuleRoute module={AppModule.AI_ASSISTANT}><AIAssistantPage /></ModuleRoute>} />
+        <Route path="/team" element={<ModuleRoute module={AppModule.TEAM}><TeamPage /></ModuleRoute>} />
+        <Route path="/terms/accept" element={<ProtectedRoute requireLegalConsent={false}><TermsAcceptancePage /></ProtectedRoute>} />
+        <Route path="/terms" element={<ProtectedRoute requireLegalConsent={false}><TermsPage /></ProtectedRoute>} />
+        <Route path="/configuration" element={<ModuleRoute module={AppModule.CONFIGURATION}><Configuration /></ModuleRoute>} />
+        <Route path="/settings" element={<ModuleRoute module={AppModule.SETTINGS}><Settings /></ModuleRoute>} />
+        <Route path="/subscription" element={<ModuleRoute module={AppModule.SUBSCRIPTION}><Subscription /></ModuleRoute>} />
         <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
         <Route path="/subscription-expired" element={<ProtectedRoute><SubscriptionExpired /></ProtectedRoute>} />
 

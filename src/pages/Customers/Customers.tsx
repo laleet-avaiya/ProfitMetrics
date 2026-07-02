@@ -13,6 +13,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -26,6 +28,7 @@ type StatusFilter = 'active' | 'archived' | 'all';
 
 export function Customers() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.CUSTOMERS);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -136,10 +139,12 @@ export function Customers() {
           searchPlaceholder="Search name, email, phone"
           searchAriaLabel="Search customers"
           actions={
-            <Button variant="primary" onClick={() => navigate('/customers/new')} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              Add customer
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={() => navigate('/customers/new')} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                Add customer
+              </Button>
+            ) : undefined
           }
           filters={
             <FilterSelect
@@ -162,10 +167,12 @@ export function Customers() {
             title="No customers yet"
             description="Add customers when you create offline invoices."
             action={
-              <Button variant="primary" onClick={() => navigate('/customers/new')}>
-                <Plus className="w-4 h-4" />
-                Add customer
-              </Button>
+              canCreate ? (
+                <Button variant="primary" onClick={() => navigate('/customers/new')}>
+                  <Plus className="w-4 h-4" />
+                  Add customer
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -208,15 +215,21 @@ export function Customers() {
                           <button type="button" onClick={() => navigate(`/customers/${customer.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View customer">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit customer">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}>
-                            {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
-                          </button>
-                          <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete customer">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canUpdate ? (
+                            <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit customer">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          ) : null}
+                          {canUpdate ? (
+                            <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}>
+                              {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
+                            </button>
+                          ) : null}
+                          {canDelete ? (
+                            <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete customer">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

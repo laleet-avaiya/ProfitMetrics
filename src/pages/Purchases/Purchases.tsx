@@ -13,6 +13,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -61,6 +63,7 @@ function paymentTone(status: PurchaseOrder['paymentStatus']): string {
 
 export function Purchases() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.PURCHASES);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -181,10 +184,12 @@ export function Purchases() {
           searchPlaceholder="Search PO, vendor, product"
           searchAriaLabel="Search purchases"
           actions={
-            <Button variant="primary" onClick={() => navigate('/purchases/new')} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              New purchase order
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={() => navigate('/purchases/new')} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                New purchase order
+              </Button>
+            ) : undefined
           }
           filters={
             <>
@@ -240,7 +245,7 @@ export function Purchases() {
                 : 'Try a different search, vendor, or date range.'
             }
             action={
-              purchases.length === 0 ? (
+              purchases.length === 0 && canCreate ? (
                 <Button variant="primary" onClick={() => navigate('/purchases/new')}>
                   <Plus className="w-4 h-4" />
                   Create first PO
@@ -310,22 +315,26 @@ export function Purchases() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/purchases/${purchase.id}/edit`)}
-                          className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                          aria-label={`Edit ${purchase.poNumber}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(purchase)}
-                          className="p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                          aria-label={`Delete ${purchase.poNumber}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdate ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/purchases/${purchase.id}/edit`)}
+                            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label={`Edit ${purchase.poNumber}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canDelete ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(purchase)}
+                            className="p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                            aria-label={`Delete ${purchase.poNumber}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -31,15 +31,15 @@ export type Permission =
   | 'manage_company'
   | 'manage_subscription';
 
-const ROLE_PERMISSIONS: Record<CompanyRole, Permission[]> = {
-  [CompanyRole.ADMIN]: ['read', 'write', 'manage_team', 'manage_company', 'manage_subscription'],
-  [CompanyRole.MANAGER]: ['read', 'write'],
-  [CompanyRole.VIEWER]: ['read'],
-};
-
+/** @deprecated Use module permissions from constants/permissions.ts */
 export function roleHasPermission(role: CompanyRole | undefined, permission: Permission): boolean {
   if (!role) return false;
-  return ROLE_PERMISSIONS[role].includes(permission);
+  const legacy: Record<CompanyRole, Permission[]> = {
+    [CompanyRole.ADMIN]: ['read', 'write', 'manage_team', 'manage_company', 'manage_subscription'],
+    [CompanyRole.MANAGER]: ['read', 'write'],
+    [CompanyRole.VIEWER]: ['read'],
+  };
+  return legacy[role].includes(permission);
 }
 
 export function roleLabel(role: CompanyRole): string {

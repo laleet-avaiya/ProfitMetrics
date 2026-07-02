@@ -13,6 +13,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -30,6 +32,7 @@ type StatusFilter = 'all' | InvoiceStatus;
 
 export function Invoices() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.INVOICES);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -146,10 +149,12 @@ export function Invoices() {
           searchPlaceholder="Search invoice, customer"
           searchAriaLabel="Search invoices"
           actions={
-            <Button variant="primary" onClick={() => navigate('/invoices/new')} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              New invoice
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={() => navigate('/invoices/new')} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                New invoice
+              </Button>
+            ) : undefined
           }
           filters={
             <>
@@ -177,7 +182,7 @@ export function Invoices() {
         {loading ? (
           <LoadingView message="Loading invoices…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (
-          <EmptyState icon={FileText} title="No invoices yet" description="Create invoices for your customers." action={<Button variant="primary" onClick={() => navigate('/invoices/new')}>Create invoice</Button>} />
+          <EmptyState icon={FileText} title="No invoices yet" description="Create invoices for your customers." action={canCreate ? <Button variant="primary" onClick={() => navigate('/invoices/new')}>Create invoice</Button> : undefined} />
         ) : (
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
@@ -212,12 +217,16 @@ export function Invoices() {
                         <button type="button" onClick={() => navigate(`/invoices/${inv.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View invoice">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={() => navigate(`/invoices/${inv.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit invoice">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button type="button" onClick={() => handleDelete(inv)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete invoice">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdate ? (
+                          <button type="button" onClick={() => navigate(`/invoices/${inv.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit invoice">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canDelete ? (
+                          <button type="button" onClick={() => handleDelete(inv)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete invoice">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

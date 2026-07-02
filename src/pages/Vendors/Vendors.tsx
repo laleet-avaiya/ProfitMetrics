@@ -23,6 +23,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -37,6 +39,7 @@ type StatusFilter = 'active' | 'archived' | 'all';
 
 export function Vendors() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.VENDORS);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -181,10 +184,12 @@ export function Vendors() {
           searchPlaceholder="Search name, contact, email, phone"
           searchAriaLabel="Search vendors"
           actions={
-            <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              Add vendor
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                Add vendor
+              </Button>
+            ) : undefined
           }
           filters={
             <FilterSelect
@@ -211,7 +216,7 @@ export function Vendors() {
                 : 'Try a different search or status filter.'
             }
             action={
-              vendors.length === 0 ? (
+              vendors.length === 0 && canCreate ? (
                 <Button variant="primary" onClick={openCreate}>
                   <Plus className="w-4 h-4" />
                   Add first vendor
@@ -295,34 +300,40 @@ export function Vendors() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => openEdit(vendor)}
-                              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              aria-label={`Edit ${vendor.name}`}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleArchiveToggle(vendor)}
-                              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              aria-label={vendor.status === 'active' ? 'Archive' : 'Restore'}
-                            >
-                              {vendor.status === 'active' ? (
-                                <Archive className="w-4 h-4" />
-                              ) : (
-                                <ArchiveRestore className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(vendor)}
-                              className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              aria-label={`Delete ${vendor.name}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canUpdate ? (
+                              <button
+                                type="button"
+                                onClick={() => openEdit(vendor)}
+                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                aria-label={`Edit ${vendor.name}`}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            ) : null}
+                            {canUpdate ? (
+                              <button
+                                type="button"
+                                onClick={() => handleArchiveToggle(vendor)}
+                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                aria-label={vendor.status === 'active' ? 'Archive' : 'Restore'}
+                              >
+                                {vendor.status === 'active' ? (
+                                  <Archive className="w-4 h-4" />
+                                ) : (
+                                  <ArchiveRestore className="w-4 h-4" />
+                                )}
+                              </button>
+                            ) : null}
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(vendor)}
+                                className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                aria-label={`Delete ${vendor.name}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -379,19 +390,23 @@ export function Vendors() {
                         <Eye className="w-4 h-4" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(vendor)}>
-                        <Pencil className="w-4 h-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(vendor)}
-                        className="text-red-600 dark:text-red-400"
-                        aria-label="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {canUpdate ? (
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(vendor)}>
+                          <Pencil className="w-4 h-4" />
+                          Edit
+                        </Button>
+                      ) : null}
+                      {canDelete ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(vendor)}
+                          className="text-red-600 dark:text-red-400"
+                          aria-label="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 );

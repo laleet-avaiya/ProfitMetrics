@@ -47,6 +47,16 @@ export interface Company {
 
 // ─── Team & access control ────────────────────────────────────────────────────
 
+import type { ModulePermissionMap } from '../constants/permissions';
+
+export interface CompanyRoleDefinition {
+  id: string;
+  companyId: string;
+  role: CompanyRole;
+  permissions: ModulePermissionMap;
+  updatedAt: Date;
+}
+
 export interface CompanyMember {
   id: string;
   companyId: string;

@@ -7,8 +7,10 @@ import { DetailMetaChip, DetailMetaRow } from '../../components/DetailPage/Detai
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
 import type { Invoice, Payment } from '../../types';
 import { InvoiceStatus } from '../../types';
@@ -20,6 +22,7 @@ export function CustomerDetailPage() {
   const { customerId } = useParams<{ customerId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.CUSTOMERS);
   const currency = company?.currency ?? 'AED';
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -98,7 +101,7 @@ export function CustomerDetailPage() {
         ) : undefined
       }
       actions={
-        customer ? (
+        customer && canUpdate ? (
           <Button variant="outline" onClick={() => navigate(`/customers/${customer.id}/edit`)}>
             <Pencil className="w-4 h-4" />
             Edit customer

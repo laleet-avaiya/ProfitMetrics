@@ -13,6 +13,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
@@ -32,6 +34,7 @@ type PlatformFilter = 'all' | string;
 
 export function Payments() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.PAYMENTS);
   const { company } = useAuth();
   const { summary: marketplaceSummary, getFilterPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
@@ -121,10 +124,12 @@ export function Payments() {
           searchPlaceholder="Search reference, customer, platform"
           searchAriaLabel="Search payments"
           actions={
-            <Button variant="primary" onClick={() => navigate('/payments/new')} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              Record payment
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={() => navigate('/payments/new')} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                Record payment
+              </Button>
+            ) : undefined
           }
           filters={
             <>
@@ -152,7 +157,7 @@ export function Payments() {
         {loading ? (
           <LoadingView message="Loading payments…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (
-          <EmptyState icon={Wallet} title="No payments yet" description="Record invoice payments, direct receipts, or marketplace payouts." action={<Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button>} />
+          <EmptyState icon={Wallet} title="No payments yet" description="Record invoice payments, direct receipts, or marketplace payouts." action={canCreate ? <Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button> : undefined} />
         ) : (
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
@@ -187,12 +192,16 @@ export function Payments() {
                         <button type="button" onClick={() => navigate(`/payments/${payment.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View payment">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={() => navigate(`/payments/${payment.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit payment">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button type="button" onClick={() => handleDelete(payment)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete payment">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canUpdate ? (
+                          <button type="button" onClick={() => navigate(`/payments/${payment.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit payment">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canDelete ? (
+                          <button type="button" onClick={() => handleDelete(payment)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete payment">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

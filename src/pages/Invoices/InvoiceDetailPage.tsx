@@ -11,9 +11,11 @@ import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentA
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { invoiceStatusLabel } from '../../constants/invoiceStatuses';
 import { PAYMENT_MODE_OPTIONS, paymentModeLabel } from '../../constants/paymentModes';
 import { purchasePaymentStatusLabel } from '../../constants/purchaseStatuses';
@@ -29,6 +31,7 @@ export function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.INVOICES);
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -107,10 +110,12 @@ export function InvoiceDetailPage() {
               <Printer className="w-4 h-4" />
               Print invoice
             </Button>
-            <Button variant="outline" onClick={() => navigate(`/invoices/${invoice.id}/edit`)}>
-              <Pencil className="w-4 h-4" />
-              Edit
-            </Button>
+            {canUpdate ? (
+              <Button variant="outline" onClick={() => navigate(`/invoices/${invoice.id}/edit`)}>
+                <Pencil className="w-4 h-4" />
+                Edit
+              </Button>
+            ) : null}
           </div>
         ) : null
       }

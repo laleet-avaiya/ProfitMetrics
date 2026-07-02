@@ -24,6 +24,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -62,6 +64,16 @@ type InvoiceStatusFilter = 'all' | InvoiceStatus;
 export function Sales() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    canCreate: canCreateSale,
+    canUpdate: canUpdateSale,
+    canDelete: canDeleteSale,
+  } = useModuleAccess(AppModule.SALES);
+  const {
+    canCreate: canCreateInvoice,
+    canUpdate: canUpdateInvoice,
+    canDelete: canDeleteInvoice,
+  } = useModuleAccess(AppModule.INVOICES);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -230,6 +242,14 @@ export function Sales() {
         ? 'No marketplace sales yet'
         : 'No sales yet';
 
+  const canUpdateRow = (row: UnifiedSalesRow) =>
+    row.kind === 'marketplace' ? canUpdateSale : canUpdateInvoice;
+
+  const canDeleteRow = (row: UnifiedSalesRow) =>
+    row.kind === 'marketplace' ? canDeleteSale : canDeleteInvoice;
+
+  const showCreateActions = canCreateInvoice || canCreateSale;
+
   return (
     <SectionPage
       title="Sales"
@@ -265,24 +285,30 @@ export function Sales() {
           searchPlaceholder="Search orders, invoices, customers…"
           searchAriaLabel="Search sales"
           actions={
-            <>
-              <Button
-                variant="violet"
-                onClick={() => navigate('/invoices/new')}
-                className="flex-1 sm:flex-none"
-              >
-                <Plus className="w-4 h-4" />
-                Offline sales
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => navigate('/sales/new')}
-                className="flex-1 sm:flex-none"
-              >
-                <Plus className="w-4 h-4" />
-                Marketplace sale
-              </Button>
-            </>
+            showCreateActions ? (
+              <>
+                {canCreateInvoice ? (
+                  <Button
+                    variant="violet"
+                    onClick={() => navigate('/invoices/new')}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Offline sales
+                  </Button>
+                ) : null}
+                {canCreateSale ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate('/sales/new')}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Marketplace sale
+                  </Button>
+                ) : null}
+              </>
+            ) : undefined
           }
           filters={
             <>
@@ -345,16 +371,22 @@ export function Sales() {
             title={emptyTitle}
             description="Log a marketplace order or create an offline customer sale."
             action={
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="violet" onClick={() => navigate('/invoices/new')}>
-                  <Plus className="w-4 h-4" />
-                  Offline sales
-                </Button>
-                <Button variant="primary" onClick={() => navigate('/sales/new')}>
-                  <Plus className="w-4 h-4" />
-                  Marketplace sale
-                </Button>
-              </div>
+              showCreateActions ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {canCreateInvoice ? (
+                    <Button variant="violet" onClick={() => navigate('/invoices/new')}>
+                      <Plus className="w-4 h-4" />
+                      Offline sales
+                    </Button>
+                  ) : null}
+                  {canCreateSale ? (
+                    <Button variant="primary" onClick={() => navigate('/sales/new')}>
+                      <Plus className="w-4 h-4" />
+                      Marketplace sale
+                    </Button>
+                  ) : null}
+                </div>
+              ) : undefined
             }
           />
         ) : (
@@ -442,22 +474,26 @@ export function Sales() {
                           >
                             <Printer className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(unifiedRowEditPath(row))}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                            aria-label="Edit"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(row)}
-                            className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            aria-label="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canUpdateRow(row) ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(unifiedRowEditPath(row))}
+                              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                              aria-label="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          ) : null}
+                          {canDeleteRow(row) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(row)}
+                              className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              aria-label="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -515,14 +551,16 @@ export function Sales() {
                     >
                       View
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(row)}
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {canDeleteRow(row) ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(row)}
+                        className="text-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))}

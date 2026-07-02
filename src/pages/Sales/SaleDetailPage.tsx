@@ -17,8 +17,10 @@ import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { paymentModeLabel } from '../../constants/paymentModes';
 import {
   purchasePaymentStatusLabel,
@@ -43,6 +45,7 @@ export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.SALES);
   const currency = company?.currency ?? 'AED';
 
   const { entity: sale, loading, notFound } = useEntityDetail({
@@ -97,14 +100,16 @@ export function SaleDetailPage() {
               <Printer className="w-4 h-4" />
               Print invoice
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(`/sales/${sale.id}/edit`)}
-            >
-              <Pencil className="w-4 h-4" />
-              Edit sale
-            </Button>
+            {canUpdate ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate(`/sales/${sale.id}/edit`)}
+              >
+                <Pencil className="w-4 h-4" />
+                Edit sale
+              </Button>
+            ) : null}
           </div>
         ) : null
       }

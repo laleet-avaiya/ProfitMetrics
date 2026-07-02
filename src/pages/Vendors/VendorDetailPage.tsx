@@ -16,8 +16,10 @@ import { DetailMetaChip, DetailMetaRow } from '../../components/DetailPage/Detai
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
 import type { Expense, PurchaseOrder } from '../../types';
 import { formatDateLocal } from '../../utils/date';
@@ -28,6 +30,7 @@ export function VendorDetailPage() {
   const { vendorId } = useParams<{ vendorId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.VENDORS);
   const currency = company?.currency ?? 'AED';
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -108,7 +111,7 @@ export function VendorDetailPage() {
         ) : undefined
       }
       actions={
-        vendor ? (
+        vendor && canUpdate ? (
           <Button
             type="button"
             variant="outline"

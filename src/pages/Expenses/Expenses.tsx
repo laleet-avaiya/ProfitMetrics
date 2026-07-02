@@ -13,6 +13,8 @@ import {
   tableHeadCellClass,
   tableTruncateCellClass,
 } from '../../constants/ui';
+import { useModuleAccess } from '../../hooks/usePermissions';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
@@ -32,6 +34,7 @@ import { getExpenseVendorDisplay } from '../../utils/vendorHelpers';
 
 export function Expenses() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = useModuleAccess(AppModule.EXPENSES);
   const { company } = useAuth();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -160,10 +163,12 @@ export function Expenses() {
           searchPlaceholder="Search description, vendor, reference"
           searchAriaLabel="Search expenses"
           actions={
-            <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
-              <Plus className="w-4 h-4" />
-              Add expense
-            </Button>
+            canCreate ? (
+              <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                Add expense
+              </Button>
+            ) : undefined
           }
           filters={
             <>
@@ -227,7 +232,7 @@ export function Expenses() {
                 : 'Try a different search, category, or date range.'
             }
             action={
-              expenses.length === 0 ? (
+              expenses.length === 0 && canCreate ? (
                 <Button variant="primary" onClick={openCreate}>
                   <Plus className="w-4 h-4" />
                   Add first expense
@@ -298,22 +303,26 @@ export function Expenses() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(expense)}
-                            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            aria-label={`Edit ${expense.description}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(expense)}
-                            className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            aria-label={`Delete ${expense.description}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canUpdate ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(expense)}
+                              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              aria-label={`Edit ${expense.description}`}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          ) : null}
+                          {canDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(expense)}
+                              className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              aria-label={`Delete ${expense.description}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -366,19 +375,23 @@ export function Expenses() {
                       <Eye className="w-4 h-4" />
                       View
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(expense)}>
-                      <Pencil className="w-4 h-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(expense)}
-                      className="text-red-600 dark:text-red-400"
-                      aria-label="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {canUpdate ? (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(expense)}>
+                        <Pencil className="w-4 h-4" />
+                        Edit
+                      </Button>
+                    ) : null}
+                    {canDelete ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(expense)}
+                        className="text-red-600 dark:text-red-400"
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))}

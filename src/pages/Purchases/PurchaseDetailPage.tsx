@@ -18,9 +18,11 @@ import { Input } from '../../components/Input/Input';
 import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
 import { Select } from '../../components/Select/Select';
 import { Textarea } from '../../components/Textarea/Textarea';
+import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { useModuleAccess } from '../../hooks/usePermissions';
 import {
   purchasePaymentStatusLabel,
   purchaseStatusLabel,
@@ -53,6 +55,7 @@ export function PurchaseDetailPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { canUpdate } = useModuleAccess(AppModule.PURCHASES);
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -227,7 +230,7 @@ export function PurchaseDetailPage() {
         ) : undefined
       }
       actions={
-        purchase && !isCancelled ? (
+        purchase && !isCancelled && canUpdate ? (
           <Button
             type="button"
             variant="outline"

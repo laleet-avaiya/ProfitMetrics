@@ -14,6 +14,7 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { appendAuditLog, auditCompanyChangedKeys } from '../services/auditLog';
 import { membershipService } from '../services/membership';
+import { rolePermissionsService } from '../services/rolePermissions';
 import { userProfileService } from '../services/userProfile';
 import {
   convertTimestamps,
@@ -24,6 +25,7 @@ import {
 import { AuthContext } from './AuthContextInstance';
 import type { AuthContextType, SignUpCompanyDetails } from './AuthContext.types';
 import type { Company, CompanyMember } from '../types';
+import type { ModulePermissionMap } from '../constants/permissions';
 import {
   BusinessCountry,
   countryDefaultsForCompany,
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [membership, setMembership] = useState<CompanyMember | null>(null);
+  const [rolePermissions, setRolePermissions] = useState<ModulePermissionMap | null>(null);
   const [loading, setLoading] = useState(true);
 
   function getDefaultSubscription(): { start: Date; end: Date } {
@@ -135,6 +138,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadRolePermissions = async (
+    companyId: string,
+    role: CompanyMember['role'] | undefined
+  ): Promise<ModulePermissionMap | null> => {
+    try {
+      const permissions = await rolePermissionsService.getForMember(companyId, role);
+      setRolePermissions(permissions);
+      return permissions;
+    } catch (error) {
+      console.error('Error loading role permissions:', error);
+      setRolePermissions(null);
+      return null;
+    }
+  };
+
   const loadSession = async (firebaseUser: User): Promise<void> => {
     const email = firebaseUser.email ?? '';
     await membershipService.acceptPendingInvites(firebaseUser.uid, email);
@@ -143,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (memberships.length === 0) {
       setCompany(null);
       setMembership(null);
+      setRolePermissions(null);
       return;
     }
 
@@ -160,7 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await loadCompany(activeCompanyId);
-    await loadMembership(activeCompanyId, firebaseUser.uid);
+    const member = await loadMembership(activeCompanyId, firebaseUser.uid);
+    await loadRolePermissions(activeCompanyId, member?.role);
   };
 
   const createCompany = async (
@@ -194,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       prepareDatesForFirestore(companyData as unknown as Record<string, unknown>)
     );
     await membershipService.createAdminMember(companyId, userId, email);
+    await rolePermissionsService.seedDefaults(companyId);
     await userProfileService.create(userId, email, companyId);
 
     appendAuditLog(companyId, userId, {
@@ -250,6 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth);
     setCompany(null);
     setMembership(null);
+    setRolePermissions(null);
   };
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
@@ -313,10 +335,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const refreshRolePermissions = async (): Promise<void> => {
+    if (!company || !membership) return;
+    await loadRolePermissions(company.id, membership.role);
+  };
+
   const refreshCompany = async (): Promise<void> => {
     if (!user || !company) return;
     await loadCompany(company.id);
-    await loadMembership(company.id, user.uid);
+    const member = await loadMembership(company.id, user.uid);
+    await loadRolePermissions(company.id, member?.role);
   };
 
   const setupCompany = async (details: SignUpCompanyDetails): Promise<void> => {
@@ -336,6 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     company,
     membership,
+    rolePermissions,
     loading,
     signUp,
     signIn,
@@ -344,6 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateCompany,
     changePassword,
     refreshCompany,
+    refreshRolePermissions,
     setupCompany,
   };
 
@@ -356,6 +386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setCompany(null);
         setMembership(null);
+        setRolePermissions(null);
       }
 
       setLoading(false);
