@@ -1,5 +1,5 @@
-import type { Expense, Invoice, PeriodProfitSummary, ProductStock, Sale } from '../types';
-import { InvoiceStatus } from '../types';
+import type { Expense, Invoice, Payment, PeriodProfitSummary, ProductStock, Sale } from '../types';
+import { InvoiceStatus, PaymentKind } from '../types';
 import {
   localDateInputToUtc,
   localDateInputToUtcEndOfDay,
@@ -89,6 +89,86 @@ export function filterInvoicesInRange(invoices: Invoice[], from?: Date, to?: Dat
   return invoices
     .filter(isReportableInvoice)
     .filter((i) => isDateInRange(i.invoiceDate, from, to));
+}
+
+export function filterPaymentsInRange(payments: Payment[], from?: Date, to?: Date): Payment[] {
+  return payments
+    .filter((p) => !p.deleted)
+    .filter((p) => isDateInRange(p.paymentDate, from, to));
+}
+
+export interface PaymentSummary {
+  count: number;
+  totalReceived: number;
+  invoicePayments: number;
+  directPayments: number;
+  marketplacePayouts: number;
+  invoicePaymentCount: number;
+  directPaymentCount: number;
+  marketplacePayoutCount: number;
+}
+
+export function computePaymentSummary(payments: Payment[]): PaymentSummary {
+  let totalReceived = 0;
+  let invoicePayments = 0;
+  let directPayments = 0;
+  let marketplacePayouts = 0;
+  let invoicePaymentCount = 0;
+  let directPaymentCount = 0;
+  let marketplacePayoutCount = 0;
+
+  for (const payment of payments) {
+    totalReceived += payment.amount;
+    if (payment.kind === PaymentKind.INVOICE) {
+      invoicePayments += payment.amount;
+      invoicePaymentCount++;
+    } else if (payment.kind === PaymentKind.DIRECT) {
+      directPayments += payment.amount;
+      directPaymentCount++;
+    } else if (payment.kind === PaymentKind.MARKETPLACE_PAYOUT) {
+      marketplacePayouts += payment.amount;
+      marketplacePayoutCount++;
+    }
+  }
+
+  return {
+    count: payments.length,
+    totalReceived: roundMoney(totalReceived),
+    invoicePayments: roundMoney(invoicePayments),
+    directPayments: roundMoney(directPayments),
+    marketplacePayouts: roundMoney(marketplacePayouts),
+    invoicePaymentCount,
+    directPaymentCount,
+    marketplacePayoutCount,
+  };
+}
+
+export interface InvoiceReceivablesSummary {
+  balanceDue: number;
+  openCount: number;
+  totalInvoiced: number;
+}
+
+/** Current outstanding customer balances (not period-filtered). */
+export function computeInvoiceReceivables(invoices: Invoice[]): InvoiceReceivablesSummary {
+  let balanceDue = 0;
+  let openCount = 0;
+  let totalInvoiced = 0;
+
+  for (const invoice of invoices) {
+    if (!isReportableInvoice(invoice)) continue;
+    totalInvoiced += invoice.total;
+    if (invoice.balanceDue > 0) {
+      balanceDue += invoice.balanceDue;
+      openCount++;
+    }
+  }
+
+  return {
+    balanceDue: roundMoney(balanceDue),
+    openCount,
+    totalInvoiced: roundMoney(totalInvoiced),
+  };
 }
 
 /**

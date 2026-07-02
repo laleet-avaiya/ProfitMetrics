@@ -1,4 +1,4 @@
-import type { Product, PurchaseOrder, PurchaseOrderLine, Vendor } from '../types';
+import type { Product, PurchaseOrder, PurchaseOrderLine, PurchasePayment, Vendor } from '../types';
 import {
   PurchaseOrderStatus,
   PurchasePaymentStatus,
@@ -147,6 +147,85 @@ export function derivePaymentStatus(
   if (totalPaid <= 0) return PurchasePaymentStatus.UNPAID;
   if (totalPaid >= total) return PurchasePaymentStatus.PAID;
   return PurchasePaymentStatus.PARTIAL;
+}
+
+export interface PurchasePaymentTaxAllocation {
+  taxType?: TaxType;
+  taxPercentage?: number;
+  taxMode?: TaxMode;
+  taxAmount?: number;
+}
+
+function primaryTaxedLine(lines: PurchaseOrderLine[]): PurchaseOrderLine | undefined {
+  return lines
+    .filter((line) => line.taxType && line.taxType !== TaxType.NONE && (line.taxAmount ?? 0) > 0)
+    .reduce<PurchaseOrderLine | undefined>(
+      (best, line) =>
+        !best || (line.taxAmount ?? 0) > (best.taxAmount ?? 0) ? line : best,
+      undefined
+    );
+}
+
+/** Tax metadata from PO lines — used when auto-generating payment expenses. */
+export function getPurchaseTaxMeta(purchase: PurchaseOrder): PurchasePaymentTaxAllocation & {
+  totalTax: number;
+} {
+  if (purchase.taxAmount <= 0) {
+    return { totalTax: 0 };
+  }
+
+  const primary = primaryTaxedLine(purchase.lines);
+  if (!primary) {
+    return { totalTax: purchase.taxAmount };
+  }
+
+  return {
+    taxType: primary.taxType,
+    taxPercentage: primary.taxPercentage,
+    taxMode: primary.taxMode,
+    totalTax: purchase.taxAmount,
+  };
+}
+
+/** Allocate PO input tax to a payment (proportional; last payment gets rounding remainder). */
+export function allocatePurchasePaymentTax(
+  purchase: PurchaseOrder,
+  payments: PurchasePayment[],
+  paymentIndex: number
+): PurchasePaymentTaxAllocation {
+  const meta = getPurchaseTaxMeta(purchase);
+  if (meta.totalTax <= 0 || purchase.total <= 0) {
+    return {};
+  }
+
+  const payment = payments[paymentIndex];
+  if (!payment || payment.amount <= 0) {
+    return {};
+  }
+
+  const isLast = paymentIndex === payments.length - 1;
+  const totalPaid = roundMoney(payments.reduce((sum, item) => sum + item.amount, 0));
+
+  let taxAmount: number;
+  if (isLast && totalPaid >= purchase.total) {
+    const priorTax = payments.slice(0, paymentIndex).reduce((sum, item) => {
+      return sum + roundMoney(meta.totalTax * (item.amount / purchase.total));
+    }, 0);
+    taxAmount = roundMoney(Math.max(0, meta.totalTax - priorTax));
+  } else {
+    taxAmount = roundMoney(meta.totalTax * (payment.amount / purchase.total));
+  }
+
+  if (taxAmount <= 0) {
+    return {};
+  }
+
+  return {
+    taxType: meta.taxType,
+    taxPercentage: meta.taxPercentage,
+    taxMode: meta.taxMode,
+    taxAmount,
+  };
 }
 
 export function purchaseToForm(purchase: PurchaseOrder): PurchaseFormState {

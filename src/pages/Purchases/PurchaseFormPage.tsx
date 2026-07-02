@@ -27,6 +27,7 @@ import {
 } from '../../utils/purchaseHelpers';
 import { allocateNextPoNumber, previewNextPoNumber } from '../../utils/documentNumbers';
 import { syncPurchaseStockReceipts } from '../../utils/purchaseStock';
+import { syncPurchaseExpenses } from '../../utils/purchaseExpenses';
 import { getActiveVendors } from '../../utils/vendorHelpers';
 import { formatMoney } from '../../utils/profit';
 import { emptyStateMessageClass } from '../../constants/ui';
@@ -194,6 +195,9 @@ export function PurchaseFormPage() {
           return;
         }
         await firestoreService.purchases.update(company.id, purchase.id, payload);
+        if (payload.payments.length > 0) {
+          await syncPurchaseExpenses(company.id, { ...purchase, ...payload });
+        }
         notification.success('Purchase order updated');
         navigate(`/purchases/${purchase.id}`);
       } else {

@@ -35,6 +35,7 @@ import {
 } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import {
+  allocatePurchasePaymentTax,
   derivePaymentStatus,
   derivePurchaseStatus,
 } from '../../utils/purchaseHelpers';
@@ -401,11 +402,18 @@ export function PurchaseDetailPage() {
                         <th className="px-3 py-2">Mode</th>
                         <th className="px-3 py-2">Reference</th>
                         <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2 text-right">Input tax</th>
                         <th className="px-3 py-2">Expense</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {purchase.payments.map((payment) => (
+                      {purchase.payments.map((payment, index) => {
+                        const inputTax = allocatePurchasePaymentTax(
+                          purchase,
+                          purchase.payments,
+                          index
+                        ).taxAmount;
+                        return (
                         <tr key={payment.id}>
                           <td className="px-3 py-2">{formatDateLocal(payment.paymentDate)}</td>
                           <td className="px-3 py-2">{paymentModeLabel(payment.paymentMode)}</td>
@@ -414,6 +422,11 @@ export function PurchaseDetailPage() {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums font-medium">
                             {formatMoney(payment.amount, currency)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
+                            {inputTax != null && inputTax > 0
+                              ? formatMoney(inputTax, currency)
+                              : '—'}
                           </td>
                           <td className="px-3 py-2">
                             {payment.expenseId ? (
@@ -425,7 +438,8 @@ export function PurchaseDetailPage() {
                             )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
