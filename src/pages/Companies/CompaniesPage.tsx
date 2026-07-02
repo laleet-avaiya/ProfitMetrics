@@ -6,7 +6,7 @@ import { Button } from '../../components/Button/Button';
 import { BRAND_LOGO_FULL, BRAND_NAME } from '../../constants/brand';
 import { OrgRole } from '../../models/org';
 import { formatDate } from '../../utils/date';
-import { getSubscriptionDaysRemaining } from '../../utils/subscription';
+import { getSubscriptionDaysRemaining, shouldShowSubscriptionRenewalNotice } from '../../utils/subscription';
 
 export function CompaniesPage() {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ export function CompaniesPage() {
 
   const daysLeft = org?.subscriptionEnd != null ? getSubscriptionDaysRemaining(org.subscriptionEnd) : null;
   const isExpired = daysLeft !== null && daysLeft <= 0;
+  const showSubscriptionNotice = shouldShowSubscriptionRenewalNotice(daysLeft);
   const canAddCompany =
     orgMembership?.role === OrgRole.ADMIN &&
     org != null &&
@@ -66,7 +67,7 @@ export function CompaniesPage() {
             </p>
           </div>
 
-          {org?.subscriptionEnd != null && (
+          {org?.subscriptionEnd != null && showSubscriptionNotice && (
             <div
               className={`rounded-xl border px-4 py-3 flex items-start gap-3 text-sm ${
                 isExpired

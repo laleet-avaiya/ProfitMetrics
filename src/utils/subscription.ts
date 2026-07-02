@@ -16,6 +16,13 @@ export function getSubscriptionPeriodDays(start: Date, end: Date): number {
   return Math.max(1, raw);
 }
 
+/** Show renewal / expiry notices when this many days or fewer remain (including expired). */
+export const SUBSCRIPTION_RENEWAL_NOTICE_DAYS = 15;
+
+export function shouldShowSubscriptionRenewalNotice(daysRemaining: number | null): boolean {
+  return daysRemaining !== null && daysRemaining <= SUBSCRIPTION_RENEWAL_NOTICE_DAYS;
+}
+
 /** Days from today (local midnight) until `subscriptionEnd` (0 if already ended that day or before). */
 export function getSubscriptionDaysRemaining(subscriptionEnd: Date): number {
   const today = new Date();

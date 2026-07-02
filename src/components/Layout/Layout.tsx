@@ -33,7 +33,7 @@ import { AppModule } from '../../constants/permissions';
 import { BRAND_LOGO_ICON, BRAND_NAME } from '../../constants/brand';
 import {
   getSubscriptionDaysRemaining,
-  getSubscriptionWarningThresholdDays,
+  shouldShowSubscriptionRenewalNotice,
 } from '../../utils/subscription';
 
 interface LayoutProps {
@@ -94,8 +94,6 @@ const navSections: NavSection[] = [
   },
 ];
 
-const SIDEBAR_SUBSCRIPTION_DAYS_THRESHOLD = 10;
-
 function isNavActive(pathname: string, path: string): boolean {
   if (path === '/') return pathname === '/';
   if (path === '/sales') {
@@ -124,24 +122,15 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
 
   const subscriptionDaysLeft =
     org?.subscriptionEnd != null ? getSubscriptionDaysRemaining(org.subscriptionEnd) : null;
-  const subscriptionWarningThresholdDays =
-    org?.subscriptionEnd != null
-      ? getSubscriptionWarningThresholdDays(
-          org.subscriptionStart,
-          org.subscriptionEnd,
-          org.createdAt
-        )
-      : null;
   const showSubscriptionWarning =
     subscriptionDaysLeft !== null &&
-    subscriptionWarningThresholdDays !== null &&
     subscriptionDaysLeft > 0 &&
-    subscriptionDaysLeft <= subscriptionWarningThresholdDays;
+    shouldShowSubscriptionRenewalNotice(subscriptionDaysLeft);
   const isExpired = subscriptionDaysLeft !== null && subscriptionDaysLeft <= 0;
   const showSidebarSubscriptionDays =
     subscriptionDaysLeft !== null &&
     subscriptionDaysLeft > 0 &&
-    subscriptionDaysLeft < SIDEBAR_SUBSCRIPTION_DAYS_THRESHOLD;
+    shouldShowSubscriptionRenewalNotice(subscriptionDaysLeft);
   const subscriptionDaysLabel =
     subscriptionDaysLeft === 1 ? '1 day left' : `${subscriptionDaysLeft} days left`;
 
