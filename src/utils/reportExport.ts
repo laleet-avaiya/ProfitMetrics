@@ -1,40 +1,99 @@
 import { ReportId, type ReportId as ReportIdType } from '../constants/reportCatalog';
-import type { Expense, Invoice, PeriodProfitSummary, Product, ProductStock, Sale } from '../types';
-import { formatDateLocal } from './date';
+import { getCountryProfile, isBusinessCountry } from '../constants/countries';
+import type { Company, Expense, Invoice, PeriodProfitSummary, Product, ProductStock, PurchaseOrder, Sale } from '../types';
+import { formatDateLocal, formatDateTimeLocal } from './date';
+import { purchasePaymentStatusLabel, purchaseStatusLabel } from '../constants/purchaseStatuses';
 import {
   computeByExpenseCategory,
   computeByPlatform,
   computeByProduct,
+  computePurchaseReportRows,
+  computePurchaseReportSummary,
   computeStockReport,
   computeStockSummary,
   computeTaxLedger,
   computeTrend,
   filterOperatingExpenses,
+  buildProfitLossStatement,
+  type ProfitLossBasis,
   type TrendGranularity,
 } from './reports';
 import type { WorkbookSheet } from './exportSpreadsheet';
 
+export interface ReportCompanyInfo {
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  taxId?: string;
+  taxIdLabel?: string;
+  countryLabel?: string;
+}
+
+export function buildReportCompanyInfo(company: Company | null | undefined): ReportCompanyInfo {
+  const profile =
+    company && isBusinessCountry(company.country) ? getCountryProfile(company.country) : null;
+
+  return {
+    name: company?.name?.trim() || 'Company',
+    address: company?.address?.trim() || undefined,
+    phone: company?.phone?.trim() || undefined,
+    email: company?.email?.trim() || undefined,
+    taxId: company?.trn?.trim() || undefined,
+    taxIdLabel: profile?.taxIdLabel,
+    countryLabel: profile?.label,
+  };
+}
+
 export interface ReportExportContext {
   reportId: ReportIdType;
   reportTitle: string;
+  company: ReportCompanyInfo;
   currency: string;
   dateRangeLabel: string;
   filteredSales: Sale[];
   filteredInvoices: Invoice[];
   filteredExpenses: Expense[];
+  filteredPurchases: PurchaseOrder[];
   stock: ProductStock[];
   products: Product[];
   summary: PeriodProfitSummary;
+  plBasis?: ProfitLossBasis;
   trendGranularity?: TrendGranularity;
 }
 
-function metaRows(title: string, period: string, currency: string): WorkbookSheet['rows'] {
-  return [
+function metaRows(
+  ctx: ReportExportContext,
+  options?: { title?: string; period?: string }
+): WorkbookSheet['rows'] {
+  const { company } = ctx;
+  const title = options?.title ?? ctx.reportTitle;
+  const period = options?.period ?? ctx.dateRangeLabel;
+
+  const rows: WorkbookSheet['rows'] = [[company.name]];
+
+  if (company.address) rows.push([company.address]);
+
+  const contactParts = [company.phone, company.email].filter(Boolean);
+  if (contactParts.length > 0) rows.push([contactParts.join(' · ')]);
+
+  if (company.taxId) {
+    const taxLabel = company.taxIdLabel ?? 'Tax ID';
+    rows.push([`${taxLabel}: ${company.taxId}`]);
+  }
+
+  if (company.countryLabel) rows.push([company.countryLabel]);
+
+  rows.push(
+    [],
     [title],
     ['Period', period],
-    ['Currency', currency],
-    [],
-  ];
+    ['Currency', ctx.currency],
+    ['Generated', formatDateTimeLocal(new Date())],
+    []
+  );
+
+  return rows;
 }
 
 function trendSheetRows(
@@ -49,7 +108,7 @@ function trendSheetRows(
   );
 
   return [
-    ...metaRows(`${ctx.reportTitle} (${granularity})`, ctx.dateRangeLabel, ctx.currency),
+    ...metaRows(ctx, { title: `${ctx.reportTitle} (${granularity})` }),
     ['Period', 'Revenue', 'Order profit', 'Operating expenses', 'Net profit'],
     ...trend.map((row) => [
       row.label,
@@ -67,30 +126,28 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
 
   switch (ctx.reportId) {
     case ReportId.PROFIT_LOSS: {
+      const basis = ctx.plBasis ?? 'paid';
+      const statement = buildProfitLossStatement(ctx.summary, ctx.filteredPurchases, basis);
       const lines = [
-        ['Line item', 'Amount'],
-        ['Gross revenue', ctx.summary.grossRevenue],
-        ...(ctx.summary.offlineRevenue > 0
-          ? [
-              ['  Online sales', ctx.summary.onlineRevenue],
-              ['  Offline invoices', ctx.summary.offlineRevenue],
-            ]
-          : []),
-        ['Cost of goods (COGS)', -ctx.summary.totalCogs],
-        ['Shipping (online)', -ctx.summary.totalShipping],
-        ['Platform fees (online)', -ctx.summary.totalPlatformFees],
-        ['Tax collected', -ctx.summary.totalTax],
-        ['Order / invoice profit', ctx.summary.grossProfit],
-        ['Operating expenses', -ctx.summary.totalExpenses],
-        ['Net profit', ctx.summary.netProfit],
+        ['Basis', statement.basisLabel],
         [],
-        ['Net margin %', ctx.summary.netMarginPercent],
+        ['Line item', 'Amount'],
+        ...statement.lines.map((line) => [line.label, line.value]),
+        [],
+        ['Net margin %', statement.netMarginPercent],
       ];
+
+      if (statement.pendingPoCount > 0 && basis === 'with-pending-po') {
+        lines.splice(3, 0, ['Pending POs (unpaid balance)', statement.pendingPoCount]);
+      }
 
       return [
         {
           name: 'Profit and Loss',
-          rows: [...metaRows(ctx.reportTitle, ctx.dateRangeLabel, ctx.currency), ...lines],
+          rows: [
+            ...metaRows(ctx, { title: `${ctx.reportTitle} — ${statement.basisLabel}` }),
+            ...lines,
+          ],
         },
       ];
     }
@@ -101,7 +158,7 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         {
           name: 'Sales by product',
           rows: [
-            ...metaRows(ctx.reportTitle, ctx.dateRangeLabel, ctx.currency),
+            ...metaRows(ctx),
             ['Product', 'Lines', 'Revenue', 'Profit', 'Margin %'],
             ...rows.map((row) => [
               row.productName,
@@ -121,7 +178,7 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         {
           name: 'Sales by channel',
           rows: [
-            ...metaRows(ctx.reportTitle, ctx.dateRangeLabel, ctx.currency),
+            ...metaRows(ctx),
             ['Channel', 'Count', 'Revenue', 'Profit', 'Margin %'],
             ...rows.map((row) => [
               row.platform,
@@ -141,7 +198,7 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         {
           name: 'Expense breakdown',
           rows: [
-            ...metaRows(ctx.reportTitle, ctx.dateRangeLabel, ctx.currency),
+            ...metaRows(ctx),
             ['Category', 'Count', 'Total', 'Share %', 'Excluded from net profit'],
             ...rows.map((row) => [
               row.category,
@@ -168,7 +225,7 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         {
           name: 'Tax summary',
           rows: [
-            ...metaRows(ctx.reportTitle, ctx.dateRangeLabel, ctx.currency),
+            ...metaRows(ctx),
             ['Line item', 'Amount'],
             ['Output tax — online sales', taxLedger.onlineOutputTax],
             ...(taxLedger.offlineOutputTax > 0
@@ -190,6 +247,57 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         { name: 'Monthly trend', rows: trendSheetRows(ctx, 'monthly') },
       ];
 
+    case ReportId.PURCHASE_ORDERS: {
+      const rows = computePurchaseReportRows(ctx.filteredPurchases);
+      const purchaseSummary = computePurchaseReportSummary(ctx.filteredPurchases);
+
+      return [
+        {
+          name: 'Purchase orders',
+          rows: [
+            ...metaRows(ctx),
+            ['Summary', 'Value'],
+            ['Purchase orders', purchaseSummary.count],
+            ['Total value', purchaseSummary.totalValue],
+            ['Total paid', purchaseSummary.totalPaid],
+            ['Balance due', purchaseSummary.balanceDue],
+            ['Unpaid', purchaseSummary.unpaidCount],
+            ['Partially paid', purchaseSummary.partialCount],
+            ['Paid', purchaseSummary.paidCount],
+            [],
+            [
+              'Date',
+              'PO #',
+              'Vendor',
+              'Reference',
+              'Status',
+              'Payment',
+              'Lines',
+              'Subtotal',
+              'Tax',
+              'Total',
+              'Paid',
+              'Balance',
+            ],
+            ...rows.map((row) => [
+              formatDateLocal(row.purchaseDate),
+              row.poNumber,
+              row.vendorName,
+              row.reference,
+              purchaseStatusLabel(row.status),
+              purchasePaymentStatusLabel(row.paymentStatus),
+              row.lineCount,
+              row.subtotal,
+              row.taxAmount,
+              row.total,
+              row.totalPaid,
+              row.balanceDue,
+            ]),
+          ],
+        },
+      ];
+    }
+
     case ReportId.STOCK_ON_HAND: {
       const skuMap = new Map(ctx.products.map((product) => [product.id, product.sku]));
       const rows = computeStockReport(ctx.stock, skuMap);
@@ -199,7 +307,7 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
         {
           name: 'Stock on hand',
           rows: [
-            ...metaRows(ctx.reportTitle, 'As of today', ctx.currency),
+            ...metaRows(ctx, { period: 'As of today' }),
             ['Summary', 'Value'],
             ['Products in stock', stockSummary.productCount],
             ['Total units', stockSummary.totalUnits],
@@ -231,6 +339,10 @@ export function canExportReport(ctx: ReportExportContext): boolean {
       ctx.stock,
       new Map(ctx.products.map((product) => [product.id, product.sku]))
     ).length > 0;
+  }
+
+  if (ctx.reportId === ReportId.PURCHASE_ORDERS) {
+    return ctx.filteredPurchases.length > 0;
   }
 
   return (

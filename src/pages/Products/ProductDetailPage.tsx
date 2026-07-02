@@ -91,7 +91,6 @@ export function ProductDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading product…"
-      loadingIcon={Package}
       notFound={notFound}
       notFoundTitle="Product not found"
       notFoundDescription="This product may have been deleted."

@@ -84,7 +84,6 @@ export function InvoiceDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading invoice…"
-      loadingIcon={FileText}
       notFound={notFound}
       notFoundTitle="Invoice not found"
       notFoundDescription="This invoice may have been deleted."

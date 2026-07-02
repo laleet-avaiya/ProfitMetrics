@@ -81,7 +81,6 @@ export function VendorDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading vendor…"
-      loadingIcon={Building2}
       notFound={notFound}
       notFoundTitle="Vendor not found"
       notFoundDescription="This vendor may have been deleted."

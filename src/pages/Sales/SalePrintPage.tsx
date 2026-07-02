@@ -4,6 +4,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageShell } from '../../components/PageShell/PageShell';
 import { Button } from '../../components/Button/Button';
+import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { SalesDocumentPrint } from '../../components/SalesDocumentPrint/SalesDocumentPrint';
 import type { SalesDocumentPrintProps } from '../../components/SalesDocumentPrint/SalesDocumentPrint';
 import { useAuth } from '../../hooks/useAuth';
@@ -78,7 +79,7 @@ function DocumentPrintShell({
     return (
       <Layout>
         <PageShell>
-          <p className="text-sm text-gray-500 py-20 text-center">{loadingLabel}</p>
+          <LoadingView message={loadingLabel} size="xl" className="py-20" />
         </PageShell>
       </Layout>
     );

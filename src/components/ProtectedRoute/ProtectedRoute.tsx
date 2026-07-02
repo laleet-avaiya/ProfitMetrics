@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { hasLegalConsent } from '../../utils/legalConsent';
+import { LoadingView } from '../AppLoader/AppLoader';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -14,14 +15,7 @@ export function ProtectedRoute({ children, requireLegalConsent = true }: Protect
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
+    return <LoadingView message="Loading…" size="lg" className="min-h-screen gap-4" />;
   }
 
   if (!user) {

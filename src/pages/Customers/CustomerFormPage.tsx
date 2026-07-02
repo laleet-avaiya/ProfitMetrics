@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, UserCircle } from 'lucide-react';
+import { UserCircle } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
-import { Button } from '../../components/Button/Button';
+import {
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPanel,
+  FormReadyBanner,
+} from '../../components/FormPage';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
@@ -19,6 +26,8 @@ import {
   emptyCustomerForm,
   type CustomerFormState,
 } from '../../utils/customerHelpers';
+
+type CustomerFormTab = 'details';
 
 export function CustomerFormPage() {
   const { customerId } = useParams<{ customerId: string }>();
@@ -31,6 +40,7 @@ export function CustomerFormPage() {
   const [loading, setLoading] = useState(isEditing);
   const [form, setForm] = useState<CustomerFormState>(() => emptyCustomerForm());
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<CustomerFormTab>('details');
   const [errors, setErrors] = useState<{ name?: string }>({});
 
   useEffect(() => {
@@ -80,11 +90,16 @@ export function CustomerFormPage() {
     }
   };
 
+  const cancelTo = isEditing && customer ? `/customers/${customer.id}` : '/customers';
+  const isReady = !isEditing && form.name.trim().length > 0;
+
+  const formTabs = [{ id: 'details' as const, label: 'Details', icon: UserCircle }];
+
   if (loading) {
     return (
       <Layout>
         <PageShell>
-          <p className="text-center py-20 text-gray-500">Loading…</p>
+          <FormPageLoading message="Loading customer…" />
         </PageShell>
       </Layout>
     );
@@ -96,42 +111,102 @@ export function CustomerFormPage() {
         <PageHeader
           title={isEditing ? 'Edit customer' : 'New customer'}
           description="Contact details for invoicing."
+          actions={
+            <FormPageHeaderActions
+              formId="customer-form"
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Add customer"
+            />
+          }
         />
-        <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-          <FormSection icon={UserCircle} title="Customer details" description="Name and contact info.">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label="Name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} error={errors.name} required />
-              <Input label="Contact name" value={form.contactName} onChange={(e) => setForm((p) => ({ ...p, contactName: e.target.value }))} />
-              <Input label="Email" type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
-              <Input label="Phone" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-              <Input label="Tax ID (TRN/GSTIN)" value={form.taxId} onChange={(e) => setForm((p) => ({ ...p, taxId: e.target.value }))} />
-              <Select
-                label="Status"
-                value={form.status}
-                onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as Customer['status'] }))}
-                options={[
-                  { value: 'active', label: 'Active' },
-                  { value: 'archived', label: 'Archived' },
-                ]}
-              />
-            </div>
-            <div className="mt-4">
-              <Input label="Address" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
-            </div>
-            <div className="mt-4">
-              <Textarea label="Notes" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={3} />
-            </div>
-          </FormSection>
-          <FormStickyActions>
-            <Button type="button" variant="outline" onClick={() => navigate(isEditing && customer ? `/customers/${customer.id}` : '/customers')} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={saving}>
-              {!saving && <CheckCircle2 className="w-4 h-4" />}
-              {isEditing ? 'Save changes' : 'Add customer'}
-            </Button>
-          </FormStickyActions>
-        </form>
+
+        <FormPageBody id="customer-form" onSubmit={handleSubmit}>
+          <FormTabs
+            tabs={formTabs}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as CustomerFormTab)}
+            ariaLabel="Customer form sections"
+          />
+
+          <FormPageGrid>
+            <FormPanel role="tabpanel">
+              {activeTab === 'details' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Name"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  error={errors.name}
+                  required
+                />
+                <Input
+                  label="Contact name"
+                  value={form.contactName}
+                  onChange={(e) => setForm((p) => ({ ...p, contactName: e.target.value }))}
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                />
+                <Input
+                  label="Phone"
+                  value={form.phone}
+                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                />
+                <Input
+                  label="Tax ID (TRN/GSTIN)"
+                  value={form.taxId}
+                  onChange={(e) => setForm((p) => ({ ...p, taxId: e.target.value }))}
+                />
+                <Select
+                  label="Status"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, status: e.target.value as Customer['status'] }))
+                  }
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'archived', label: 'Archived' },
+                  ]}
+                />
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Address"
+                    value={form.address}
+                    onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Textarea
+                    label="Notes"
+                    optional
+                    value={form.notes}
+                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                    rows={2}
+                  />
+                </div>
+              </div>
+              ) : null}
+            </FormPanel>
+          </FormPageGrid>
+
+          {isReady ? (
+            <FormReadyBanner>
+              <span className="font-medium">{form.name.trim()}</span> is ready to add.
+            </FormReadyBanner>
+          ) : null}
+
+          <FormPageMobileActions
+            onCancel={() => navigate(cancelTo)}
+            saving={saving}
+            isEditing={isEditing}
+            createLabel="Add customer"
+          />
+        </FormPageBody>
       </PageShell>
     </Layout>
   );

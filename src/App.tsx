@@ -31,7 +31,6 @@ import { Purchases } from './pages/Purchases/Purchases';
 import { PurchaseFormPage } from './pages/Purchases/PurchaseFormPage';
 import { PurchaseDetailPage } from './pages/Purchases/PurchaseDetailPage';
 import { Reports } from './pages/Reports/Reports';
-import { ReportViewPage } from './pages/Reports/ReportViewPage';
 import { TermsPage } from './pages/Terms/TermsPage';
 import { TermsAcceptancePage } from './pages/Terms/TermsAcceptancePage';
 import { Configuration } from './pages/Configuration/Configuration';
@@ -39,18 +38,14 @@ import { Settings } from './pages/Settings/Settings';
 import { About } from './pages/About/About';
 import { Subscription } from './pages/Subscription/Subscription';
 import { SubscriptionExpired } from './pages/SubscriptionExpired/SubscriptionExpired';
+import { LoadingView } from './components/AppLoader/AppLoader';
 
 function AuthRedirect() {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
+      <LoadingView message="Loading…" size="lg" className="min-h-screen gap-4" />
     );
   }
 
@@ -129,7 +124,7 @@ function App() {
         <Route path="/purchases/:purchaseId/edit" element={<ProtectedRoute><PurchaseFormPage /></ProtectedRoute>} />
         <Route path="/purchases/:purchaseId" element={<ProtectedRoute><PurchaseDetailPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-        <Route path="/reports/:reportId" element={<ProtectedRoute><ReportViewPage /></ProtectedRoute>} />
+        <Route path="/reports/:reportId" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route
           path="/terms/accept"
           element={

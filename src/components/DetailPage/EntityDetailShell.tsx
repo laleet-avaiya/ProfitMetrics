@@ -1,15 +1,13 @@
-import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../Layout/Layout';
 import { PageHeader, PageShell } from '../PageShell/PageShell';
 import { Button } from '../Button/Button';
-import { Package } from 'lucide-react';
+import { LoadingView } from '../AppLoader/AppLoader';
 
 interface EntityDetailShellProps {
   loading: boolean;
   loadingLabel?: string;
-  loadingIcon?: LucideIcon;
   notFound: boolean;
   notFoundTitle: string;
   notFoundDescription: string;
@@ -25,7 +23,6 @@ interface EntityDetailShellProps {
 export function EntityDetailShell({
   loading,
   loadingLabel = 'Loading…',
-  loadingIcon: LoadingIcon = Package,
   notFound,
   notFoundTitle,
   notFoundDescription,
@@ -41,12 +38,7 @@ export function EntityDetailShell({
     return (
       <Layout>
         <PageShell>
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <LoadingIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-pulse" />
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{loadingLabel}</p>
-          </div>
+          <LoadingView message={loadingLabel} size="xl" className="py-20" />
         </PageShell>
       </Layout>
     );

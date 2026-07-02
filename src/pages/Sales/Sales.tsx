@@ -17,20 +17,19 @@ import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
+import { FormTabs } from '../../components/ui/FormTabs';
 import {
-  filterRowClass,
   tableCellClass,
   tableHeadCellClass,
   tableTruncateCellClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel } from '../../constants/invoiceStatuses';
 import { purchasePaymentStatusLabel, normalizeSalePaymentStatus } from '../../constants/purchaseStatuses';
 import {
-  SALES_CHANNEL_FILTER_OPTIONS,
   SalesChannelFilter,
   normalizeSalesChannelFilter,
   salesKindLabel,
@@ -154,6 +153,44 @@ export function Sales() {
     [filtered]
   );
 
+  const channelCounts = useMemo(
+    () =>
+      merged.reduce(
+        (acc, row) => {
+          acc.all += 1;
+          if (row.kind === 'marketplace') acc.marketplace += 1;
+          else acc.offline += 1;
+          return acc;
+        },
+        { all: 0, marketplace: 0, offline: 0 }
+      ),
+    [merged]
+  );
+
+  const channelTabs = [
+    {
+      id: SalesChannelFilter.ALL,
+      label: 'All sales',
+      icon: ShoppingCart,
+      badge: channelCounts.all || undefined,
+    },
+    {
+      id: SalesChannelFilter.MARKETPLACE,
+      label: 'Marketplace',
+      icon: Store,
+      badge: channelCounts.marketplace || undefined,
+    },
+    {
+      id: SalesChannelFilter.OFFLINE,
+      label: 'Offline',
+      icon: FileText,
+      badge: channelCounts.offline || undefined,
+    },
+  ];
+
+  const showCustomerFilter =
+    channel === SalesChannelFilter.OFFLINE || channel === SalesChannelFilter.ALL;
+
   const handleDelete = (row: UnifiedSalesRow) => {
     if (!company) return;
     const ref = unifiedRowReference(row);
@@ -196,22 +233,12 @@ export function Sales() {
       title="Sales"
       description="Marketplace orders and offline customer sales in one place."
     >
-      <div className="flex flex-wrap gap-2">
-        {SALES_CHANNEL_FILTER_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => setChannel(option.value)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              channel === option.value
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <FormTabs
+        tabs={channelTabs}
+        active={channel}
+        onChange={(id) => setChannel(id as SalesChannelFilter)}
+        ariaLabel="Sales channel"
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Sales" value={String(summary.count)} tone="indigo" icon={ShoppingCart} />
@@ -230,21 +257,49 @@ export function Sales() {
       </div>
 
       <Card className="space-y-3">
-        <div className={toolbarClass}>
-          <div className={filterRowClass}>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order, invoice, customer, product"
-              leftIcon={<Search className="w-4 h-4" />}
-            />
-            <FilterSelect value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)}>
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex-1 min-w-0">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search orders, invoices, customers…"
+                leftIcon={<Search className="w-4 h-4" />}
+                aria-label="Search sales"
+              />
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="violet"
+                onClick={() => navigate('/invoices/new')}
+                className="flex-1 sm:flex-none"
+              >
+                <Plus className="w-4 h-4" />
+                Offline sales
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => navigate('/sales/new')}
+                className="flex-1 sm:flex-none"
+              >
+                <Plus className="w-4 h-4" />
+                Marketplace sale
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 dark:border-gray-700/80 pt-2">
+            <FilterSelect
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+              aria-label="Date range"
+            >
               <option value="today">Today</option>
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
               <option value="all">All time</option>
             </FilterSelect>
-            {(channel === SalesChannelFilter.OFFLINE || channel === SalesChannelFilter.ALL) && (
+            {showCustomerFilter ? (
               <>
                 <FilterSelect
                   value={customerFilter}
@@ -255,6 +310,7 @@ export function Sales() {
                     setSearchParams(params, { replace: true });
                   }}
                   wide
+                  aria-label="Customer"
                 >
                   <option value="">All customers</option>
                   {customers.map((c) => (
@@ -268,6 +324,7 @@ export function Sales() {
                     value={invoiceStatusFilter}
                     onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceStatusFilter)}
                     wide
+                    aria-label="Invoice status"
                   >
                     <option value="all">All statuses</option>
                     {INVOICE_STATUS_OPTIONS.map((o) => (
@@ -278,24 +335,12 @@ export function Sales() {
                   </FilterSelect>
                 ) : null}
               </>
-            )}
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button variant="outline" onClick={() => navigate('/invoices/new')} className="w-full sm:w-auto">
-              <FileText className="w-4 h-4" />
-              Offline sale
-            </Button>
-            <Button variant="primary" onClick={() => navigate('/sales/new')} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4" />
-              Marketplace sale
-            </Button>
+            ) : null}
           </div>
         </div>
 
         {loading ? (
-          <div className="py-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-          </div>
+          <LoadingView message="Loading sales…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={ShoppingCart}
@@ -303,10 +348,12 @@ export function Sales() {
             description="Log a marketplace order or create an offline customer sale."
             action={
               <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="outline" onClick={() => navigate('/invoices/new')}>
-                  Offline sale
+                <Button variant="violet" onClick={() => navigate('/invoices/new')}>
+                  <Plus className="w-4 h-4" />
+                  Offline sales
                 </Button>
                 <Button variant="primary" onClick={() => navigate('/sales/new')}>
+                  <Plus className="w-4 h-4" />
                   Marketplace sale
                 </Button>
               </div>

@@ -28,45 +28,47 @@ export function SaleFormSummaryBar({
 
   return (
     <div
-      className={`sticky top-0 z-20 -mx-1 px-1 pb-2 pt-1 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm lg:static lg:mx-0 lg:px-0 lg:pb-0 lg:pt-0 lg:bg-transparent lg:backdrop-blur-none ${className}`.trim()}
+      className={`sticky top-0 z-20 lg:static ${className}`.trim()}
     >
       <div
-        className={`rounded-xl border shadow-sm overflow-hidden ${
+        className={`rounded-lg border text-sm overflow-hidden ${
           profitPositive
-            ? 'border-emerald-200/80 dark:border-emerald-800/50 bg-white dark:bg-gray-800'
-            : 'border-red-200/80 dark:border-red-800/50 bg-white dark:bg-gray-800'
+            ? 'border-emerald-200/70 dark:border-emerald-800/40 bg-white dark:bg-gray-800'
+            : 'border-red-200/70 dark:border-red-800/40 bg-white dark:bg-gray-800'
         }`}
       >
-        <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-700">
-          <div className="px-3 py-2.5 min-w-0">
+        <div className="flex flex-wrap items-stretch divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
+          <div className="flex flex-1 min-w-[33%] items-baseline justify-between gap-2 px-3 py-2 sm:block sm:min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Revenue
             </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white truncate">
+            <p className="font-bold tabular-nums text-gray-900 dark:text-white">
               {formatMoney(preview.grossRevenue, currency)}
             </p>
           </div>
-          <div className="px-3 py-2.5 min-w-0">
+          <div className="flex flex-1 min-w-[33%] items-baseline justify-between gap-2 px-3 py-2 sm:block sm:min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Costs
             </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white truncate">
+            <p className="font-bold tabular-nums text-gray-900 dark:text-white">
               {formatMoney(preview.totalCosts, currency)}
             </p>
           </div>
-          <div className="px-3 py-2.5 min-w-0">
+          <div className="flex flex-1 min-w-[33%] items-baseline justify-between gap-2 px-3 py-2 sm:block sm:min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Profit
             </p>
-            <p className={`text-sm font-bold tabular-nums truncate ${profitTone(preview.profit)}`}>
-              {formatMoney(preview.profit, currency)}
-            </p>
-            <p className={`text-[10px] tabular-nums ${profitTone(preview.profit)}`}>
-              {formatPercent(preview.profitMarginPercent)}
-            </p>
+            <div className="text-right sm:text-left">
+              <p className={`font-bold tabular-nums ${profitTone(preview.profit)}`}>
+                {formatMoney(preview.profit, currency)}
+              </p>
+              <p className={`text-[10px] tabular-nums ${profitTone(preview.profit)}`}>
+                {formatPercent(preview.profitMarginPercent)}
+              </p>
+            </div>
           </div>
         </div>
-        <p className="px-3 py-1.5 text-[10px] text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40">
+        <p className="px-3 py-1 text-[10px] text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/30">
           {itemCount} item{itemCount === 1 ? '' : 's'} · {preview.quantity} unit
           {preview.quantity === 1 ? '' : 's'} · {deliveryLabel}
         </p>

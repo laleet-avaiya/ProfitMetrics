@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  CheckCircle2,
-  Layers,
   Package,
   Plus,
   Receipt,
-  Sparkles,
   Truck,
   Wallet,
 } from 'lucide-react';
@@ -16,11 +13,20 @@ import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
 import { AmountIncludesTaxField } from '../../components/AmountIncludesTaxField/AmountIncludesTaxField';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
+import {
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPageNotFound,
+  FormPanel,
+  FormReadyBanner,
+} from '../../components/FormPage';
 import { SaleLineEditor } from '../../components/SaleLineEditor/SaleLineEditor';
 import { SaleFormSummaryBar } from '../../components/SaleFormSummaryBar/SaleFormSummaryBar';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
@@ -51,9 +57,13 @@ import { getSaleLines } from '../../utils/saleLines';
 import { SALE_STATUS_OPTIONS, saleStatusLabel } from '../../constants/saleStatuses';
 import {
   emptyStateMessageClass,
-  economicsPreviewColumnClass,
-  economicsSplitLayoutClass,
+  tableClass,
+  tableHeadCellClass,
+  tableHeadRowClass,
+  tableWrapClass,
 } from '../../constants/ui';
+
+type SaleFormTab = 'order' | 'items' | 'delivery' | 'extras';
 
 export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
@@ -69,6 +79,7 @@ export function SaleFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<SaleFormState>(() => emptySaleForm());
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<SaleFormTab>('order');
   const [errors, setErrors] = useState<{
     orderId?: string;
     platform?: string;
@@ -173,6 +184,7 @@ export function SaleFormPage() {
 
   const addLine = () => {
     setForm((f) => ({ ...f, lines: [...f.lines, emptySaleLineForm()] }));
+    setActiveTab('items');
   };
 
   const removeLine = (lineId: string) => {
@@ -295,7 +307,16 @@ export function SaleFormPage() {
 
     if (Object.keys(lineErrors).length > 0) next.lines = lineErrors;
     setErrors(next);
-    return Object.keys(next).length === 0;
+
+    if (next.orderId || next.platform) {
+      setActiveTab('order');
+      return false;
+    }
+    if (next.lines) {
+      setActiveTab('items');
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -377,128 +398,18 @@ export function SaleFormPage() {
   });
   const isReady = !isEditing && form.orderId.trim() && form.platform.trim() && validLines;
 
-  const optionalFields = (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Select
-          label="Payment mode"
-          value={form.paymentMode}
-          options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))
-          }
-        />
-        <Select
-          label="Payment status"
-          value={form.paymentStatus}
-          options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
-            value: o.value,
-            label: o.label,
-          }))}
-          onChange={(e) =>
-            setForm((f) => ({
-              ...f,
-              paymentStatus: e.target.value as PurchasePaymentStatus,
-            }))
-          }
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Select
-          label="Status"
-          value={form.status}
-          options={SALE_STATUS_OPTIONS}
-          onChange={(e) => requestStatusChange(e.target.value as SaleStatus)}
-        />
-        {isReturned ? (
-          <Input
-            label="Return date"
-            type="date"
-            value={form.returnedAt}
-            onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
-          />
-        ) : null}
-        {isCancelled ? (
-          <Input
-            label="Cancellation date"
-            type="date"
-            value={form.cancelledAt}
-            onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
-          />
-        ) : null}
-      </div>
-
-      {isReturned ? (
-        <OutcomeChargeFields
-          title="Return charges"
-          description="Reverse shipping, restocking, and return logistics."
-          amountLabel="Return charges"
-          amount={form.returnCharges}
-          onAmountChange={(value) => setForm((f) => ({ ...f, returnCharges: value }))}
-          taxPercentage={form.returnTaxPercentage}
-          onTaxPercentageChange={(value) =>
-            setForm((f) => ({ ...f, returnTaxPercentage: value }))
-          }
-          taxMode={form.returnTaxMode}
-          onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
-          tracksTax={tracksTax}
-          pctLabel={pctLabel}
-          currency={currency}
-          previewBase={preview.returnOutcome.base}
-          previewTax={preview.returnOutcome.tax}
-          perUnit={false}
-        />
-      ) : null}
-
-      {isCancelled ? (
-        <OutcomeChargeFields
-          title="Cancellation charges"
-          description="Marketplace or carrier fees when the order is cancelled."
-          amountLabel="Cancellation charges"
-          amount={form.cancellationCharges}
-          onAmountChange={(value) => setForm((f) => ({ ...f, cancellationCharges: value }))}
-          taxPercentage={form.cancellationTaxPercentage}
-          onTaxPercentageChange={(value) =>
-            setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
-          }
-          taxMode={form.cancellationTaxMode}
-          onTaxModeChange={(mode) => setForm((f) => ({ ...f, cancellationTaxMode: mode }))}
-          tracksTax={tracksTax}
-          pctLabel={pctLabel}
-          currency={currency}
-          previewBase={preview.cancellationOutcome.base}
-          previewTax={preview.cancellationOutcome.tax}
-          perUnit={false}
-        />
-      ) : null}
-
-      <Input
-        label="Tracking ID"
-        value={form.trackingId}
-        onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
-        placeholder="e.g. AWB123456789"
-      />
-      <Textarea
-        label="Order notes"
-        optional
-        value={form.notes}
-        onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-        rows={3}
-      />
-    </>
-  );
+  const formTabs = [
+    { id: 'order' as const, label: 'Order', icon: Receipt },
+    { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
+    { id: 'delivery' as const, label: 'Delivery', icon: Truck },
+    { id: 'extras' as const, label: 'Payment & notes', icon: Wallet },
+  ];
 
   if (loading) {
     return (
       <Layout>
         <PageShell>
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <Receipt className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-pulse" />
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading sale…</p>
-          </div>
+          <FormPageLoading message="Loading sale…" />
         </PageShell>
       </Layout>
     );
@@ -508,10 +419,12 @@ export function SaleFormPage() {
     return (
       <Layout>
         <PageShell>
-          <PageHeader title="Sale not found" description="This order may have been deleted." />
-          <Button type="button" variant="outline" onClick={() => navigate('/sales')}>
-            Back to sales
-          </Button>
+          <FormPageNotFound
+            title="Sale not found"
+            description="This order may have been deleted."
+            backLabel="Back to sales"
+            onBack={() => navigate('/sales')}
+          />
         </PageShell>
       </Layout>
     );
@@ -522,30 +435,16 @@ export function SaleFormPage() {
       <PageShell>
         <PageHeader
           title={isEditing ? 'Edit sale' : 'Log sale'}
-          description={
-            isEditing
-              ? `Order ${sale?.orderId ?? ''}`
-              : 'Multi-item marketplace order'
-          }
+          description={isEditing ? `Order ${sale?.orderId ?? ''}` : 'Marketplace order'}
           actions={
             !noProducts ? (
-              <div className="hidden lg:flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button type="submit" form="sale-form" variant="primary" loading={saving}>
-                  {!isEditing && !saving ? (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Log sale
-                    </>
-                  ) : isEditing ? (
-                    'Save changes'
-                  ) : (
-                    'Log sale'
-                  )}
-                </Button>
-              </div>
+              <FormPageHeaderActions
+                formId="sale-form"
+                onCancel={() => navigate(cancelTo)}
+                saving={saving}
+                isEditing={isEditing}
+                createLabel="Log sale"
+              />
             ) : null
           }
         />
@@ -568,7 +467,7 @@ export function SaleFormPage() {
             </Button>
           </div>
         ) : (
-          <form id="sale-form" onSubmit={handleSubmit} className="w-full space-y-3 sm:space-y-4 lg:space-y-5 pb-24 lg:pb-2">
+          <FormPageBody id="sale-form" onSubmit={handleSubmit}>
             <SaleFormSummaryBar
               preview={preview}
               currency={currency}
@@ -576,361 +475,332 @@ export function SaleFormPage() {
               deliveryLabel={deliveryModeLabel(form.deliveryMode).toLowerCase()}
             />
 
-            <FormSection
-              icon={Receipt}
-              iconTone="indigo"
-              step={isEditing ? undefined : 1}
-              title="Order details"
-              description="Order ID, date, and marketplace."
-            >
-              <div className="space-y-3">
-                <Input
-                  label="Order ID"
-                  value={form.orderId}
-                  onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
-                  error={errors.orderId}
-                  required
-                  placeholder="e.g. Amazon order #"
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="Order date"
-                    type="date"
-                    value={form.orderDate}
-                    onChange={(e) => setForm((f) => ({ ...f, orderDate: e.target.value }))}
-                    required
-                  />
-                  <Select
-                    label="Marketplace"
-                    value={form.platform}
-                    options={[
-                      { value: '', label: 'Select marketplace…' },
-                      ...productPlatformOptions,
-                    ]}
-                    onChange={(e) => handlePlatformChange(e.target.value)}
-                    error={errors.platform}
-                    required
-                  />
-                </div>
-              </div>
-            </FormSection>
+            <FormTabs
+              tabs={formTabs}
+              active={activeTab}
+              onChange={(id) => setActiveTab(id as SaleFormTab)}
+              ariaLabel="Sale form sections"
+            />
 
-            <FormSection
-              icon={Package}
-              iconTone="violet"
-              step={isEditing ? undefined : 2}
-              title="Products"
-              description="One row per SKU in the order."
-              headerAction={
-                <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!form.platform}>
-                  <Plus className="w-4 h-4" />
-                  Add item
-                </Button>
+            <FormPageGrid
+              sidebar={
+                <LineEconomicsPreview
+                  title="Order totals"
+                  preview={preview}
+                  currency={currency}
+                  tracksTax={tracksTax}
+                />
               }
             >
-              <div className="space-y-3">
-                {form.lines.map((line, index) => (
-                  <SaleLineEditor
-                    key={line.id}
-                    line={line}
-                    index={index}
-                    platform={form.platform}
-                    deliveryMode={form.deliveryMode}
-                    products={formProducts}
-                    currency={currency}
-                    canRemove={form.lines.length > 1}
-                    errors={errors.lines?.[line.id]}
-                    onChange={(patch) => updateLine(line.id, patch)}
-                    onEconomicsChange={(patch) => updateLineEconomics(line.id, patch)}
-                    onRemove={() => removeLine(line.id)}
-                  />
-                ))}
-              </div>
-            </FormSection>
-
-            <FormSection
-              icon={Truck}
-              iconTone="emerald"
-              step={isEditing ? undefined : 3}
-              title="Delivery"
-              description="Per-item fees or one combined shipment charge."
-            >
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  {DELIVERY_MODE_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleDeliveryModeChange(option.value)}
-                      className={`px-3 py-3 rounded-lg text-left border transition-colors ${
-                        form.deliveryMode === option.value
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                          : 'bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700'
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold">{option.label}</span>
-                      <span
-                        className={`block text-[11px] mt-0.5 leading-snug ${
-                          form.deliveryMode === option.value
-                            ? 'text-emerald-100'
-                            : 'text-gray-500 dark:text-gray-400'
-                        }`}
-                      >
-                        {option.value === DeliveryMode.INDIVIDUAL
-                          ? 'Each item uses its own fee'
-                          : 'One fee for whole order'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                {isGroupDelivery ? (
-                  <div className="space-y-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/20 p-3">
+              <FormPanel role="tabpanel">
+                {activeTab === 'order' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <Input
-                      label="Combined delivery fee"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.orderShippingCost || ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          orderShippingCost: parseFloat(e.target.value) || 0,
-                        }))
-                      }
+                      label="Order ID"
+                      value={form.orderId}
+                      onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
+                      error={errors.orderId}
+                      required
+                      placeholder="Amazon order #"
                     />
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input
-                        label={pctLabel}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        disabled={!tracksTax}
-                        value={form.orderDeliveryTaxPercentage || ''}
+                    <Input
+                      label="Order date"
+                      type="date"
+                      value={form.orderDate}
+                      onChange={(e) => setForm((f) => ({ ...f, orderDate: e.target.value }))}
+                      required
+                    />
+                    <Select
+                      label="Marketplace"
+                      value={form.platform}
+                      options={[
+                        { value: '', label: 'Select marketplace…' },
+                        ...productPlatformOptions,
+                      ]}
+                      onChange={(e) => handlePlatformChange(e.target.value)}
+                      error={errors.platform}
+                      required
+                    />
+                  </div>
+                ) : null}
+
+                {activeTab === 'items' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {form.platform
+                          ? `${form.lines.length} line${form.lines.length === 1 ? '' : 's'} on ${form.platform}`
+                          : 'Pick a marketplace on the Order tab first'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addLine}
+                        disabled={!form.platform}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add item
+                      </Button>
+                    </div>
+
+                    {!form.platform ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+                        Go to the Order tab and select a marketplace before adding products.
+                      </p>
+                    ) : (
+                      <>
+                        <div className={`${tableWrapClass} hidden md:block`}>
+                          <table className={tableClass}>
+                            <thead>
+                              <tr className={tableHeadRowClass}>
+                                <th className={`${tableHeadCellClass} w-8`}>#</th>
+                                <th className={tableHeadCellClass}>Product</th>
+                                <th className={`${tableHeadCellClass} w-16`}>Qty</th>
+                                <th className={`${tableHeadCellClass} w-24`}>Cost</th>
+                                <th className={`${tableHeadCellClass} w-24`}>Price</th>
+                                <th className={`${tableHeadCellClass} w-24 text-right`}>Profit</th>
+                                <th className={`${tableHeadCellClass} w-20`} />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {form.lines.map((line, index) => (
+                                <SaleLineEditor
+                                  key={line.id}
+                                  layout="table"
+                                  line={line}
+                                  index={index}
+                                  platform={form.platform}
+                                  deliveryMode={form.deliveryMode}
+                                  products={formProducts}
+                                  currency={currency}
+                                  canRemove={form.lines.length > 1}
+                                  errors={errors.lines?.[line.id]}
+                                  onChange={(patch) => updateLine(line.id, patch)}
+                                  onEconomicsChange={(patch) => updateLineEconomics(line.id, patch)}
+                                  onRemove={() => removeLine(line.id)}
+                                />
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="md:hidden space-y-2">
+                          {form.lines.map((line, index) => (
+                            <SaleLineEditor
+                              key={line.id}
+                              layout="card"
+                              line={line}
+                              index={index}
+                              platform={form.platform}
+                              deliveryMode={form.deliveryMode}
+                              products={formProducts}
+                              currency={currency}
+                              canRemove={form.lines.length > 1}
+                              errors={errors.lines?.[line.id]}
+                              onChange={(patch) => updateLine(line.id, patch)}
+                              onEconomicsChange={(patch) => updateLineEconomics(line.id, patch)}
+                              onRemove={() => removeLine(line.id)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+
+                {activeTab === 'delivery' ? (
+                  <div className="space-y-3 max-w-xl">
+                    <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-900/40">
+                      {DELIVERY_MODE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleDeliveryModeChange(option.value)}
+                          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                            form.deliveryMode === option.value
+                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                              : 'text-gray-600 dark:text-gray-400'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {isGroupDelivery
+                        ? 'One combined delivery fee for the whole order.'
+                        : 'Each line item uses its own delivery fee (set per item on the Items tab).'}
+                    </p>
+
+                    {isGroupDelivery ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <Input
+                          label="Combined delivery fee"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.orderShippingCost || ''}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              orderShippingCost: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                        />
+                        <Input
+                          label={pctLabel}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          disabled={!tracksTax}
+                          value={form.orderDeliveryTaxPercentage || ''}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              orderDeliveryTaxPercentage: parseFloat(e.target.value) || 0,
+                            }))
+                          }
+                        />
+                        <AmountIncludesTaxField
+                          value={form.orderDeliveryTaxMode}
+                          disabled={!tracksTax}
+                          onChange={(mode) => setForm((f) => ({ ...f, orderDeliveryTaxMode: mode }))}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {activeTab === 'extras' ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <Select
+                        label="Payment mode"
+                        value={form.paymentMode}
+                        options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))
+                        }
+                      />
+                      <Select
+                        label="Payment status"
+                        value={form.paymentStatus}
+                        options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
+                          value: o.value,
+                          label: o.label,
+                        }))}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            orderDeliveryTaxPercentage: parseFloat(e.target.value) || 0,
+                            paymentStatus: e.target.value as PurchasePaymentStatus,
                           }))
                         }
                       />
-                      <AmountIncludesTaxField
-                        value={form.orderDeliveryTaxMode}
-                        disabled={!tracksTax}
-                        onChange={(mode) => setForm((f) => ({ ...f, orderDeliveryTaxMode: mode }))}
+                      <Select
+                        label="Order status"
+                        value={form.status}
+                        options={SALE_STATUS_OPTIONS}
+                        onChange={(e) => requestStatusChange(e.target.value as SaleStatus)}
+                      />
+                      {isReturned ? (
+                        <Input
+                          label="Return date"
+                          type="date"
+                          value={form.returnedAt}
+                          onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
+                        />
+                      ) : null}
+                      {isCancelled ? (
+                        <Input
+                          label="Cancellation date"
+                          type="date"
+                          value={form.cancelledAt}
+                          onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
+                        />
+                      ) : null}
+                      <Input
+                        label="Tracking ID"
+                        value={form.trackingId}
+                        onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
+                        placeholder="AWB123456789"
                       />
                     </div>
+
+                    {isReturned ? (
+                      <OutcomeChargeFields
+                        title="Return charges"
+                        description="Reverse shipping, restocking, and return logistics."
+                        amountLabel="Return charges"
+                        amount={form.returnCharges}
+                        onAmountChange={(value) => setForm((f) => ({ ...f, returnCharges: value }))}
+                        taxPercentage={form.returnTaxPercentage}
+                        onTaxPercentageChange={(value) =>
+                          setForm((f) => ({ ...f, returnTaxPercentage: value }))
+                        }
+                        taxMode={form.returnTaxMode}
+                        onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
+                        tracksTax={tracksTax}
+                        pctLabel={pctLabel}
+                        currency={currency}
+                        previewBase={preview.returnOutcome.base}
+                        previewTax={preview.returnOutcome.tax}
+                        perUnit={false}
+                      />
+                    ) : null}
+
+                    {isCancelled ? (
+                      <OutcomeChargeFields
+                        title="Cancellation charges"
+                        description="Marketplace or carrier fees when the order is cancelled."
+                        amountLabel="Cancellation charges"
+                        amount={form.cancellationCharges}
+                        onAmountChange={(value) =>
+                          setForm((f) => ({ ...f, cancellationCharges: value }))
+                        }
+                        taxPercentage={form.cancellationTaxPercentage}
+                        onTaxPercentageChange={(value) =>
+                          setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
+                        }
+                        taxMode={form.cancellationTaxMode}
+                        onTaxModeChange={(mode) =>
+                          setForm((f) => ({ ...f, cancellationTaxMode: mode }))
+                        }
+                        tracksTax={tracksTax}
+                        pctLabel={pctLabel}
+                        currency={currency}
+                        previewBase={preview.cancellationOutcome.base}
+                        previewTax={preview.cancellationOutcome.tax}
+                        perUnit={false}
+                      />
+                    ) : null}
+
+                    <Textarea
+                      label="Order notes"
+                      optional
+                      value={form.notes}
+                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      rows={2}
+                    />
                   </div>
                 ) : null}
-              </div>
-            </FormSection>
+              </FormPanel>
+            </FormPageGrid>
 
-            <FormSection
-              icon={Layers}
-              iconTone="violet"
-              step={isEditing ? undefined : 4}
-              title="Profit breakdown"
-              description="Full order economics."
-              className="hidden lg:block"
-            >
-              <div className={economicsSplitLayoutClass}>
-                <div className="xl:col-span-7">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {form.lines.length} item{form.lines.length === 1 ? '' : 's'} ·{' '}
-                    {preview.quantity} unit{preview.quantity === 1 ? '' : 's'} ·{' '}
-                    {isGroupDelivery ? 'group delivery' : 'individual delivery'}
-                  </p>
-                </div>
-                <div className={`xl:col-span-5 ${economicsPreviewColumnClass}`}>
-                  <LineEconomicsPreview
-                    title="Order totals"
-                    preview={preview}
-                    currency={currency}
-                    tracksTax={tracksTax}
-                  />
-                </div>
-              </div>
-            </FormSection>
+            {isReady ? (
+              <FormReadyBanner>
+                Order <span className="font-medium">{form.orderId.trim()}</span> on{' '}
+                <span className="font-medium">{form.platform}</span> — ready to log.
+              </FormReadyBanner>
+            ) : null}
 
-            <FormSection
-              icon={Wallet}
-              iconTone="emerald"
-              title="Payment & fulfillment"
-              description="Optional tracking fields."
-              className="lg:hidden"
-            >
-              <details className="group">
-                <summary className="flex items-center justify-between gap-2 py-1 cursor-pointer list-none text-xs font-medium text-gray-600 dark:text-gray-400">
-                  Tap to expand payment, status, tracking & notes
-                </summary>
-                <div className="mt-3 space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  {optionalFields}
-                </div>
-              </details>
-            </FormSection>
-
-            <FormSection
-              icon={Wallet}
-              iconTone="emerald"
-              step={isEditing ? undefined : 5}
-              title="Payment tracking"
-              description="Optional — track marketplace payout."
-              className="hidden lg:block"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <Select
-                  label="Payment mode"
-                  value={form.paymentMode}
-                  options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))
-                  }
-                />
-                <Select
-                  label="Payment status"
-                  value={form.paymentStatus}
-                  options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
-                    value: o.value,
-                    label: o.label,
-                  }))}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      paymentStatus: e.target.value as PurchasePaymentStatus,
-                    }))
-                  }
-                />
-              </div>
-            </FormSection>
-
-            <FormSection
-              icon={Package}
-              iconTone="amber"
-              step={isEditing ? undefined : 6}
-              title="Fulfillment"
-              description="Order status, returns, and cancellations."
-              className="hidden lg:block"
-            >
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <Select
-                    label="Status"
-                    value={form.status}
-                    options={SALE_STATUS_OPTIONS}
-                    onChange={(e) => requestStatusChange(e.target.value as SaleStatus)}
-                  />
-                  {isReturned ? (
-                    <Input
-                      label="Return date"
-                      type="date"
-                      value={form.returnedAt}
-                      onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
-                    />
-                  ) : null}
-                  {isCancelled ? (
-                    <Input
-                      label="Cancellation date"
-                      type="date"
-                      value={form.cancelledAt}
-                      onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
-                    />
-                  ) : null}
-                </div>
-                {isReturned ? (
-                  <OutcomeChargeFields
-                    title="Return charges"
-                    description="Reverse shipping, restocking, and return logistics."
-                    amountLabel="Return charges"
-                    amount={form.returnCharges}
-                    onAmountChange={(value) => setForm((f) => ({ ...f, returnCharges: value }))}
-                    taxPercentage={form.returnTaxPercentage}
-                    onTaxPercentageChange={(value) =>
-                      setForm((f) => ({ ...f, returnTaxPercentage: value }))
-                    }
-                    taxMode={form.returnTaxMode}
-                    onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
-                    tracksTax={tracksTax}
-                    pctLabel={pctLabel}
-                    currency={currency}
-                    previewBase={preview.returnOutcome.base}
-                    previewTax={preview.returnOutcome.tax}
-                    perUnit={false}
-                  />
-                ) : null}
-                {isCancelled ? (
-                  <OutcomeChargeFields
-                    title="Cancellation charges"
-                    description="Marketplace or carrier fees when the order is cancelled."
-                    amountLabel="Cancellation charges"
-                    amount={form.cancellationCharges}
-                    onAmountChange={(value) =>
-                      setForm((f) => ({ ...f, cancellationCharges: value }))
-                    }
-                    taxPercentage={form.cancellationTaxPercentage}
-                    onTaxPercentageChange={(value) =>
-                      setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
-                    }
-                    taxMode={form.cancellationTaxMode}
-                    onTaxModeChange={(mode) =>
-                      setForm((f) => ({ ...f, cancellationTaxMode: mode }))
-                    }
-                    tracksTax={tracksTax}
-                    pctLabel={pctLabel}
-                    currency={currency}
-                    previewBase={preview.cancellationOutcome.base}
-                    previewTax={preview.cancellationOutcome.tax}
-                    perUnit={false}
-                  />
-                ) : null}
-              </div>
-            </FormSection>
-
-            <FormSection
-              icon={Truck}
-              iconTone="emerald"
-              step={isEditing ? undefined : 7}
-              title="Shipment & notes"
-              description="Tracking and internal notes."
-              className="hidden lg:block"
-            >
-              <div className="space-y-4 max-w-md">
-                <Input
-                  label="Tracking ID"
-                  value={form.trackingId}
-                  onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
-                  placeholder="e.g. AWB123456789"
-                />
-                <Textarea
-                  label="Order notes"
-                  optional
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  rows={4}
-                />
-              </div>
-            </FormSection>
-
-            {isReady && (
-              <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-3.5 py-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                  Order <span className="font-medium">{form.orderId.trim()}</span> on{' '}
-                  <span className="font-medium">{form.platform}</span> with{' '}
-                  <span className="font-medium">{form.lines.length}</span> item
-                  {form.lines.length === 1 ? '' : 's'} is ready to log.
-                </p>
-              </div>
-            )}
-
-            <FormStickyActions className="lg:hidden">
-              <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" loading={saving}>
-                {isEditing ? 'Save changes' : 'Log sale'}
-              </Button>
-            </FormStickyActions>
-          </form>
+            <FormPageMobileActions
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Log sale"
+            />
+          </FormPageBody>
         )}
       </PageShell>
     </Layout>

@@ -1,10 +1,10 @@
 import { type ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { AppLoader } from '../AppLoader/AppLoader';
 
 interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'violet' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
   disabled?: boolean;
@@ -16,6 +16,7 @@ interface ButtonProps {
 
 const variantClasses = {
   primary: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm',
+  violet: 'bg-violet-600 hover:bg-violet-700 text-white shadow-sm',
   secondary: 'bg-gray-600 hover:bg-gray-700 text-white shadow-sm',
   outline:
     'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
@@ -59,7 +60,7 @@ export function Button({
         ${className}
       `}
     >
-      {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+      {loading ? <AppLoader size="xs" /> : null}
       {children}
     </button>
   );

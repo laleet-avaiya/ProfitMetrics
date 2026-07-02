@@ -8,6 +8,7 @@ import { FilterSelect } from '../../components/ui/FilterSelect';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { Input } from '../../components/Input/Input';
 import { Button } from '../../components/Button/Button';
+import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
@@ -408,10 +409,7 @@ export function Dashboard() {
           </div>
 
           {loading ? (
-            <div className="py-10 text-center">
-              <div className="inline-block animate-spin rounded-full h-7 w-7 border-b-2 border-indigo-600" />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading metrics…</p>
-            </div>
+            <LoadingView message="Loading metrics…" size="md" className="py-10" />
           ) : (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

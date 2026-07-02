@@ -6,6 +6,7 @@ import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import {
   filterRowClass,
@@ -153,7 +154,7 @@ export function Payments() {
           </Button>
         </div>
         {loading ? (
-          <div className="py-16 text-center"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>
+          <LoadingView message="Loading payments…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (
           <EmptyState icon={Wallet} title="No payments yet" description="Record invoice payments, direct receipts, or marketplace payouts." action={<Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button>} />
         ) : (

@@ -71,7 +71,6 @@ export function CustomerDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading customer…"
-      loadingIcon={UserCircle}
       notFound={notFound}
       notFoundTitle="Customer not found"
       notFoundDescription="This customer may have been deleted."

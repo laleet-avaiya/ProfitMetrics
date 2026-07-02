@@ -1,20 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Card, CardHeader } from '../../components/ui/Card';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { SpreadsheetTable } from '../../components/ui/SpreadsheetTable';
 import { ReportId, type ReportId as ReportIdType } from '../../constants/reportCatalog';
+import {
+  purchasePaymentStatusLabel,
+  purchaseStatusLabel,
+  salePaymentStatusBadgeClass,
+} from '../../constants/purchaseStatuses';
 import { emptyStateClass } from '../../constants/ui';
-import type { Expense, Invoice, PeriodProfitSummary, Product, ProductStock, Sale } from '../../types';
+import type { Expense, Invoice, PeriodProfitSummary, Product, ProductStock, PurchaseOrder, Sale } from '../../types';
+import { PurchaseOrderStatus } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatMoney, formatPercent } from '../../utils/profit';
 import {
   computeByExpenseCategory,
   computeByPlatform,
   computeByProduct,
+  computePurchaseReportRows,
+  computePurchaseReportSummary,
   computeStockReport,
   computeStockSummary,
   computeTaxLedger,
   computeTrend,
   filterOperatingExpenses,
+  buildProfitLossStatement,
+  type ProfitLossBasis,
   type TrendGranularity,
 } from '../../utils/reports';
 
@@ -22,6 +33,19 @@ export function profitClass(value: number): string {
   if (value > 0) return 'text-emerald-600 dark:text-emerald-400';
   if (value < 0) return 'text-red-600 dark:text-red-400';
   return 'text-gray-900 dark:text-white';
+}
+
+function purchaseStatusBadgeClass(status: PurchaseOrderStatus): string {
+  if (status === PurchaseOrderStatus.RECEIVED) {
+    return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200';
+  }
+  if (status === PurchaseOrderStatus.PARTIALLY_RECEIVED) {
+    return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200';
+  }
+  if (status === PurchaseOrderStatus.CANCELLED) {
+    return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+  }
+  return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200';
 }
 
 function ReportSection({
@@ -91,10 +115,13 @@ interface ReportContentProps {
   filteredSales: Sale[];
   filteredInvoices: Invoice[];
   filteredExpenses: Expense[];
+  filteredPurchases: PurchaseOrder[];
   stock: ProductStock[];
   products: Product[];
   summary: PeriodProfitSummary;
   hasData: boolean;
+  plBasis: ProfitLossBasis;
+  onPlBasisChange: (basis: ProfitLossBasis) => void;
 }
 
 export function ReportContent({
@@ -103,10 +130,13 @@ export function ReportContent({
   filteredSales,
   filteredInvoices,
   filteredExpenses,
+  filteredPurchases,
   stock,
   products,
   summary,
   hasData,
+  plBasis,
+  onPlBasisChange,
 }: ReportContentProps) {
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
   const isStockReport = reportId === ReportId.STOCK_ON_HAND;
@@ -145,6 +175,15 @@ export function ReportContent({
     [filteredSales, filteredInvoices, filteredExpenses, trendGranularity]
   );
 
+  const purchaseRows = useMemo(
+    () => computePurchaseReportRows(filteredPurchases),
+    [filteredPurchases]
+  );
+  const purchaseSummary = useMemo(
+    () => computePurchaseReportSummary(filteredPurchases),
+    [filteredPurchases]
+  );
+
   const operatingExpenseTotal = useMemo(
     () => operatingExpenses.reduce((sum, expense) => sum + expense.amount, 0),
     [operatingExpenses]
@@ -177,7 +216,7 @@ export function ReportContent({
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-md border border-emerald-200/70 dark:border-emerald-800/50 bg-gradient-to-br from-emerald-50/90 to-white dark:from-emerald-950/30 dark:to-gray-800 p-3"
+                className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3"
               >
                 <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
                 <p className="mt-0.5 text-base font-semibold tabular-nums text-gray-900 dark:text-white">
@@ -189,7 +228,7 @@ export function ReportContent({
 
           <ReportSection
             title="Stock on hand"
-            description="Spreadsheet view — download XLS for Excel."
+            description="Current inventory snapshot — download XLS for Excel."
           >
             <SpreadsheetTable
               columns={[
@@ -251,22 +290,7 @@ export function ReportContent({
       );
 
     case ReportId.PROFIT_LOSS: {
-      const plLines = [
-        { label: 'Gross revenue', value: summary.grossRevenue, emphasize: false },
-        ...(summary.offlineRevenue > 0
-          ? [
-              { label: '  Online sales', value: summary.onlineRevenue, emphasize: false },
-              { label: '  Offline invoices', value: summary.offlineRevenue, emphasize: false },
-            ]
-          : []),
-        { label: 'Cost of goods (COGS)', value: -summary.totalCogs, emphasize: false },
-        { label: 'Shipping (online)', value: -summary.totalShipping, emphasize: false },
-        { label: 'Platform fees (online)', value: -summary.totalPlatformFees, emphasize: false },
-        { label: 'Tax collected', value: -summary.totalTax, emphasize: false },
-        { label: 'Order / invoice profit', value: summary.grossProfit, emphasize: true },
-        { label: 'Operating expenses', value: -summary.totalExpenses, emphasize: false },
-        { label: 'Net profit', value: summary.netProfit, emphasize: true },
-      ];
+      const plStatement = buildProfitLossStatement(summary, filteredPurchases, plBasis);
 
       const orderLabel =
         summary.invoiceCount > 0
@@ -275,6 +299,16 @@ export function ReportContent({
 
       return (
         <div className="space-y-4">
+          <FormTabs
+            tabs={[
+              { id: 'paid', label: 'Paid expenses' },
+              { id: 'with-pending-po', label: 'Incl. pending PO' },
+            ]}
+            active={plBasis}
+            onChange={(id) => onPlBasisChange(id as ProfitLossBasis)}
+            ariaLabel="Profit and loss basis"
+          />
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Orders / invoices', value: orderLabel },
@@ -282,8 +316,8 @@ export function ReportContent({
               { label: 'Order profit', value: formatMoney(summary.grossProfit, currency) },
               {
                 label: 'Net profit',
-                value: formatMoney(summary.netProfit, currency),
-                valueClass: profitClass(summary.netProfit),
+                value: formatMoney(plStatement.netProfit, currency),
+                valueClass: profitClass(plStatement.netProfit),
               },
             ].map((stat) => (
               <div
@@ -300,7 +334,19 @@ export function ReportContent({
             ))}
           </div>
 
-          <ReportSection title="Profit & Loss statement">
+          {plBasis === 'with-pending-po' && plStatement.pendingPoBalance > 0 ? (
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-2.5 py-1 text-rose-800 dark:text-rose-200">
+                Pending PO balance · {formatMoney(plStatement.pendingPoBalance, currency)} across{' '}
+                {plStatement.pendingPoCount} PO{plStatement.pendingPoCount === 1 ? '' : 's'}
+              </span>
+            </div>
+          ) : null}
+
+          <ReportSection
+            title="Profit & Loss statement"
+            description={plStatement.basisLabel}
+          >
             <SpreadsheetTable
               columns={[
                 {
@@ -323,19 +369,30 @@ export function ReportContent({
                   ),
                 },
               ]}
-              rows={plLines}
+              rows={plStatement.lines}
               rowKey={(line) => line.label}
               footerRows={[
                 {
-                  cells: ['Net margin', formatPercent(summary.netMarginPercent)],
+                  cells: ['Net margin', formatPercent(plStatement.netMarginPercent)],
                 },
               ]}
             />
-            {summary.excludedAutoExpenses > 0 && (
+            {summary.excludedAutoExpenses > 0 ? (
               <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                 {formatMoney(summary.excludedAutoExpenses, currency)} in auto-generated sale fees
                 and inventory purchases is excluded from operating expenses (already in order profit
                 or stock).
+              </p>
+            ) : null}
+            {plBasis === 'with-pending-po' ? (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Pending PO payments are unpaid balances on purchase orders in this period — a
+                commitment view, not yet recorded as paid expenses.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Operating expenses include paid manual expenses and purchase order payments recorded
+                in this period.
               </p>
             )}
           </ReportSection>
@@ -555,6 +612,145 @@ export function ReportContent({
         </div>
       );
     }
+
+    case ReportId.PURCHASE_ORDERS:
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Purchase orders', value: String(purchaseSummary.count) },
+              { label: 'Total value', value: formatMoney(purchaseSummary.totalValue, currency) },
+              { label: 'Total paid', value: formatMoney(purchaseSummary.totalPaid, currency) },
+              {
+                label: 'Balance due',
+                value: formatMoney(purchaseSummary.balanceDue, currency),
+                valueClass:
+                  purchaseSummary.balanceDue > 0
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-gray-900 dark:text-white',
+              },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
+                <p
+                  className={`mt-0.5 text-base font-semibold tabular-nums ${stat.valueClass ?? 'text-gray-900 dark:text-white'}`}
+                >
+                  {stat.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 dark:bg-rose-900/30 px-2.5 py-1 text-rose-800 dark:text-rose-200">
+              Unpaid · {purchaseSummary.unpaidCount}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-amber-800 dark:text-amber-200">
+              Partially paid · {purchaseSummary.partialCount}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-1 text-emerald-800 dark:text-emerald-200">
+              Paid · {purchaseSummary.paidCount}
+            </span>
+          </div>
+
+          <ReportSection
+            title="Purchase orders"
+            description="Excludes cancelled POs. Filtered by purchase date."
+          >
+            <SpreadsheetTable
+              columns={[
+                {
+                  key: 'date',
+                  header: 'Date',
+                  render: (row) => formatDateLocal(row.purchaseDate),
+                },
+                {
+                  key: 'po',
+                  header: 'PO #',
+                  render: (row) => <span className="font-medium">{row.poNumber}</span>,
+                },
+                {
+                  key: 'vendor',
+                  header: 'Vendor',
+                  render: (row) => row.vendorName,
+                },
+                {
+                  key: 'reference',
+                  header: 'Reference',
+                  render: (row) => row.reference || '—',
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (row) => (
+                    <span
+                      className={`inline-flex text-xs px-2 py-0.5 rounded-full ${purchaseStatusBadgeClass(row.status)}`}
+                    >
+                      {purchaseStatusLabel(row.status)}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'payment',
+                  header: 'Payment',
+                  render: (row) => (
+                    <span
+                      className={`inline-flex text-xs px-2 py-0.5 rounded-full ${salePaymentStatusBadgeClass(row.paymentStatus)}`}
+                    >
+                      {purchasePaymentStatusLabel(row.paymentStatus)}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'lines',
+                  header: 'Lines',
+                  align: 'right',
+                  render: (row) => row.lineCount,
+                },
+                {
+                  key: 'total',
+                  header: 'Total',
+                  align: 'right',
+                  className: 'font-medium',
+                  render: (row) => formatMoney(row.total, currency),
+                },
+                {
+                  key: 'paid',
+                  header: 'Paid',
+                  align: 'right',
+                  render: (row) => formatMoney(row.totalPaid, currency),
+                },
+                {
+                  key: 'balance',
+                  header: 'Balance',
+                  align: 'right',
+                  render: (row) =>
+                    row.balanceDue > 0 ? (
+                      <span className="text-rose-600 dark:text-rose-400">
+                        {formatMoney(row.balanceDue, currency)}
+                      </span>
+                    ) : (
+                      '—'
+                    ),
+                },
+              ]}
+              rows={purchaseRows}
+              rowKey={(row) => row.id}
+              footerRows={[
+                {
+                  cells: [
+                    `${purchaseSummary.count} POs · ${formatMoney(purchaseSummary.totalValue, currency)} total · ${formatMoney(purchaseSummary.balanceDue, currency)} due`,
+                  ],
+                },
+              ]}
+              emptyMessage="No purchase orders in this period."
+            />
+          </ReportSection>
+        </div>
+      );
 
     case ReportId.TREND:
       return (

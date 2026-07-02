@@ -61,7 +61,6 @@ export function SaleDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading sale…"
-      loadingIcon={ShoppingCart}
       notFound={notFound}
       notFoundTitle="Sale not found"
       notFoundDescription="This order may have been deleted."

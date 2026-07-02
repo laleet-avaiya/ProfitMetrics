@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useNotification } from './useNotification';
 import { firestoreService } from '../services/firestore';
-import type { Expense, Invoice, Product, ProductStock, Sale } from '../types';
+import type { Expense, Invoice, Product, ProductStock, PurchaseOrder, Sale } from '../types';
 import {
   computePeriodSummary,
   filterExpensesInRange,
   filterInvoicesInRange,
+  filterPurchasesInRange,
   filterSalesInRange,
   getReportDateRange,
   type ReportPreset,
@@ -21,6 +22,7 @@ export function useReportData() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<ProductStock[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<ReportPreset>('30d');
   const [customFrom, setCustomFrom] = useState('');
@@ -30,18 +32,21 @@ export function useReportData() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, expensesList, stockList, productsList] = await Promise.all([
+      const [salesList, invoicesList, expensesList, stockList, productsList, purchasesList] =
+        await Promise.all([
         firestoreService.sales.getAll(company.id),
         firestoreService.invoices.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
         firestoreService.stock.getAll(company.id),
         firestoreService.products.getAll(company.id),
+        firestoreService.purchases.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
       setInvoices(invoicesList.filter((i) => !i.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
       setStock(stockList);
       setProducts(productsList.filter((p) => !p.deleted));
+      setPurchases(purchasesList.filter((p) => !p.deleted));
     } catch (err) {
       console.error('Failed to load report data:', err);
       notification.error('Failed to load report data');
@@ -74,6 +79,11 @@ export function useReportData() {
     [expenses, dateRange]
   );
 
+  const filteredPurchases = useMemo(
+    () => filterPurchasesInRange(purchases, dateRange.from, dateRange.to),
+    [purchases, dateRange]
+  );
+
   const summary = useMemo(
     () =>
       computePeriodSummary(
@@ -90,7 +100,8 @@ export function useReportData() {
   const hasData =
     filteredSales.length > 0 ||
     filteredInvoices.length > 0 ||
-    filteredExpenses.length > 0;
+    filteredExpenses.length > 0 ||
+    filteredPurchases.length > 0;
 
   return {
     currency: company?.currency ?? 'AED',
@@ -105,6 +116,7 @@ export function useReportData() {
     filteredSales,
     filteredInvoices,
     filteredExpenses,
+    filteredPurchases,
     stock,
     products,
     summary,

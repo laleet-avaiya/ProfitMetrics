@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Layers, Package, Plus, Trash2 } from 'lucide-react';
+import {
+  Building2,
+  ClipboardList,
+  Package,
+  Plus,
+} from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
-import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
+import {
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPanel,
+  FormReadyBanner,
+  FormSidebarRow,
+  FormSidebarSection,
+} from '../../components/FormPage';
+import { PurchaseFormSummaryBar } from '../../components/PurchaseFormSummaryBar/PurchaseFormSummaryBar';
+import { PurchaseLineEditor } from '../../components/PurchaseLineEditor/PurchaseLineEditor';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { PURCHASE_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
@@ -30,14 +46,15 @@ import { syncPurchaseStockReceipts } from '../../utils/purchaseStock';
 import { syncPurchaseExpenses } from '../../utils/purchaseExpenses';
 import { getActiveVendors } from '../../utils/vendorHelpers';
 import { formatMoney } from '../../utils/profit';
-import { emptyStateMessageClass } from '../../constants/ui';
+import {
+  emptyStateMessageClass,
+  tableClass,
+  tableHeadCellClass,
+  tableHeadRowClass,
+  tableWrapClass,
+} from '../../constants/ui';
 
-const taxTypeOptions = [
-  { value: TaxType.NONE, label: 'None' },
-  { value: TaxType.VAT, label: 'VAT' },
-  { value: TaxType.GST, label: 'GST' },
-  { value: TaxType.SALES_TAX, label: 'Sales tax' },
-];
+type PurchaseFormTab = 'order' | 'items' | 'notes';
 
 export function PurchaseFormPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
@@ -54,6 +71,7 @@ export function PurchaseFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<PurchaseFormState>(() => emptyPurchaseForm());
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<PurchaseFormTab>('order');
   const [errors, setErrors] = useState<{ vendorId?: string; lines?: string }>({});
   const [nextPoNumber, setNextPoNumber] = useState('');
 
@@ -91,7 +109,10 @@ export function PurchaseFormPage() {
           setPurchase(null);
           const initial = emptyPurchaseForm();
           const vendorFromUrl = searchParams.get('vendor');
-          if (vendorFromUrl) initial.vendorId = vendorFromUrl;
+          if (vendorFromUrl) {
+            initial.vendorId = vendorFromUrl;
+            setActiveTab('items');
+          }
           setForm(initial);
         }
       } catch (err) {
@@ -131,6 +152,7 @@ export function PurchaseFormPage() {
 
   const addLine = () => {
     setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyPurchaseLineForm()] }));
+    setActiveTab('items');
   };
 
   const removeLine = (lineId: string) => {
@@ -159,7 +181,16 @@ export function PurchaseFormPage() {
     const validLines = form.lines.filter((l) => l.productId);
     if (validLines.length === 0) next.lines = 'Add at least one product line';
     setErrors(next);
-    return Object.keys(next).length === 0;
+
+    if (next.vendorId) {
+      setActiveTab('order');
+      return false;
+    }
+    if (next.lines) {
+      setActiveTab('items');
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -207,7 +238,9 @@ export function PurchaseFormPage() {
         } catch (stockErr) {
           console.error('Stock sync after create:', stockErr);
           notification.error(
-            stockErr instanceof Error ? stockErr.message : 'Purchase created but stock could not be updated'
+            stockErr instanceof Error
+              ? stockErr.message
+              : 'Purchase created but stock could not be updated'
           );
           setSaving(false);
           navigate(`/purchases/${created.id}`);
@@ -225,15 +258,26 @@ export function PurchaseFormPage() {
   };
 
   const cancelTo = isEditing && purchase ? `/purchases/${purchase.id}` : '/purchases';
+  const filledLines = form.lines.filter((l) => l.productId).length;
+  const isReady = !isEditing && form.vendorId && filledLines > 0;
+
+  const statusOptions = PURCHASE_STATUS_OPTIONS.filter(
+    (o) =>
+      o.value !== PurchaseOrderStatus.PARTIALLY_RECEIVED &&
+      o.value !== PurchaseOrderStatus.RECEIVED
+  ).map((o) => ({ value: o.value, label: o.label }));
+
+  const formTabs = [
+    { id: 'order' as const, label: 'Order', icon: ClipboardList },
+    { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
+    { id: 'notes' as const, label: 'Notes', icon: Building2 },
+  ];
 
   if (loading) {
     return (
       <Layout>
         <PageShell>
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <ClipboardList className="w-8 h-8 text-indigo-600 animate-pulse" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading purchase order…</p>
-          </div>
+          <FormPageLoading message="Loading purchase order…" />
         </PageShell>
       </Layout>
     );
@@ -245,6 +289,17 @@ export function PurchaseFormPage() {
         <PageHeader
           title={isEditing ? `Edit PO ${purchase?.poNumber ?? ''}` : 'New purchase order'}
           description="Order products from a vendor with purchase and selling prices per line."
+          actions={
+            activeProducts.length > 0 && activeVendors.length > 0 ? (
+              <FormPageHeaderActions
+                formId="purchase-form"
+                onCancel={() => navigate(cancelTo)}
+                saving={saving}
+                isEditing={isEditing}
+                createLabel="Create PO"
+              />
+            ) : null
+          }
         />
 
         {activeProducts.length === 0 ? (
@@ -262,195 +317,187 @@ export function PurchaseFormPage() {
             </Link>
           </p>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-            <FormSection
-              icon={ClipboardList}
-              title="Order details"
-              description="PO number, vendor reference, and business date."
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label="PO number"
-                  value={isEditing ? (purchase?.poNumber ?? '') : nextPoNumber}
-                  readOnly
-                  disabled
-                  helperText={isEditing ? 'Auto-assigned and cannot be changed' : 'Assigned automatically on save'}
-                />
-                <Input
-                  label="Reference"
-                  value={form.reference}
-                  onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
-                  placeholder="Optional — vendor quote or invoice #"
-                />
-                <Input
-                  label="Purchase date"
-                  type="date"
-                  value={form.purchaseDate}
-                  onChange={(e) => setForm((p) => ({ ...p, purchaseDate: e.target.value }))}
-                />
-                <Select
-                  label="Vendor"
-                  value={form.vendorId}
-                  onChange={(e) => setForm((p) => ({ ...p, vendorId: e.target.value }))}
-                  error={errors.vendorId}
-                  options={[
-                    { value: '', label: 'Select vendor…' },
-                    ...activeVendors.map((v) => ({ value: v.id, label: v.name })),
-                  ]}
-                />
-                <Select
-                  label="Status"
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      status: e.target.value as PurchaseOrderStatus,
-                    }))
-                  }
-                  options={PURCHASE_STATUS_OPTIONS.filter(
-                    (o) =>
-                      o.value !== PurchaseOrderStatus.PARTIALLY_RECEIVED &&
-                      o.value !== PurchaseOrderStatus.RECEIVED
-                  ).map((o) => ({ value: o.value, label: o.label }))}
-                />
-              </div>
-            </FormSection>
+          <FormPageBody id="purchase-form" onSubmit={handleSubmit}>
+            <PurchaseFormSummaryBar
+              subtotal={preview.subtotal}
+              taxAmount={preview.taxAmount}
+              total={preview.total}
+              lineCount={preview.lineCount}
+              currency={currency}
+            />
 
-            <FormSection
-              icon={Package}
-              title="Line items"
-              description="Products, quantities, purchase price, and selling price."
-              headerAction={
-                <Button type="button" variant="outline" size="sm" onClick={addLine}>
-                  <Plus className="w-4 h-4" />
-                  Add line
-                </Button>
+            <FormTabs
+              tabs={formTabs}
+              active={activeTab}
+              onChange={(id) => setActiveTab(id as PurchaseFormTab)}
+              ariaLabel="Purchase order form sections"
+            />
+
+            <FormPageGrid
+              sidebar={
+                <FormSidebarSection title="Breakdown">
+                  <FormSidebarRow
+                    label="Subtotal"
+                    value={formatMoney(preview.subtotal, currency)}
+                  />
+                  <FormSidebarRow
+                    label="Tax"
+                    value={formatMoney(preview.taxAmount, currency)}
+                  />
+                  <FormSidebarRow
+                    label="Total"
+                    value={formatMoney(preview.total, currency)}
+                    emphasize
+                  />
+                  {form.vendorId ? (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-700">
+                      Vendor:{' '}
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {activeVendors.find((v) => v.id === form.vendorId)?.name ?? '—'}
+                      </span>
+                    </p>
+                  ) : null}
+                </FormSidebarSection>
               }
             >
-              {errors.lines ? (
-                <p className="text-sm text-rose-600 dark:text-rose-400 mb-3">{errors.lines}</p>
-              ) : null}
-              <div className="space-y-4">
-                {form.lines.map((line, index) => (
-                  <div
-                    key={line.id}
-                    className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase text-gray-500">Line {index + 1}</span>
-                      {form.lines.length > 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(line.id)}
-                          className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                          aria-label="Remove line"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : null}
-                    </div>
+              <FormPanel role="tabpanel">
+                {activeTab === 'order' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <Input
+                      label="PO number"
+                      value={isEditing ? (purchase?.poNumber ?? '') : nextPoNumber}
+                      readOnly
+                      disabled
+                      helperText={isEditing ? 'Cannot change' : 'Assigned on save'}
+                    />
+                    <Input
+                      label="Reference"
+                      value={form.reference}
+                      onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
+                      placeholder="Vendor quote #"
+                    />
+                    <Input
+                      label="Purchase date"
+                      type="date"
+                      value={form.purchaseDate}
+                      onChange={(e) => setForm((p) => ({ ...p, purchaseDate: e.target.value }))}
+                    />
                     <Select
-                      label="Product"
-                      value={line.productId}
-                      onChange={(e) => fillFromProduct(line.id, e.target.value)}
+                      label="Vendor"
+                      value={form.vendorId}
+                      onChange={(e) => setForm((p) => ({ ...p, vendorId: e.target.value }))}
+                      error={errors.vendorId}
                       options={[
-                        { value: '', label: 'Select product…' },
-                        ...activeProducts.map((p) => ({
-                          value: p.id,
-                          label: p.sku ? `${p.name} (${p.sku})` : p.name,
-                        })),
+                        { value: '', label: 'Select vendor…' },
+                        ...activeVendors.map((v) => ({ value: v.id, label: v.name })),
                       ]}
                     />
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <Input
-                        label="Qty ordered"
-                        type="number"
-                        min={1}
-                        value={line.quantityOrdered}
-                        onChange={(e) => updateLine(line.id, { quantityOrdered: e.target.value })}
-                      />
-                      <Input
-                        label="Purchase price"
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={line.purchasePrice}
-                        onChange={(e) => updateLine(line.id, { purchasePrice: e.target.value })}
-                      />
-                      <Input
-                        label="Selling price"
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={line.sellingPrice}
-                        onChange={(e) => updateLine(line.id, { sellingPrice: e.target.value })}
-                      />
-                      <Select
-                        label="Tax"
-                        value={line.taxType}
-                        onChange={(e) =>
-                          updateLine(line.id, { taxType: e.target.value as TaxType })
-                        }
-                        options={taxTypeOptions}
-                      />
-                    </div>
-                    {line.taxType !== TaxType.NONE ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          label="Tax %"
-                          type="number"
-                          min={0}
-                          value={line.taxPercentage}
-                          onChange={(e) => updateLine(line.id, { taxPercentage: e.target.value })}
-                        />
-                        <TaxModeField
-                          value={line.taxMode}
-                          onChange={(taxMode) => updateLine(line.id, { taxMode })}
-                        />
-                      </div>
-                    ) : null}
+                    <Select
+                      label="Status"
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          status: e.target.value as PurchaseOrderStatus,
+                        }))
+                      }
+                      options={statusOptions}
+                    />
                   </div>
-                ))}
-              </div>
-            </FormSection>
+                ) : null}
 
-            <FormSection icon={Layers} title="Summary" description="Order totals.">
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
-                  <span className="tabular-nums font-medium">{formatMoney(preview.subtotal, currency)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Tax</span>
-                  <span className="tabular-nums">{formatMoney(preview.taxAmount, currency)}</span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <span className="font-semibold">Total</span>
-                  <span className="tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
-                    {formatMoney(preview.total, currency)}
-                  </span>
-                </div>
-              </div>
-            </FormSection>
+                {activeTab === 'items' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {filledLines} product line{filledLines === 1 ? '' : 's'}
+                      </p>
+                      <Button type="button" variant="outline" size="sm" onClick={addLine}>
+                        <Plus className="w-4 h-4" />
+                        Add line
+                      </Button>
+                    </div>
+                    {errors.lines ? (
+                      <p className="text-xs text-red-600 dark:text-red-400">{errors.lines}</p>
+                    ) : null}
 
-            <FormSection icon={ClipboardList} title="Notes" description="Optional internal notes.">
-              <Textarea
-                value={form.notes}
-                onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                rows={3}
-                placeholder="Delivery instructions, vendor quote ref…"
-              />
-            </FormSection>
+                    <div className={`${tableWrapClass} hidden md:block`}>
+                      <table className={tableClass}>
+                        <thead>
+                          <tr className={tableHeadRowClass}>
+                            <th className={`${tableHeadCellClass} w-8`}>#</th>
+                            <th className={tableHeadCellClass}>Product</th>
+                            <th className={`${tableHeadCellClass} w-16`}>Qty</th>
+                            <th className={`${tableHeadCellClass} w-24`}>Cost</th>
+                            <th className={`${tableHeadCellClass} w-24`}>Sell</th>
+                            <th className={`${tableHeadCellClass} w-24 text-right`}>Line</th>
+                            <th className={`${tableHeadCellClass} w-20`} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {form.lines.map((line, i) => (
+                            <PurchaseLineEditor
+                              key={line.id}
+                              layout="table"
+                              line={line}
+                              index={i}
+                              products={activeProducts}
+                              currency={currency}
+                              canRemove={form.lines.length > 1}
+                              onChange={(patch) => updateLine(line.id, patch)}
+                              onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                              onRemove={() => removeLine(line.id)}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
-            <FormStickyActions>
-              <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" loading={saving}>
-                {isEditing ? 'Save changes' : 'Create purchase order'}
-              </Button>
-            </FormStickyActions>
-          </form>
+                    <div className="md:hidden space-y-2">
+                      {form.lines.map((line, i) => (
+                        <PurchaseLineEditor
+                          key={line.id}
+                          layout="card"
+                          line={line}
+                          index={i}
+                          products={activeProducts}
+                          currency={currency}
+                          canRemove={form.lines.length > 1}
+                          onChange={(patch) => updateLine(line.id, patch)}
+                          onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                          onRemove={() => removeLine(line.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === 'notes' ? (
+                  <Textarea
+                    label="Order notes"
+                    optional
+                    value={form.notes}
+                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                    rows={3}
+                    placeholder="Delivery instructions, vendor quote ref…"
+                  />
+                ) : null}
+              </FormPanel>
+            </FormPageGrid>
+
+            {isReady ? (
+              <FormReadyBanner>
+                {filledLines} line{filledLines === 1 ? '' : 's'} — ready to create.
+              </FormReadyBanner>
+            ) : null}
+
+            <FormPageMobileActions
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Create PO"
+            />
+          </FormPageBody>
         )}
       </PageShell>
     </Layout>

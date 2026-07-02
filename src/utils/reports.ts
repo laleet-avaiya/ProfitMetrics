@@ -1,5 +1,5 @@
 import type { Expense, Invoice, Payment, PeriodProfitSummary, ProductStock, PurchaseOrder, Sale } from '../types';
-import { InvoiceStatus, PaymentKind, PurchaseOrderStatus } from '../types';
+import { InvoiceStatus, PaymentKind, PurchaseOrderStatus, PurchasePaymentStatus } from '../types';
 import {
   localDateInputToUtc,
   localDateInputToUtcEndOfDay,
@@ -96,6 +96,168 @@ export function filterPaymentsInRange(payments: Payment[], from?: Date, to?: Dat
   return payments
     .filter((p) => !p.deleted)
     .filter((p) => isDateInRange(p.paymentDate, from, to));
+}
+
+export function filterPurchasesInRange(
+  purchases: PurchaseOrder[],
+  from?: Date,
+  to?: Date
+): PurchaseOrder[] {
+  return purchases
+    .filter((p) => !p.deleted)
+    .filter((p) => p.status !== PurchaseOrderStatus.CANCELLED)
+    .filter((p) => isDateInRange(p.purchaseDate, from, to));
+}
+
+export interface PurchaseReportRow {
+  id: string;
+  poNumber: string;
+  purchaseDate: Date;
+  vendorName: string;
+  reference: string;
+  status: PurchaseOrder['status'];
+  paymentStatus: PurchaseOrder['paymentStatus'];
+  lineCount: number;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  totalPaid: number;
+  balanceDue: number;
+}
+
+export interface PurchaseReportSummary {
+  count: number;
+  totalValue: number;
+  totalPaid: number;
+  balanceDue: number;
+  unpaidCount: number;
+  partialCount: number;
+  paidCount: number;
+}
+
+export function computePurchaseReportRows(purchases: PurchaseOrder[]): PurchaseReportRow[] {
+  return purchases
+    .map((purchase) => ({
+      id: purchase.id,
+      poNumber: purchase.poNumber,
+      purchaseDate: purchase.purchaseDate,
+      vendorName: purchase.vendorName ?? '—',
+      reference: purchase.reference ?? '',
+      status: purchase.status,
+      paymentStatus: purchase.paymentStatus,
+      lineCount: purchase.lines.length,
+      subtotal: purchase.subtotal,
+      taxAmount: purchase.taxAmount,
+      total: purchase.total,
+      totalPaid: purchase.totalPaid,
+      balanceDue: purchase.balanceDue,
+    }))
+    .sort((a, b) => b.purchaseDate.getTime() - a.purchaseDate.getTime());
+}
+
+export function computePurchaseReportSummary(purchases: PurchaseOrder[]): PurchaseReportSummary {
+  let totalValue = 0;
+  let totalPaid = 0;
+  let balanceDue = 0;
+  let unpaidCount = 0;
+  let partialCount = 0;
+  let paidCount = 0;
+
+  for (const purchase of purchases) {
+    totalValue += purchase.total;
+    totalPaid += purchase.totalPaid;
+    balanceDue += purchase.balanceDue;
+    if (purchase.paymentStatus === PurchasePaymentStatus.PAID) paidCount++;
+    else if (purchase.paymentStatus === PurchasePaymentStatus.PARTIAL) partialCount++;
+    else unpaidCount++;
+  }
+
+  return {
+    count: purchases.length,
+    totalValue: roundMoney(totalValue),
+    totalPaid: roundMoney(totalPaid),
+    balanceDue: roundMoney(balanceDue),
+    unpaidCount,
+    partialCount,
+    paidCount,
+  };
+}
+
+export type ProfitLossBasis = 'paid' | 'with-pending-po';
+
+export interface ProfitLossLine {
+  label: string;
+  value: number;
+  emphasize: boolean;
+}
+
+export interface ProfitLossStatement {
+  basis: ProfitLossBasis;
+  basisLabel: string;
+  lines: ProfitLossLine[];
+  netProfit: number;
+  netMarginPercent: number;
+  pendingPoBalance: number;
+  pendingPoCount: number;
+  paidOperatingExpenses: number;
+}
+
+export function computePendingPoBalance(purchases: PurchaseOrder[]): number {
+  return roundMoney(purchases.reduce((sum, purchase) => sum + purchase.balanceDue, 0));
+}
+
+export function computePendingPoCount(purchases: PurchaseOrder[]): number {
+  return purchases.filter((purchase) => purchase.balanceDue > 0).length;
+}
+
+export function buildProfitLossStatement(
+  summary: PeriodProfitSummary,
+  purchases: PurchaseOrder[],
+  basis: ProfitLossBasis
+): ProfitLossStatement {
+  const pendingPoBalance = computePendingPoBalance(purchases);
+  const pendingPoCount = computePendingPoCount(purchases);
+  const pendingDeduction = basis === 'with-pending-po' ? pendingPoBalance : 0;
+  const netProfit = roundMoney(summary.grossProfit - summary.totalExpenses - pendingDeduction);
+  const netMarginPercent =
+    summary.grossRevenue > 0 ? roundMoney((netProfit / summary.grossRevenue) * 100) : 0;
+
+  const lines: ProfitLossLine[] = [
+    { label: 'Gross revenue', value: summary.grossRevenue, emphasize: false },
+    ...(summary.offlineRevenue > 0
+      ? [
+          { label: '  Online sales', value: summary.onlineRevenue, emphasize: false },
+          { label: '  Offline invoices', value: summary.offlineRevenue, emphasize: false },
+        ]
+      : []),
+    { label: 'Cost of goods (COGS)', value: -summary.totalCogs, emphasize: false },
+    { label: 'Shipping (online)', value: -summary.totalShipping, emphasize: false },
+    { label: 'Platform fees (online)', value: -summary.totalPlatformFees, emphasize: false },
+    { label: 'Tax collected', value: -summary.totalTax, emphasize: false },
+    { label: 'Order / invoice profit', value: summary.grossProfit, emphasize: true },
+    { label: 'Operating expenses (paid)', value: -summary.totalExpenses, emphasize: false },
+  ];
+
+  if (basis === 'with-pending-po') {
+    lines.push({
+      label: 'Pending PO payments',
+      value: -pendingPoBalance,
+      emphasize: false,
+    });
+  }
+
+  lines.push({ label: 'Net profit', value: netProfit, emphasize: true });
+
+  return {
+    basis,
+    basisLabel: basis === 'paid' ? 'Paid expenses only' : 'Incl. pending PO payments',
+    lines,
+    netProfit,
+    netMarginPercent,
+    pendingPoBalance,
+    pendingPoCount,
+    paidOperatingExpenses: summary.totalExpenses,
+  };
 }
 
 export interface PaymentSummary {

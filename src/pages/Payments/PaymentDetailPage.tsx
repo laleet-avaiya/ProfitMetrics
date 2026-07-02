@@ -31,7 +31,6 @@ export function PaymentDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading payment…"
-      loadingIcon={Wallet}
       notFound={notFound}
       notFoundTitle="Payment not found"
       notFoundDescription="This payment may have been deleted."

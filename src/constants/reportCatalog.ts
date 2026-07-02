@@ -6,6 +6,7 @@ export const ReportId = {
   TAX_SUMMARY: 'tax-summary',
   TREND: 'trend',
   STOCK_ON_HAND: 'stock-on-hand',
+  PURCHASE_ORDERS: 'purchase-orders',
 } as const;
 
 export type ReportId = (typeof ReportId)[keyof typeof ReportId];
@@ -51,6 +52,11 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     id: ReportId.STOCK_ON_HAND,
     title: 'Stock on hand',
     description: 'Current inventory — quantities, average cost, selling price, and stock value by product.',
+  },
+  {
+    id: ReportId.PURCHASE_ORDERS,
+    title: 'Purchase orders',
+    description: 'PO totals, receipt status, and payment status (paid, partial, unpaid) by order date.',
   },
 ];
 

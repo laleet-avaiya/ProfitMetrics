@@ -7,9 +7,19 @@ import { Input } from '../../components/Input/Input';
 import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
-import { Button } from '../../components/Button/Button';
+import {
+  FormFieldGroup,
+  FormFieldGroupDivider,
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPanel,
+  FormSidebarRow,
+  FormSidebarSection,
+} from '../../components/FormPage';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { PAYMENT_KIND_OPTIONS } from '../../constants/paymentKinds';
@@ -26,6 +36,9 @@ import {
   syncInvoicePaymentRollup,
   type PaymentFormState,
 } from '../../utils/paymentHelpers';
+import { formatMoney } from '../../utils/profit';
+
+type PaymentFormTab = 'details';
 
 export function PaymentFormPage() {
   const { paymentId } = useParams<{ paymentId: string }>();
@@ -43,6 +56,7 @@ export function PaymentFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<PaymentFormState>(() => emptyPaymentForm());
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<PaymentFormTab>('details');
 
   const marketplacePlatformOptions = useMemo(
     () => getPayoutPlatformOptions(form.platform ? [form.platform] : undefined),
@@ -90,7 +104,9 @@ export function PaymentFormPage() {
       }
       setLoading(false);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [company, isEditing, paymentId, searchParams]);
 
   const selectedInvoice = useMemo(
@@ -98,11 +114,13 @@ export function PaymentFormPage() {
     [invoices, form.invoiceId]
   );
 
+  const amountNum = parseFloat(form.amount);
+  const hasAmount = Number.isFinite(amountNum) && amountNum > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company) return;
-    const amount = parseFloat(form.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!hasAmount) {
       notification.error('Enter a valid amount');
       return;
     }
@@ -140,69 +158,194 @@ export function PaymentFormPage() {
     }
   };
 
+  const cancelTo = isEditing && payment ? `/payments/${payment.id}` : '/payments';
+
+  const formTabs = [{ id: 'details' as const, label: 'Details', icon: Wallet }];
+
+  const sidebar = (
+    <FormSidebarSection title="Payment">
+      <FormSidebarRow
+        label="Amount"
+        value={hasAmount ? formatMoney(amountNum, currency) : '—'}
+        emphasize
+      />
+      {form.kind === PaymentKind.INVOICE && selectedInvoice ? (
+        <FormSidebarRow
+          label="Invoice due"
+          value={formatMoney(selectedInvoice.balanceDue, currency)}
+        />
+      ) : null}
+    </FormSidebarSection>
+  );
+
   if (loading) {
-    return <Layout><PageShell><p className="text-center py-20">Loading…</p></PageShell></Layout>;
+    return (
+      <Layout>
+        <PageShell>
+          <FormPageLoading message="Loading payment…" />
+        </PageShell>
+      </Layout>
+    );
   }
 
   return (
     <Layout>
       <PageShell>
-        <PageHeader title={isEditing ? 'Edit payment' : 'Record payment'} description="Invoice payment, direct receipt, or marketplace payout." />
-        <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-          <FormSection icon={Wallet} title="Payment details">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input label="Payment date" type="date" value={form.paymentDate} onChange={(e) => setForm((p) => ({ ...p, paymentDate: e.target.value }))} />
+        <PageHeader
+          title={isEditing ? 'Edit payment' : 'Record payment'}
+          description="Invoice payment, direct receipt, or marketplace payout."
+          actions={
+            <FormPageHeaderActions
+              formId="payment-form"
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Record payment"
+              editLabel="Save"
+              showSparkle={false}
+            />
+          }
+        />
+
+        <FormPageBody id="payment-form" onSubmit={handleSubmit}>
+          <FormTabs
+            tabs={formTabs}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as PaymentFormTab)}
+            ariaLabel="Payment form sections"
+          />
+
+          <FormPageGrid sidebar={sidebar}>
+            <FormPanel role="tabpanel">
+              {activeTab === 'details' ? (
+                <>
+              <FormFieldGroup title="Payment details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Payment date"
+                    type="date"
+                    value={form.paymentDate}
+                    onChange={(e) => setForm((p) => ({ ...p, paymentDate: e.target.value }))}
+                  />
+                  {form.kind === PaymentKind.INVOICE ? (
+                    <PaymentAmountField
+                      value={form.amount}
+                      onChange={(amount) => setForm((p) => ({ ...p, amount }))}
+                      pendingAmount={selectedInvoice?.balanceDue ?? 0}
+                      currency={currency}
+                      required
+                    />
+                  ) : (
+                    <Input
+                      label="Amount"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.amount}
+                      onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                      required
+                    />
+                  )}
+                  <Select
+                    label="Payment type"
+                    value={form.kind}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, kind: e.target.value as PaymentKind }))
+                    }
+                    options={PAYMENT_KIND_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                  />
+                  <Select
+                    label="Payment mode"
+                    value={form.paymentMode}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, paymentMode: e.target.value as PaymentMode }))
+                    }
+                    options={PAYMENT_MODE_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                  />
+                  <Input
+                    label="Reference"
+                    value={form.reference}
+                    onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
+                    placeholder="Transfer ref, cheque no."
+                  />
+                </div>
+              </FormFieldGroup>
+
+              {(form.kind === PaymentKind.INVOICE ||
+                form.kind === PaymentKind.MARKETPLACE_PAYOUT ||
+                form.kind === PaymentKind.DIRECT) && <FormFieldGroupDivider />}
+
               {form.kind === PaymentKind.INVOICE ? (
-                <PaymentAmountField
-                  value={form.amount}
-                  onChange={(amount) => setForm((p) => ({ ...p, amount }))}
-                  pendingAmount={selectedInvoice?.balanceDue ?? 0}
-                  currency={currency}
-                  required
-                />
-              ) : (
-                <Input label="Amount" type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} required />
-              )}
-              <Select label="Payment type" value={form.kind} onChange={(e) => setForm((p) => ({ ...p, kind: e.target.value as PaymentKind }))}
-                options={PAYMENT_KIND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
-              <Select
-                label="Payment mode"
-                value={form.paymentMode}
-                onChange={(e) => setForm((p) => ({ ...p, paymentMode: e.target.value as PaymentMode }))}
-                options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                <FormFieldGroup title="Invoice link">
+                  <Select
+                    label="Invoice"
+                    value={form.invoiceId}
+                    onChange={(e) => setForm((p) => ({ ...p, invoiceId: e.target.value }))}
+                    options={[
+                      { value: '', label: 'Select invoice…' },
+                      ...openInvoices.map((i) => ({
+                        value: i.id,
+                        label: `${i.invoiceNumber} — ${i.customerName} (${i.balanceDue} due)`,
+                      })),
+                    ]}
+                  />
+                </FormFieldGroup>
+              ) : null}
+
+              {form.kind === PaymentKind.MARKETPLACE_PAYOUT ? (
+                <FormFieldGroup title="Marketplace">
+                  <Select
+                    label="Platform"
+                    value={form.platform}
+                    onChange={(e) => setForm((p) => ({ ...p, platform: e.target.value }))}
+                    options={marketplacePlatformOptions}
+                  />
+                </FormFieldGroup>
+              ) : null}
+
+              {form.kind === PaymentKind.DIRECT || form.kind === PaymentKind.MARKETPLACE_PAYOUT ? (
+                <FormFieldGroup title="Customer (optional)">
+                  <Select
+                    label="Customer"
+                    value={form.customerId}
+                    onChange={(e) => setForm((p) => ({ ...p, customerId: e.target.value }))}
+                    options={[
+                      { value: '', label: 'None' },
+                      ...activeCustomers.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                  />
+                </FormFieldGroup>
+              ) : null}
+
+              <FormFieldGroupDivider />
+
+              <Textarea
+                label="Notes"
+                optional
+                value={form.notes}
+                onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                rows={2}
+                placeholder="Optional notes"
               />
-              <Input label="Reference" value={form.reference} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} placeholder="Transfer ref, cheque no." />
-            </div>
-          </FormSection>
+                </>
+              ) : null}
+            </FormPanel>
+          </FormPageGrid>
 
-          {form.kind === PaymentKind.INVOICE && (
-            <FormSection icon={Wallet} title="Invoice">
-              <Select label="Invoice" value={form.invoiceId} onChange={(e) => setForm((p) => ({ ...p, invoiceId: e.target.value }))}
-                options={[{ value: '', label: 'Select invoice…' }, ...openInvoices.map((i) => ({ value: i.id, label: `${i.invoiceNumber} — ${i.customerName} (${i.balanceDue} due)` }))]} />
-            </FormSection>
-          )}
-
-          {form.kind === PaymentKind.MARKETPLACE_PAYOUT && (
-            <FormSection icon={Wallet} title="Marketplace">
-              <Select label="Platform" value={form.platform} onChange={(e) => setForm((p) => ({ ...p, platform: e.target.value }))}
-                options={marketplacePlatformOptions} />
-            </FormSection>
-          )}
-
-          {(form.kind === PaymentKind.DIRECT || form.kind === PaymentKind.MARKETPLACE_PAYOUT) && (
-            <FormSection icon={Wallet} title="Customer (optional)">
-              <Select label="Customer" value={form.customerId} onChange={(e) => setForm((p) => ({ ...p, customerId: e.target.value }))}
-                options={[{ value: '', label: 'None' }, ...activeCustomers.map((c) => ({ value: c.id, label: c.name }))]} />
-            </FormSection>
-          )}
-
-          <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Notes" />
-
-          <FormStickyActions>
-            <Button type="button" variant="outline" onClick={() => navigate(isEditing && payment ? `/payments/${payment.id}` : '/payments')} disabled={saving}>Cancel</Button>
-            <Button type="submit" variant="primary" loading={saving}>{isEditing ? 'Save' : 'Record payment'}</Button>
-          </FormStickyActions>
-        </form>
+          <FormPageMobileActions
+            onCancel={() => navigate(cancelTo)}
+            saving={saving}
+            isEditing={isEditing}
+            createLabel="Record payment"
+            editLabel="Save"
+          />
+        </FormPageBody>
       </PageShell>
     </Layout>
   );

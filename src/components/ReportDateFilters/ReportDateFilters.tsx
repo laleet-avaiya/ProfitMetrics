@@ -1,16 +1,16 @@
+import { CalendarRange } from 'lucide-react';
 import { Input } from '../Input/Input';
-import { FilterSelect } from '../ui/FilterSelect';
 import { Card } from '../ui/Card';
-import { filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
+import { FormTabs } from '../ui/FormTabs';
 import type { ReportPreset } from '../../utils/reports';
 
-const PRESET_OPTIONS: { value: ReportPreset; label: string }[] = [
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: 'month', label: 'This month' },
-  { value: 'year', label: 'This year' },
-  { value: 'all', label: 'All time' },
-  { value: 'custom', label: 'Custom' },
+const PRESET_TABS: { id: ReportPreset; label: string }[] = [
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'year', label: 'This year' },
+  { id: 'all', label: 'All time' },
+  { id: 'custom', label: 'Custom' },
 ];
 
 interface ReportDateFiltersProps {
@@ -34,43 +34,35 @@ export function ReportDateFilters({
 }: ReportDateFiltersProps) {
   return (
     <Card className="space-y-3">
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-end lg:justify-between">
-        <div>
-          <p className={sectionTitleClass}>Date range</p>
-          <p className={sectionDescriptionClass}>{rangeLabel}</p>
-        </div>
-        <div className={filterRowClass}>
-          <FilterSelect
-            value={preset}
-            onChange={(e) => onPresetChange(e.target.value as ReportPreset)}
-            aria-label="Report date preset"
-          >
-            {PRESET_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </FilterSelect>
-          {preset === 'custom' && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Input
-                label="From"
-                type="date"
-                value={customFrom}
-                onChange={(e) => onCustomFromChange(e.target.value)}
-                fullWidth={false}
-              />
-              <Input
-                label="To"
-                type="date"
-                value={customTo}
-                onChange={(e) => onCustomToChange(e.target.value)}
-                fullWidth={false}
-              />
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <FormTabs
+          tabs={PRESET_TABS.map((tab) => ({ ...tab, icon: tab.id === 'custom' ? CalendarRange : undefined }))}
+          active={preset}
+          onChange={(id) => onPresetChange(id as ReportPreset)}
+          ariaLabel="Report date range"
+          className="w-full sm:w-auto"
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400 shrink-0 sm:text-right">
+          {rangeLabel}
+        </p>
       </div>
+
+      {preset === 'custom' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md border-t border-gray-100 dark:border-gray-700/80 pt-3">
+          <Input
+            label="From"
+            type="date"
+            value={customFrom}
+            onChange={(e) => onCustomFromChange(e.target.value)}
+          />
+          <Input
+            label="To"
+            type="date"
+            value={customTo}
+            onChange={(e) => onCustomToChange(e.target.value)}
+          />
+        </div>
+      ) : null}
     </Card>
   );
 }

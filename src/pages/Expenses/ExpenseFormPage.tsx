@@ -1,28 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import {
-  Building2,
-  CheckCircle2,
-  Layers,
-  Receipt,
-  Sparkles,
-} from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
 import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
-import { Button } from '../../components/Button/Button';
+import {
+  FormFieldGroup,
+  FormFieldGroupDivider,
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPageNotFound,
+  FormPanel,
+  FormReadyBanner,
+  FormSidebarRow,
+  FormSidebarSection,
+} from '../../components/FormPage';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getCountryProfile } from '../../constants/countries';
 import { EXPENSE_CATEGORIES } from '../../constants/expenseCategories';
 import { firestoreService } from '../../services/firestore';
 import type { Expense, Vendor } from '../../types';
-import { TaxMode, TaxType } from '../../types';
+import { TaxType } from '../../types';
 import {
   buildExpenseFromForm,
   computeExpenseInputTax,
@@ -46,6 +52,8 @@ function parseNumber(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+type ExpenseFormTab = 'details';
+
 export function ExpenseFormPage() {
   const { expenseId } = useParams<{ expenseId: string }>();
   const [searchParams] = useSearchParams();
@@ -61,6 +69,7 @@ export function ExpenseFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<ExpenseFormState>(() => emptyExpenseForm(company));
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<ExpenseFormTab>('details');
   const [errors, setErrors] = useState<{
     category?: string;
     description?: string;
@@ -94,9 +103,7 @@ export function ExpenseFormPage() {
           setExpense(null);
           const initial = emptyExpenseForm(company);
           const vendorFromUrl = searchParams.get('vendor');
-          if (vendorFromUrl) {
-            initial.vendorId = vendorFromUrl;
-          }
+          if (vendorFromUrl) initial.vendorId = vendorFromUrl;
           setForm(initial);
         }
       } catch (err) {
@@ -111,7 +118,7 @@ export function ExpenseFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [company, expenseId, isEditing, searchParams]);
+  }, [company, expenseId, isEditing, searchParams, notification]);
 
   useEffect(() => {
     if (!company || isEditing) {
@@ -245,23 +252,37 @@ export function ExpenseFormPage() {
   };
 
   const cancelTo = isEditing && expense ? `/expenses/${expense.id}` : '/expenses';
-
+  const amount = parseNumber(form.amount);
   const isReady =
-    !isEditing &&
-    Boolean(form.category) &&
-    form.description.trim().length > 0 &&
-    parseNumber(form.amount) > 0;
+    !isEditing && Boolean(form.category) && form.description.trim().length > 0 && amount > 0;
+
+  const formTabs = [{ id: 'details' as const, label: 'Details', icon: Receipt }];
+
+  const sidebar = (
+    <FormSidebarSection title="Preview">
+      <FormSidebarRow
+        label="Amount"
+        value={amount > 0 ? formatMoney(amount, currency) : '—'}
+      />
+      {tracksTax ? (
+        <FormSidebarRow
+          label="Input tax"
+          value={formatMoney(taxPreview, currency)}
+        />
+      ) : null}
+      <FormSidebarRow
+        label="Total"
+        value={amount > 0 ? formatMoney(amount, currency) : '—'}
+        emphasize
+      />
+    </FormSidebarSection>
+  );
 
   if (loading) {
     return (
       <Layout>
         <PageShell>
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <Receipt className="w-6 h-6 text-indigo-600 dark:text-indigo-400 animate-pulse" />
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading expense…</p>
-          </div>
+          <FormPageLoading message="Loading expense…" />
         </PageShell>
       </Layout>
     );
@@ -271,10 +292,12 @@ export function ExpenseFormPage() {
     return (
       <Layout>
         <PageShell>
-          <PageHeader title="Expense not found" description="This expense may have been deleted." />
-          <Button type="button" variant="outline" onClick={() => navigate('/expenses')}>
-            Back to expenses
-          </Button>
+          <FormPageNotFound
+            title="Expense not found"
+            description="This expense may have been deleted."
+            backLabel="Back to expenses"
+            onBack={() => navigate('/expenses')}
+          />
         </PageShell>
       </Layout>
     );
@@ -288,248 +311,207 @@ export function ExpenseFormPage() {
           description={
             isEditing
               ? 'Update expense details and input tax.'
-              : 'Record operating costs with optional GST/VAT input tax for reports.'
+              : 'Record operating costs with optional input tax for reports.'
           }
           actions={
-            <div className="hidden lg:flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="submit" form="expense-form" variant="primary" loading={saving}>
-                {!isEditing && !saving ? (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Add expense
-                  </>
-                ) : isEditing ? (
-                  'Save changes'
-                ) : (
-                  'Add expense'
-                )}
-              </Button>
-            </div>
+            <FormPageHeaderActions
+              formId="expense-form"
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Add expense"
+            />
           }
         />
 
-        <form id="expense-form" onSubmit={handleSubmit} className="w-full space-y-5 pb-2">
-          <FormSection
-            icon={Receipt}
-            iconTone="indigo"
-            step={isEditing ? undefined : 1}
-            title="Expense details"
-            description="When it happened, category, and amount paid."
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-              <div className="lg:col-span-3">
-                <Input
-                  label="Expense number"
-                  value={isEditing ? (expense?.expenseNumber ?? '—') : nextExpenseNumber}
-                  readOnly
-                  disabled
-                  helperText={isEditing ? 'Auto-assigned and cannot be changed' : 'Assigned automatically on save'}
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <Input
-                  label="Expense date"
-                  type="date"
-                  value={form.expenseDate}
-                  onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <Select
-                  label="Category"
-                  value={form.category}
-                  options={categoryOptions}
-                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  error={errors.category}
-                  required
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <Input
-                  label={`Amount paid (${currency})`}
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                  error={errors.amount}
-                  required
-                  placeholder="0.00"
-                  helperText="Total on invoice or receipt"
-                />
-              </div>
-              <div className="lg:col-span-3">
-                <Input
-                  label="Description"
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  error={errors.description}
-                  required
-                  placeholder="e.g. Amazon PPC, packaging"
-                />
-              </div>
-            </div>
-          </FormSection>
+        <FormPageBody id="expense-form" onSubmit={handleSubmit}>
+          <FormTabs
+            tabs={formTabs}
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as ExpenseFormTab)}
+            ariaLabel="Expense form sections"
+          />
 
-          <FormSection
-            icon={Layers}
-            iconTone="violet"
-            step={isEditing ? undefined : 2}
-            title="Input tax"
-            description={`Optional ${countryProfile.defaultTaxType === TaxType.GST ? 'GST' : 'VAT'} paid on this expense for input credit in reports.`}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Select
-                label="Tax type"
-                value={form.taxType}
-                options={taxTypeOptions}
-                onChange={(e) => handleTaxTypeChange(e.target.value as ExpenseFormState['taxType'])}
-              />
-              {tracksTax && (
+          <FormPageGrid sidebar={sidebar}>
+            <FormPanel role="tabpanel">
+              {activeTab === 'details' ? (
                 <>
+              <FormFieldGroup title="Expense details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <Input
-                    label="Tax %"
+                    label="Expense number"
+                    value={isEditing ? (expense?.expenseNumber ?? '—') : nextExpenseNumber}
+                    readOnly
+                    disabled
+                    helperText={isEditing ? 'Cannot change' : 'Assigned on save'}
+                  />
+                  <Input
+                    label="Expense date"
+                    type="date"
+                    value={form.expenseDate}
+                    onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
+                    required
+                  />
+                  <Select
+                    label="Category"
+                    value={form.category}
+                    options={categoryOptions}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    error={errors.category}
+                    required
+                  />
+                  <Input
+                    label={`Amount (${currency})`}
                     type="number"
-                    min="0"
+                    min="0.01"
                     step="0.01"
-                    value={form.taxPercentage}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        taxPercentage: e.target.value,
-                        taxAmountManual: false,
-                      }))
-                    }
+                    value={form.amount}
+                    onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                    error={errors.amount}
+                    required
+                    placeholder="0.00"
                   />
-                  <TaxModeField
-                    label="Tax on amount"
-                    value={form.taxMode}
-                    onChange={(taxMode) =>
-                      setForm((f) => ({
-                        ...f,
-                        taxMode,
-                        taxAmountManual: false,
-                      }))
-                    }
-                  />
-                </>
-              )}
-            </div>
-            {tracksTax && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label={`${formatExpenseTaxLabel(form.taxType)} amount (${currency})`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.taxAmountManual ? form.taxAmount : taxPreview || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      taxAmount: e.target.value,
-                      taxAmountManual: true,
-                    }))
-                  }
-                  helperText={
-                    form.taxAmountManual
-                      ? 'Manual override'
-                      : `Auto from ${form.taxPercentage}% · ${form.taxMode === TaxMode.INCLUSIVE ? 'inclusive' : 'exclusive'}`
-                  }
-                />
-                {!form.taxAmountManual && taxPreview > 0 && (
-                  <div className="flex items-end pb-1">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Input tax:{' '}
-                      <span className="font-semibold text-gray-900 dark:text-white tabular-nums">
-                        {formatMoney(taxPreview, currency)}
-                      </span>
-                    </p>
+                  <div className="sm:col-span-2">
+                    <Input
+                      label="Description"
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                      error={errors.description}
+                      required
+                      placeholder="e.g. Amazon PPC, packaging"
+                    />
                   </div>
-                )}
-              </div>
-            )}
-          </FormSection>
+                </div>
+              </FormFieldGroup>
 
-          <FormSection
-            icon={Building2}
-            iconTone="emerald"
-            step={isEditing ? undefined : 3}
-            title="Vendor & notes"
-            description="Link a payee and add invoice reference or internal notes."
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-              <div className="lg:col-span-4 space-y-1">
-                <Select
-                  label="Vendor"
-                  value={form.vendorId}
-                  options={vendorOptions}
-                  onChange={(e) => setForm((f) => ({ ...f, vendorId: e.target.value }))}
-                />
-                {legacyVendorLabel && !form.vendorId && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    Previously saved as &quot;{legacyVendorLabel}&quot; — select a vendor to link it.
-                  </p>
-                )}
-                <Link
-                  to="/vendors/new"
-                  className="inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Add vendor
-                </Link>
-              </div>
-              <div className="lg:col-span-4">
-                <Input
-                  label="Reference"
-                  value={form.reference}
-                  onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
-                  placeholder="Optional — invoice or receipt #"
-                />
-              </div>
-              <div className="lg:col-span-4">
-                <Textarea
-                  label="Notes"
-                  optional
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder="Optional additional details"
-                  rows={2}
-                />
-              </div>
-            </div>
-          </FormSection>
+              <FormFieldGroupDivider />
 
-          {isReady && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-3.5 py-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                <span className="font-medium">{form.description.trim()}</span> is ready — review input tax,
-                then add your expense.
-              </p>
-            </div>
-          )}
+              <FormFieldGroup
+                title="Input tax"
+                description={`Optional ${countryProfile.defaultTaxType === TaxType.GST ? 'GST' : 'VAT'} for input credit in reports.`}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Select
+                    label="Tax type"
+                    value={form.taxType}
+                    options={taxTypeOptions}
+                    onChange={(e) =>
+                      handleTaxTypeChange(e.target.value as ExpenseFormState['taxType'])
+                    }
+                  />
+                  {tracksTax ? (
+                    <>
+                      <Input
+                        label="Tax %"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.taxPercentage}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            taxPercentage: e.target.value,
+                            taxAmountManual: false,
+                          }))
+                        }
+                      />
+                      <TaxModeField
+                        label="Tax on amount"
+                        value={form.taxMode}
+                        onChange={(taxMode) =>
+                          setForm((f) => ({
+                            ...f,
+                            taxMode,
+                            taxAmountManual: false,
+                          }))
+                        }
+                      />
+                    </>
+                  ) : null}
+                </div>
+                {tracksTax ? (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label={`${formatExpenseTaxLabel(form.taxType)} (${currency})`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.taxAmountManual ? form.taxAmount : taxPreview || ''}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          taxAmount: e.target.value,
+                          taxAmountManual: true,
+                        }))
+                      }
+                      helperText={
+                        form.taxAmountManual
+                          ? 'Manual override'
+                          : `Auto from ${form.taxPercentage}%`
+                      }
+                    />
+                  </div>
+                ) : null}
+              </FormFieldGroup>
 
-          <FormStickyActions className="lg:hidden">
-            <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={saving}>
-              {!isEditing && !saving ? (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Add expense
+              <FormFieldGroupDivider />
+
+              <FormFieldGroup title="Vendor & notes">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Select
+                      label="Vendor"
+                      value={form.vendorId}
+                      options={vendorOptions}
+                      onChange={(e) => setForm((f) => ({ ...f, vendorId: e.target.value }))}
+                    />
+                    {legacyVendorLabel && !form.vendorId ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Previously &quot;{legacyVendorLabel}&quot; — select a vendor to link.
+                      </p>
+                    ) : null}
+                    <Link
+                      to="/vendors/new"
+                      className="inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      Add vendor
+                    </Link>
+                  </div>
+                  <Input
+                    label="Reference"
+                    value={form.reference}
+                    onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
+                    placeholder="Invoice or receipt #"
+                  />
+                  <div className="sm:col-span-2">
+                    <Textarea
+                      label="Notes"
+                      optional
+                      value={form.notes}
+                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </FormFieldGroup>
                 </>
-              ) : isEditing ? (
-                'Save changes'
-              ) : (
-                'Add expense'
-              )}
-            </Button>
-          </FormStickyActions>
-        </form>
+              ) : null}
+            </FormPanel>
+          </FormPageGrid>
+
+          {isReady ? (
+            <FormReadyBanner>
+              <span className="font-medium">{form.description.trim()}</span> is ready to add.
+            </FormReadyBanner>
+          ) : null}
+
+          <FormPageMobileActions
+            onCancel={() => navigate(cancelTo)}
+            saving={saving}
+            isEditing={isEditing}
+            createLabel="Add expense"
+          />
+        </FormPageBody>
       </PageShell>
     </Layout>
   );

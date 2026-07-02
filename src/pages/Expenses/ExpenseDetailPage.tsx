@@ -43,7 +43,6 @@ export function ExpenseDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading expense…"
-      loadingIcon={Receipt}
       notFound={notFound}
       notFoundTitle="Expense not found"
       notFoundDescription="This expense may have been deleted."

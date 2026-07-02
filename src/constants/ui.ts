@@ -34,6 +34,9 @@ export const filterSelectWideControlClass = `${controlBaseClass} h-9 px-2.5 w-[1
 /** Inline date / short inputs in filter toolbars */
 export const inlineInputControlClass = `${controlBaseClass} h-9 px-3 w-[8.75rem] max-w-full shrink-0`;
 
+/** Compact controls inside data tables */
+export const tableInputControlClass = `${controlBaseClass} h-8 px-2 w-full min-w-0 text-sm`;
+
 export const textareaControlClass = `${controlBaseClass} min-h-[72px] px-3 py-2 resize-y`;
 
 export const cardClass =

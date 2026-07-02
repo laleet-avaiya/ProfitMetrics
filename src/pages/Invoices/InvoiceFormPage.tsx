@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FileText, Layers, Package, Plus, Trash2, UserCircle } from 'lucide-react';
+import {
+  FileText,
+  Package,
+  Plus,
+  UserCircle,
+} from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
-import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
-import { FormSection } from '../../components/FormSection/FormSection';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
+import {
+  FormPageBody,
+  FormPageGrid,
+  FormPageHeaderActions,
+  FormPageLoading,
+  FormPageMobileActions,
+  FormPanel,
+  FormReadyBanner,
+  FormSidebarRow,
+  FormSidebarSection,
+} from '../../components/FormPage';
+import { InvoiceFormSummaryBar } from '../../components/InvoiceFormSummaryBar/InvoiceFormSummaryBar';
+import { InvoiceLineEditor } from '../../components/InvoiceLineEditor/InvoiceLineEditor';
+import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { INVOICE_STATUS_OPTIONS } from '../../constants/invoiceStatuses';
@@ -34,14 +50,15 @@ import {
 import { allocateNextInvoiceNumber, previewNextInvoiceNumber } from '../../utils/documentNumbers';
 import { applyInvoiceStock, resyncInvoiceStock } from '../../utils/invoiceStock';
 import { formatMoney } from '../../utils/profit';
-import { emptyStateMessageClass } from '../../constants/ui';
+import {
+  emptyStateMessageClass,
+  tableClass,
+  tableHeadCellClass,
+  tableHeadRowClass,
+  tableWrapClass,
+} from '../../constants/ui';
 
-const taxTypeOptions = [
-  { value: TaxType.NONE, label: 'None' },
-  { value: TaxType.VAT, label: 'VAT' },
-  { value: TaxType.GST, label: 'GST' },
-  { value: TaxType.SALES_TAX, label: 'Sales tax' },
-];
+type InvoiceFormTab = 'invoice' | 'customer' | 'items' | 'notes';
 
 export function InvoiceFormPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -58,6 +75,7 @@ export function InvoiceFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<InvoiceFormState>(() => emptyInvoiceForm());
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<InvoiceFormTab>('invoice');
   const [errors, setErrors] = useState<{ customer?: string; lines?: string }>({});
   const [nextInvoiceNumber, setNextInvoiceNumber] = useState('');
 
@@ -91,6 +109,7 @@ export function InvoiceFormPage() {
           if (customerFromUrl) {
             initial.customer.mode = 'existing';
             initial.customer.customerId = customerFromUrl;
+            setActiveTab('items');
           }
           setForm(initial);
         }
@@ -101,7 +120,9 @@ export function InvoiceFormPage() {
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [company, isEditing, invoiceId, searchParams, notification]);
 
   useEffect(() => {
@@ -146,6 +167,18 @@ export function InvoiceFormPage() {
     });
   };
 
+  const addLine = () => {
+    setForm((p) => ({ ...p, lines: [...p.lines, emptyInvoiceLineForm()] }));
+    setActiveTab('items');
+  };
+
+  const removeLine = (lineId: string) => {
+    setForm((p) => ({
+      ...p,
+      lines: p.lines.length <= 1 ? p.lines : p.lines.filter((l) => l.id !== lineId),
+    }));
+  };
+
   const resolveCustomer = async (): Promise<Customer | undefined> => {
     if (!company) return undefined;
     if (form.customer.mode === 'existing') {
@@ -170,7 +203,16 @@ export function InvoiceFormPage() {
     }
     if (form.lines.filter((l) => l.productId).length === 0) next.lines = 'Add at least one product';
     setErrors(next);
-    return Object.keys(next).length === 0;
+
+    if (next.customer) {
+      setActiveTab('customer');
+      return false;
+    }
+    if (next.lines) {
+      setActiveTab('items');
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -211,7 +253,7 @@ export function InvoiceFormPage() {
             notification.error(`Invoice saved but insufficient stock for ${stockResult.productName}`);
           }
         }
-        notification.success('Invoice created');
+        notification.success('Offline sale created');
         navigate(`/invoices/${created.id}`);
       }
     } catch (err) {
@@ -222,104 +264,312 @@ export function InvoiceFormPage() {
     }
   };
 
+  const cancelTo =
+    isEditing && invoice ? `/invoices/${invoice.id}` : '/sales?channel=offline';
+
+  const filledLines = form.lines.filter((l) => l.productId).length;
+  const hasCustomer =
+    form.customer.mode === 'existing'
+      ? Boolean(form.customer.customerId)
+      : Boolean(form.customer.name.trim());
+  const isReady = !isEditing && hasCustomer && filledLines > 0;
+
+  const formTabs = [
+    { id: 'invoice' as const, label: 'Invoice', icon: FileText },
+    { id: 'customer' as const, label: 'Customer', icon: UserCircle },
+    { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
+    { id: 'notes' as const, label: 'Notes', icon: FileText },
+  ];
+
   if (loading) {
     return (
-      <Layout><PageShell><p className="text-center py-20 text-gray-500">Loading…</p></PageShell></Layout>
+      <Layout>
+        <PageShell>
+          <FormPageLoading message="Loading…" />
+        </PageShell>
+      </Layout>
     );
   }
 
   return (
     <Layout>
       <PageShell>
-        <PageHeader title={isEditing ? `Edit invoice ${invoice?.invoiceNumber ?? ''}` : 'New invoice'} description="Invoice a customer with line items and tax." />
+        <PageHeader
+          title={isEditing ? `Edit offline sale` : 'New offline sale'}
+          description={
+            isEditing
+              ? `Invoice ${invoice?.invoiceNumber ?? ''}`
+              : 'Invoice a customer with line items and tax.'
+          }
+          actions={
+            activeProducts.length > 0 ? (
+              <FormPageHeaderActions
+                formId="invoice-form"
+                onCancel={() => navigate(cancelTo)}
+                saving={saving}
+                isEditing={isEditing}
+                createLabel="Create sale"
+              />
+            ) : null
+          }
+        />
+
         {activeProducts.length === 0 ? (
-          <p className={emptyStateMessageClass}>Add products first. <Link to="/products/new" className="text-indigo-600 hover:underline">Create product</Link></p>
+          <p className={emptyStateMessageClass}>
+            Add products first.{' '}
+            <Link to="/products/new" className="text-indigo-600 hover:underline">
+              Create product
+            </Link>
+          </p>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-            <FormSection icon={FileText} title="Invoice details">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label="Invoice number"
-                  value={isEditing ? (invoice?.invoiceNumber ?? '') : nextInvoiceNumber}
-                  readOnly
-                  disabled
-                  helperText={isEditing ? 'Auto-assigned and cannot be changed' : 'Assigned automatically on save'}
-                />
-                <Input label="Invoice date" type="date" value={form.invoiceDate} onChange={(e) => setForm((p) => ({ ...p, invoiceDate: e.target.value }))} />
-                <Input label="Due date" type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
-                <Select label="Status" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as InvoiceStatus }))}
-                  options={INVOICE_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
-              </div>
-            </FormSection>
+          <FormPageBody id="invoice-form" onSubmit={handleSubmit}>
+            <InvoiceFormSummaryBar
+              subtotal={preview.subtotal}
+              taxAmount={preview.taxAmount}
+              total={preview.total}
+              profit={preview.profit}
+              lineCount={preview.lineCount}
+              currency={currency}
+            />
 
-            <FormSection icon={UserCircle} title="Customer">
-              {errors.customer ? <p className="text-sm text-rose-600 mb-2">{errors.customer}</p> : null}
-              <Select label="Customer type" value={form.customer.mode}
-                onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, mode: e.target.value as 'existing' | 'new' } }))}
-                options={[{ value: 'existing', label: 'Existing customer' }, { value: 'new', label: 'New customer' }]} />
-              {form.customer.mode === 'existing' ? (
-                <div className="mt-3">
-                  <Select label="Customer" value={form.customer.customerId}
-                    onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, customerId: e.target.value } }))}
-                    options={[{ value: '', label: 'Select…' }, ...activeCustomers.map((c) => ({ value: c.id, label: c.name }))]} />
-                </div>
-              ) : (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input label="Name" value={form.customer.name} onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, name: e.target.value } }))} />
-                  <Input label="Email" value={form.customer.email} onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, email: e.target.value } }))} />
-                  <Input label="Phone" value={form.customer.phone} onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, phone: e.target.value } }))} />
-                  <Input label="Tax ID" value={form.customer.taxId} onChange={(e) => setForm((p) => ({ ...p, customer: { ...p.customer, taxId: e.target.value } }))} />
-                </div>
-              )}
-            </FormSection>
+            <FormTabs
+              tabs={formTabs}
+              active={activeTab}
+              onChange={(id) => setActiveTab(id as InvoiceFormTab)}
+              ariaLabel="Invoice form sections"
+            />
 
-            <FormSection icon={Package} title="Line items" headerAction={<Button type="button" variant="outline" size="sm" onClick={() => setForm((p) => ({ ...p, lines: [...p.lines, emptyInvoiceLineForm()] }))}><Plus className="w-4 h-4" />Add line</Button>}>
-              {errors.lines ? <p className="text-sm text-rose-600 mb-2">{errors.lines}</p> : null}
-              <div className="space-y-4">
-                {form.lines.map((line, i) => (
-                  <div key={line.id} className="rounded-xl border p-4 space-y-3">
-                    <div className="flex justify-between"><span className="text-xs font-semibold uppercase text-gray-500">Line {i + 1}</span>
-                      {form.lines.length > 1 && <button type="button" onClick={() => setForm((p) => ({ ...p, lines: p.lines.filter((l) => l.id !== line.id) }))}><Trash2 className="w-4 h-4 text-rose-600" /></button>}
-                    </div>
-                    <Select label="Product" value={line.productId} onChange={(e) => fillFromProduct(line.id, e.target.value)}
-                      options={[{ value: '', label: 'Select…' }, ...activeProducts.map((p) => ({ value: p.id, label: p.name }))]} />
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <Input label="Qty" type="number" min={1} value={line.quantity} onChange={(e) => updateLine(line.id, { quantity: e.target.value })} />
-                      <Input label="Unit price" type="number" min={0} step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.id, { unitPrice: e.target.value })} />
-                      <Input label="COGS / unit" type="number" min={0} step="0.01" value={line.purchasePrice} onChange={(e) => updateLine(line.id, { purchasePrice: e.target.value })} />
-                      <Select label="Tax" value={line.taxType} onChange={(e) => updateLine(line.id, { taxType: e.target.value as TaxType })} options={taxTypeOptions} />
-                    </div>
-                    {line.taxType !== TaxType.NONE && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input label="Tax %" type="number" value={line.taxPercentage} onChange={(e) => updateLine(line.id, { taxPercentage: e.target.value })} />
-                        <TaxModeField
-                          value={line.taxMode}
-                          onChange={(taxMode) => updateLine(line.id, { taxMode })}
+            <FormPageGrid
+              sidebar={
+                <FormSidebarSection title="Breakdown">
+                  <FormSidebarRow label="Subtotal" value={formatMoney(preview.subtotal, currency)} />
+                  <FormSidebarRow label="Tax" value={formatMoney(preview.taxAmount, currency)} />
+                  <FormSidebarRow label="COGS" value={formatMoney(preview.totalCogs, currency)} />
+                  <FormSidebarRow
+                    label="Total"
+                    value={formatMoney(preview.total, currency)}
+                    emphasize
+                  />
+                  <FormSidebarRow
+                    label="Est. profit"
+                    value={formatMoney(preview.profit, currency)}
+                  />
+                </FormSidebarSection>
+              }
+            >
+              <FormPanel role="tabpanel">
+                {activeTab === 'invoice' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <Input
+                      label="Invoice number"
+                      value={isEditing ? (invoice?.invoiceNumber ?? '') : nextInvoiceNumber}
+                      readOnly
+                      disabled
+                      helperText={isEditing ? 'Cannot change' : 'Assigned on save'}
+                    />
+                    <Input
+                      label="Invoice date"
+                      type="date"
+                      value={form.invoiceDate}
+                      onChange={(e) => setForm((p) => ({ ...p, invoiceDate: e.target.value }))}
+                    />
+                    <Input
+                      label="Due date"
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
+                    />
+                    <Select
+                      label="Status"
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, status: e.target.value as InvoiceStatus }))
+                      }
+                      options={INVOICE_STATUS_OPTIONS.map((o) => ({
+                        value: o.value,
+                        label: o.label,
+                      }))}
+                    />
+                  </div>
+                ) : null}
+
+                {activeTab === 'customer' ? (
+                  <div className="space-y-3 max-w-2xl">
+                    {errors.customer ? (
+                      <p className="text-xs text-red-600 dark:text-red-400">{errors.customer}</p>
+                    ) : null}
+                    <Select
+                      label="Customer type"
+                      value={form.customer.mode}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          customer: {
+                            ...p.customer,
+                            mode: e.target.value as 'existing' | 'new',
+                          },
+                        }))
+                      }
+                      options={[
+                        { value: 'existing', label: 'Existing customer' },
+                        { value: 'new', label: 'New customer' },
+                      ]}
+                    />
+                    {form.customer.mode === 'existing' ? (
+                      <Select
+                        label="Customer"
+                        value={form.customer.customerId}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            customer: { ...p.customer, customerId: e.target.value },
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'Select…' },
+                          ...activeCustomers.map((c) => ({ value: c.id, label: c.name })),
+                        ]}
+                      />
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label="Name"
+                          value={form.customer.name}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              customer: { ...p.customer, name: e.target.value },
+                            }))
+                          }
+                          required
+                        />
+                        <Input
+                          label="Email"
+                          value={form.customer.email}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              customer: { ...p.customer, email: e.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Phone"
+                          value={form.customer.phone}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              customer: { ...p.customer, phone: e.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Tax ID"
+                          value={form.customer.taxId}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              customer: { ...p.customer, taxId: e.target.value },
+                            }))
+                          }
                         />
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            </FormSection>
+                ) : null}
 
-            <FormSection icon={Layers} title="Summary">
-              <div className="rounded-lg border p-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(preview.subtotal, currency)}</span></div>
-                <div className="flex justify-between"><span>Tax</span><span>{formatMoney(preview.taxAmount, currency)}</span></div>
-                <div className="flex justify-between"><span>COGS</span><span>{formatMoney(preview.totalCogs, currency)}</span></div>
-                <div className="flex justify-between font-semibold border-t pt-2"><span>Total</span><span className="text-indigo-600">{formatMoney(preview.total, currency)}</span></div>
-                <div className="flex justify-between text-emerald-600"><span>Est. profit</span><span>{formatMoney(preview.profit, currency)}</span></div>
-              </div>
-            </FormSection>
+                {activeTab === 'items' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {filledLines} product line{filledLines === 1 ? '' : 's'}
+                      </p>
+                      <Button type="button" variant="outline" size="sm" onClick={addLine}>
+                        <Plus className="w-4 h-4" />
+                        Add line
+                      </Button>
+                    </div>
+                    {errors.lines ? (
+                      <p className="text-xs text-red-600 dark:text-red-400">{errors.lines}</p>
+                    ) : null}
 
-            <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Notes" />
+                    <div className={`${tableWrapClass} hidden md:block`}>
+                      <table className={tableClass}>
+                        <thead>
+                          <tr className={tableHeadRowClass}>
+                            <th className={`${tableHeadCellClass} w-8`}>#</th>
+                            <th className={tableHeadCellClass}>Product</th>
+                            <th className={`${tableHeadCellClass} w-16`}>Qty</th>
+                            <th className={`${tableHeadCellClass} w-24`}>Price</th>
+                            <th className={`${tableHeadCellClass} w-24`}>COGS</th>
+                            <th className={`${tableHeadCellClass} w-24 text-right`}>Line</th>
+                            <th className={`${tableHeadCellClass} w-20`} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {form.lines.map((line, i) => (
+                            <InvoiceLineEditor
+                              key={line.id}
+                              layout="table"
+                              line={line}
+                              index={i}
+                              products={activeProducts}
+                              currency={currency}
+                              canRemove={form.lines.length > 1}
+                              onChange={(patch) => updateLine(line.id, patch)}
+                              onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                              onRemove={() => removeLine(line.id)}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
-            <FormStickyActions>
-              <Button type="button" variant="outline" onClick={() => navigate(isEditing && invoice ? `/invoices/${invoice.id}` : '/sales?channel=offline')} disabled={saving}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={saving}>{isEditing ? 'Save invoice' : 'Create invoice'}</Button>
-            </FormStickyActions>
-          </form>
+                    <div className="md:hidden space-y-2">
+                      {form.lines.map((line, i) => (
+                        <InvoiceLineEditor
+                          key={line.id}
+                          layout="card"
+                          line={line}
+                          index={i}
+                          products={activeProducts}
+                          currency={currency}
+                          canRemove={form.lines.length > 1}
+                          onChange={(patch) => updateLine(line.id, patch)}
+                          onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                          onRemove={() => removeLine(line.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === 'notes' ? (
+                  <Textarea
+                    label="Invoice notes"
+                    optional
+                    value={form.notes}
+                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                    rows={3}
+                    placeholder="Payment terms, delivery notes…"
+                  />
+                ) : null}
+              </FormPanel>
+            </FormPageGrid>
+
+            {isReady ? (
+              <FormReadyBanner>
+                {filledLines} line{filledLines === 1 ? '' : 's'} — ready to create.
+              </FormReadyBanner>
+            ) : null}
+
+            <FormPageMobileActions
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Create sale"
+            />
+          </FormPageBody>
         )}
       </PageShell>
     </Layout>

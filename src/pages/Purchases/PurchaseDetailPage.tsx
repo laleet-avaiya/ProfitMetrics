@@ -210,7 +210,6 @@ export function PurchaseDetailPage() {
     <EntityDetailShell
       loading={loading}
       loadingLabel="Loading purchase order…"
-      loadingIcon={ClipboardList}
       notFound={notFound}
       notFoundTitle="Purchase order not found"
       notFoundDescription="This PO may have been deleted."

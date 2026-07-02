@@ -14,6 +14,7 @@ import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingView } from '../../components/AppLoader/AppLoader';
 import {
   filterRowClass,
   tableCellClass,
@@ -158,10 +159,7 @@ export function Products() {
           </div>
 
           {loading ? (
-            <div className="py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-              <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading products…</p>
-            </div>
+            <LoadingView message="Loading products…" size="lg" className="py-12" />
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={Package}
