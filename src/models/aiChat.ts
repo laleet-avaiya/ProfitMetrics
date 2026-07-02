@@ -1,4 +1,4 @@
-import type { SoftDeletable } from './softDelete';
+import type { Auditable, SoftDeletable } from './softDelete';
 
 export type AiChatMessageRole = 'user' | 'assistant';
 
@@ -9,7 +9,7 @@ export interface AiChatMessage {
   createdAt: Date;
 }
 
-export interface AiChat extends SoftDeletable {
+export interface AiChat extends Auditable, SoftDeletable {
   id: string;
   companyId: string;
   title: string;

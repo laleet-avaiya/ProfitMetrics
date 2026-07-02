@@ -38,6 +38,8 @@ function mapMember(docId: string, data: Record<string, unknown>): CompanyMember 
     deleted: converted.deleted === true,
     deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
     deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
+    createdBy: converted.createdBy ? String(converted.createdBy) : undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -56,6 +58,8 @@ function mapInvite(docId: string, data: Record<string, unknown>): CompanyInvite 
     deleted: converted.deleted === true,
     deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
     deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
+    createdBy: converted.createdBy ? String(converted.createdBy) : undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -112,6 +116,8 @@ export const membershipService = {
       email: email.toLowerCase(),
       role: CompanyRole.ADMIN,
       status: 'active',
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -139,6 +145,8 @@ export const membershipService = {
       role,
       status: 'active',
       invitedBy,
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
       inviteId,
@@ -166,6 +174,8 @@ export const membershipService = {
       role,
       invitedBy,
       status: 'pending',
+      createdBy: invitedBy,
+      updatedBy: invitedBy,
       createdAt: now,
       updatedAt: now,
     };
@@ -176,11 +186,12 @@ export const membershipService = {
   async updateMemberRole(
     companyId: string,
     userId: string,
-    role: CompanyRoleType
+    role: CompanyRoleType,
+    updatedBy: string
   ): Promise<void> {
     await updateDoc(
       doc(db, COLLECTION_MEMBERS, getMemberDocId(companyId, userId)),
-      prepareDatesForFirestore({ role, updatedAt: nowUtc() })
+      prepareDatesForFirestore({ role, updatedBy, updatedAt: nowUtc() })
     );
   },
 
@@ -193,6 +204,7 @@ export const membershipService = {
         deleted: true,
         deletedAt: now,
         deletedBy,
+        updatedBy: deletedBy,
         updatedAt: now,
       })
     );
@@ -213,6 +225,7 @@ export const membershipService = {
         deleted: true,
         deletedAt: now,
         deletedBy,
+        updatedBy: deletedBy,
         updatedAt: now,
       })
     );

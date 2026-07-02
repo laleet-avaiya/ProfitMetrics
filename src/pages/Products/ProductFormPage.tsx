@@ -64,7 +64,7 @@ function productToForm(product: Product): FormState {
 export function ProductFormPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { marketplaces } = useCompanyMarketplaces();
   const notification = useNotification();
   const isEditing = Boolean(productId);
@@ -168,7 +168,7 @@ export function ProductFormPage() {
           status: 'active',
           platformListings: listings,
           updatedAt: now,
-        });
+        }, user!.uid);
         notification.success('Product updated');
       } else {
         const id = createListingId();
@@ -184,7 +184,7 @@ export function ProductFormPage() {
           createdAt: now,
           updatedAt: now,
         };
-        await firestoreService.products.create(company.id, newProduct);
+        await firestoreService.products.create(company.id, newProduct, user!.uid);
         notification.success('Product created');
       }
 

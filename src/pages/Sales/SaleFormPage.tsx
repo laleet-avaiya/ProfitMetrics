@@ -338,9 +338,9 @@ export function SaleFormPage() {
           setSaving(false);
           return;
         }
-        await firestoreService.sales.update(company.id, sale.id, payload);
+        await firestoreService.sales.update(company.id, sale.id, payload, user!.uid);
         try {
-          await syncSaleStock(company.id, payload, sale);
+          await syncSaleStock(company.id, payload, user!.uid, sale);
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
           notification.error('Sale saved but stock could not be updated.');
@@ -362,9 +362,9 @@ export function SaleFormPage() {
           setSaving(false);
           return;
         }
-        const created = await firestoreService.sales.create(company.id, payload);
+        const created = await firestoreService.sales.create(company.id, payload, user!.uid);
         try {
-          await syncSaleStock(company.id, created);
+          await syncSaleStock(company.id, created, user!.uid);
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
           notification.error('Sale saved but stock could not be updated.');

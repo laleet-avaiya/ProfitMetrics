@@ -66,17 +66,25 @@ service cloud.firestore {
         && (resource == null || hasModulePermission(resource.data.companyId, module, 'view'));
     }
 
+    function createdByUnchanged() {
+      return request.resource.data.createdBy == resource.data.createdBy;
+    }
+
     function canCreateModule(module) {
-      return hasModulePermission(request.resource.data.companyId, module, 'create');
+      return hasModulePermission(request.resource.data.companyId, module, 'create')
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
     }
 
     function canUpdateModuleDoc(module) {
       return ownsDocument()
         && maintainsCompanyId()
+        && createdByUnchanged()
         && deletedFieldChangeAllowed(module)
         && (
           (hasModulePermission(resource.data.companyId, module, 'update')
-            && request.resource.data.deleted != true)
+            && request.resource.data.deleted != true
+            && request.resource.data.updatedBy == request.auth.uid)
           || isSoftDeleteUpdate(module)
         );
     }
@@ -92,9 +100,8 @@ service cloud.firestore {
     }
 
     function deletedFieldChangeAllowed(module) {
-      if (request.resource.data.deleted == resource.data.deleted) return true;
-      if (resource.data.deleted == true) return false;
-      return isSoftDeleteUpdate(module);
+      return request.resource.data.deleted == resource.data.deleted
+        || (resource.data.deleted != true && isSoftDeleteUpdate(module));
     }
 
     function canDeleteModuleDoc(module) {
@@ -209,10 +216,14 @@ service cloud.firestore {
       allow read: if isOrgMember(orgId);
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.id == orgId;
       allow update: if isOrgAdmin(orgId)
         && orgOwnerUnchanged()
-        && orgProtectedFieldsUnchanged();
+        && createdByUnchanged()
+        && orgProtectedFieldsUnchanged()
+        && request.resource.data.updatedBy == request.auth.uid;
       allow delete: if false;
     }
 
@@ -241,10 +252,13 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && isOrgAdmin(request.resource.data.orgId)
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.id == companyId;
       allow update: if hasModulePermission(companyId, 'settings', 'update')
         && companyOrgIdUnchanged()
         && companyCreatedByUnchanged()
+        && createdByUnchanged()
+        && request.resource.data.updatedBy == request.auth.uid
         && (
           resource.data.deleted == request.resource.data.deleted
           || (request.resource.data.deleted == true

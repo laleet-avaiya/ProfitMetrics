@@ -216,7 +216,7 @@ export function PurchaseFormPage() {
 
       if (isEditing && purchase) {
         try {
-          await syncPurchaseStockReceipts(company.id, purchase, payload);
+          await syncPurchaseStockReceipts(company.id, purchase, payload, user!.uid);
         } catch (stockErr) {
           console.error(stockErr);
           notification.error(
@@ -225,16 +225,16 @@ export function PurchaseFormPage() {
           setSaving(false);
           return;
         }
-        await firestoreService.purchases.update(company.id, purchase.id, payload);
+        await firestoreService.purchases.update(company.id, purchase.id, payload, user!.uid);
         if (payload.payments.length > 0) {
           await syncPurchaseExpenses(company.id, { ...purchase, ...payload }, user!.uid);
         }
         notification.success('Purchase order updated');
         navigate(`/purchases/${purchase.id}`);
       } else {
-        const created = await firestoreService.purchases.create(company.id, payload);
+        const created = await firestoreService.purchases.create(company.id, payload, user!.uid);
         try {
-          await syncPurchaseStockReceipts(company.id, null, created);
+          await syncPurchaseStockReceipts(company.id, null, created, user!.uid);
         } catch (stockErr) {
           console.error('Stock sync after create:', stockErr);
           notification.error(

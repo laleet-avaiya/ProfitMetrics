@@ -1,7 +1,7 @@
 import type { OrgRole } from './org';
-import type { SoftDeletable } from './softDelete';
+import type { Auditable, SoftDeletable } from './softDelete';
 
-export interface OrgMember extends SoftDeletable {
+export interface OrgMember extends Auditable, SoftDeletable {
   id: string;
   orgId: string;
   userId: string;

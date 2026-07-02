@@ -55,18 +55,19 @@ function deductionDelta(
 export async function syncSaleStock(
   companyId: string,
   sale: Sale,
+  userId: string,
   previous?: Sale | null
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
 
   for (const [productId, { delta, productName }] of changes) {
     if (delta > 0) {
-      const result = await deductStock(companyId, productId, delta);
+      const result = await deductStock(companyId, productId, delta, userId);
       if (!result.ok) {
         return { ok: false, available: result.available, needed: delta, productName };
       }
     } else if (delta < 0) {
-      await restoreStock(companyId, productId, productName, -delta);
+      await restoreStock(companyId, productId, productName, -delta, userId);
     }
   }
 
@@ -95,9 +96,13 @@ export async function checkSaleStock(
 }
 
 /** Restore stock when a sale is deleted. */
-export async function restoreSaleStock(companyId: string, sale: Sale): Promise<void> {
+export async function restoreSaleStock(
+  companyId: string,
+  sale: Sale,
+  userId: string
+): Promise<void> {
   for (const [productId, qty] of effectiveStockDeductions(sale)) {
     const line = getSaleLines(sale).find((l) => l.productId === productId);
-    await restoreStock(companyId, productId, line?.productName ?? sale.productName, qty);
+    await restoreStock(companyId, productId, line?.productName ?? sale.productName, qty, userId);
   }
 }

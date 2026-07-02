@@ -64,7 +64,7 @@ export function InvoiceFormPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const isEditing = Boolean(invoiceId);
   const currency = company?.currency ?? 'AED';
@@ -189,7 +189,7 @@ export function InvoiceFormPage() {
       { ...emptyCustomerForm(), ...form.customer, status: 'active' },
       company.id
     );
-    const created = await firestoreService.customers.create(company.id, customerPayload);
+    const created = await firestoreService.customers.create(company.id, customerPayload, user!.uid);
     return created;
   };
 
@@ -235,20 +235,20 @@ export function InvoiceFormPage() {
       );
 
       if (isEditing && invoice) {
-        await firestoreService.invoices.update(company.id, invoice.id, payload);
+        await firestoreService.invoices.update(company.id, invoice.id, payload, user!.uid);
         const stockResult = await resyncInvoiceStock(company.id, invoice, {
           ...payload,
           id: invoice.id,
-        });
+        }, user!.uid);
         if (!stockResult.ok) {
           notification.error(`Insufficient stock for ${stockResult.productName}`);
         }
         notification.success('Invoice updated');
         navigate(`/invoices/${invoice.id}`);
       } else {
-        const created = await firestoreService.invoices.create(company.id, payload);
+        const created = await firestoreService.invoices.create(company.id, payload, user!.uid);
         if (shouldApplyInvoiceStock(created)) {
-          const stockResult = await applyInvoiceStock(company.id, created);
+          const stockResult = await applyInvoiceStock(company.id, created, user!.uid);
           if (!stockResult.ok) {
             notification.error(`Invoice saved but insufficient stock for ${stockResult.productName}`);
           }

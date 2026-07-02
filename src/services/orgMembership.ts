@@ -28,6 +28,8 @@ function mapMember(docId: string, data: Record<string, unknown>): OrgMember {
     displayName: converted.displayName ? String(converted.displayName) : undefined,
     role: converted.role === OrgRole.MEMBER ? OrgRole.MEMBER : OrgRole.ADMIN,
     status: converted.status === 'disabled' ? 'disabled' : 'active',
+    createdBy: converted.createdBy ? String(converted.createdBy) : undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -50,6 +52,8 @@ export const orgMembershipService = {
       displayName,
       role: OrgRole.ADMIN,
       status: 'active',
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -79,6 +83,8 @@ export const orgMembershipService = {
       displayName,
       role: OrgRole.MEMBER,
       status: 'active',
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
       ...(bootstrapCompanyId ? { bootstrapCompanyId } : {}),

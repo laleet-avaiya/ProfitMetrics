@@ -70,9 +70,9 @@ export async function syncPurchaseExpenses(
     const expense = expenseFromPayment(purchase, payment, expenseNumber, tax, existing);
 
     if (existing) {
-      await firestoreService.expenses.update(companyId, existing.id, expense);
+      await firestoreService.expenses.update(companyId, existing.id, expense, deletedBy);
     } else {
-      await firestoreService.expenses.create(companyId, expense);
+      await firestoreService.expenses.create(companyId, expense, deletedBy);
     }
 
     updatedPayments.push({ ...payment, expenseId: expense.id });
@@ -97,10 +97,15 @@ export async function syncPurchaseExpenses(
     updatedAt: nowUtc(),
   };
 
-  await firestoreService.purchases.update(companyId, purchase.id, {
-    payments: updatedPayments,
-    updatedAt: updated.updatedAt,
-  });
+  await firestoreService.purchases.update(
+    companyId,
+    purchase.id,
+    {
+      payments: updatedPayments,
+      updatedAt: updated.updatedAt,
+    },
+    deletedBy
+  );
 
   return updated;
 }

@@ -18,6 +18,7 @@ export interface Company {
   defaultTaxMode: TaxMode;
   defaultTaxPercentage: number;
   marketplaces?: string[];
+  updatedBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }

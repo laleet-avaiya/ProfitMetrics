@@ -31,6 +31,8 @@ function mapOrg(id: string, data: Record<string, unknown>): Organization {
     aiMessageQuota:
       typeof converted.aiMessageQuota === 'number' ? converted.aiMessageQuota : DEFAULT_AI_MESSAGE_QUOTA,
     aiMessagesUsed: typeof converted.aiMessagesUsed === 'number' ? converted.aiMessagesUsed : 0,
+    createdBy: converted.createdBy ? String(converted.createdBy) : undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     subscriptionStart: fromFirestoreTimestamp(converted.subscriptionStart),
     subscriptionEnd: fromFirestoreTimestamp(converted.subscriptionEnd),
     termsVersion: converted.termsVersion as string | undefined,
@@ -64,6 +66,8 @@ export const orgService = {
       aiMessagesUsed: 0,
       subscriptionStart: now,
       subscriptionEnd,
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
     };

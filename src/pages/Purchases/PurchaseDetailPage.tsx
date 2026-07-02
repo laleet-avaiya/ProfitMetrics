@@ -120,13 +120,13 @@ export function PurchaseDetailPage() {
         updatedAt: nowUtc(),
       };
 
-      await syncPurchaseStockReceipts(company.id, purchase, updated);
+      await syncPurchaseStockReceipts(company.id, purchase, updated, user!.uid);
       await firestoreService.purchases.update(company.id, purchase.id, {
         lines,
         status,
         receivedAt: updated.receivedAt,
         updatedAt: updated.updatedAt,
-      });
+      }, user!.uid);
       reload();
       notification.success('Receipts updated and stock adjusted');
     } catch (err) {
@@ -183,7 +183,7 @@ export function PurchaseDetailPage() {
         balanceDue,
         paymentStatus: updated.paymentStatus,
         updatedAt: updated.updatedAt,
-      });
+      }, user!.uid);
 
       updated = await syncPurchaseExpenses(company.id, updated, user!.uid);
 

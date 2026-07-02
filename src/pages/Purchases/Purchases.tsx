@@ -141,7 +141,7 @@ export function Purchases() {
       variant: 'danger',
       onConfirm: async () => {
         try {
-          await reverseAllPurchaseStock(company.id, purchase);
+          await reverseAllPurchaseStock(company.id, purchase, user!.uid);
           await deletePurchaseLinkedExpenses(company.id, purchase.id, user!.uid);
           await firestoreService.purchases.delete(company.id, purchase.id, user!.uid);
           notification.success('Purchase order deleted');

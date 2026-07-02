@@ -90,7 +90,7 @@ export function Customers() {
     if (!company) return;
     const next = customer.status === 'active' ? 'archived' : 'active';
     firestoreService.customers
-      .update(company.id, customer.id, { status: next, updatedAt: nowUtc() })
+      .update(company.id, customer.id, { status: next, updatedAt: nowUtc() }, user!.uid)
       .then(() => {
         notification.success(next === 'archived' ? 'Customer archived' : 'Customer restored');
         reload();

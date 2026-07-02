@@ -89,7 +89,8 @@ export function buildPaymentFromForm(
 /** Recompute invoice paid totals from all linked payments. */
 export async function syncInvoicePaymentRollup(
   companyId: string,
-  invoiceId: string
+  invoiceId: string,
+  userId: string
 ): Promise<Invoice | null> {
   const invoice = await firestoreService.invoices.get(companyId, invoiceId);
   if (!invoice || invoice.deleted) return null;
@@ -112,7 +113,7 @@ export async function syncInvoicePaymentRollup(
     updatedAt: nowUtc(),
   };
 
-  await firestoreService.invoices.update(companyId, invoiceId, updated);
+  await firestoreService.invoices.update(companyId, invoiceId, updated, userId);
   return { ...invoice, ...updated };
 }
 

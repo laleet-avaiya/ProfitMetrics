@@ -42,6 +42,8 @@ function buildStockRecord(
     avgSellingPrice: avgSelling,
     totalValue: roundMoney(qty * avgPurchase),
     lastReceivedAt: existing?.lastReceivedAt,
+    createdBy: existing?.createdBy,
+    updatedBy: existing?.updatedBy,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -54,13 +56,14 @@ export async function receiveStock(
   productName: string,
   quantity: number,
   purchasePrice: number,
-  sellingPrice: number
+  sellingPrice: number,
+  userId: string
 ): Promise<ProductStock> {
   if (quantity <= 0) {
     const existing = await firestoreService.stock.getByProductId(companyId, productId);
     if (existing) return existing;
     const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0);
-    await firestoreService.stock.create(companyId, empty);
+    await firestoreService.stock.create(companyId, empty, userId);
     return empty;
   }
 
@@ -77,7 +80,7 @@ export async function receiveStock(
       sellingPrice
     );
     created.lastReceivedAt = now;
-    await firestoreService.stock.create(companyId, created);
+    await firestoreService.stock.create(companyId, created, userId);
     return created;
   }
 
@@ -106,7 +109,7 @@ export async function receiveStock(
     updatedAt: now,
   };
 
-  await firestoreService.stock.update(companyId, productId, updated);
+  await firestoreService.stock.update(companyId, productId, updated, userId);
   return updated;
 }
 
@@ -114,7 +117,8 @@ export async function receiveStock(
 export async function deductStock(
   companyId: string,
   productId: string,
-  quantity: number
+  quantity: number,
+  userId: string
 ): Promise<{ ok: true; stock: ProductStock } | { ok: false; available: number }> {
   if (quantity <= 0) {
     const existing = await firestoreService.stock.getByProductId(companyId, productId);
@@ -140,7 +144,7 @@ export async function deductStock(
     updatedAt: nowUtc(),
   };
 
-  await firestoreService.stock.update(companyId, productId, updated);
+  await firestoreService.stock.update(companyId, productId, updated, userId);
   return { ok: true, stock: updated };
 }
 
@@ -149,20 +153,21 @@ export async function restoreStock(
   companyId: string,
   productId: string,
   productName: string,
-  quantity: number
+  quantity: number,
+  userId: string
 ): Promise<ProductStock> {
   if (quantity <= 0) {
     const existing = await firestoreService.stock.getByProductId(companyId, productId);
     if (existing) return existing;
     const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0);
-    await firestoreService.stock.create(companyId, empty);
+    await firestoreService.stock.create(companyId, empty, userId);
     return empty;
   }
 
   const existing = await firestoreService.stock.getByProductId(companyId, productId);
   if (!existing) {
     const created = buildStockRecord(companyId, productId, productName, quantity, 0, 0);
-    await firestoreService.stock.create(companyId, created);
+    await firestoreService.stock.create(companyId, created, userId);
     return created;
   }
 
@@ -175,7 +180,7 @@ export async function restoreStock(
     updatedAt: nowUtc(),
   };
 
-  await firestoreService.stock.update(companyId, productId, updated);
+  await firestoreService.stock.update(companyId, productId, updated, userId);
   return updated;
 }
 

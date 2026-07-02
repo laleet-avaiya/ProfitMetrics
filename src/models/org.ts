@@ -18,6 +18,8 @@ export interface Organization {
   termsAcceptedAt?: Date;
   usagePolicyAcceptedAt?: Date;
   legalAcceptedByUserId?: string;
+  createdBy?: string;
+  updatedBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }

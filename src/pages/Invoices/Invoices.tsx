@@ -109,7 +109,7 @@ export function Invoices() {
       onConfirm: async () => {
         try {
           if (invoice.stockApplied) {
-            await restoreInvoiceStock(company.id, invoice);
+            await restoreInvoiceStock(company.id, invoice, user!.uid);
           }
           await firestoreService.invoices.delete(company.id, invoice.id, user!.uid);
           notification.success('Invoice deleted');

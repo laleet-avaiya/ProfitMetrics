@@ -94,7 +94,7 @@ export function Payments() {
       onConfirm: async () => {
         await firestoreService.payments.delete(company.id, payment.id, user!.uid);
         if (payment.invoiceId) {
-          await syncInvoicePaymentRollup(company.id, payment.invoiceId);
+          await syncInvoicePaymentRollup(company.id, payment.invoiceId, user!.uid);
         }
         notification.success('Payment deleted');
         reload();

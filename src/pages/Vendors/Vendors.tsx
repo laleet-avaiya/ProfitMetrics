@@ -128,7 +128,7 @@ export function Vendors() {
           await firestoreService.vendors.update(company.id, vendor.id, {
             status: archiving ? 'archived' : 'active',
             updatedAt: nowUtc(),
-          });
+          }, user!.uid);
           notification.success(archiving ? 'Vendor archived' : 'Vendor restored');
           reload();
         } catch (err) {

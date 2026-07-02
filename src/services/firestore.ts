@@ -101,7 +101,8 @@ async function getAll<T extends { createdAt?: Date; deleted?: boolean }>(
 async function create<T extends { id: string; createdAt?: Date; updatedAt?: Date }>(
   companyId: string,
   collectionName: string,
-  data: T
+  data: T,
+  userId: string
 ): Promise<T> {
   const { id, ...rest } = data;
   const docRef = doc(db, collectionName, getDocId(companyId, id));
@@ -110,24 +111,29 @@ async function create<T extends { id: string; createdAt?: Date; updatedAt?: Date
     ...rest,
     id,
     companyId,
+    createdBy: userId,
+    updatedBy: userId,
     createdAt: data.createdAt ?? serverTimestamp(),
     updatedAt: data.updatedAt ?? serverTimestamp(),
   } as Record<string, unknown>);
 
   await setDoc(docRef, prepared);
-  return data;
+  return { ...data, createdBy: userId, updatedBy: userId };
 }
 
 async function update<T extends { id: string; updatedAt?: Date }>(
   companyId: string,
   collectionName: string,
   id: string,
-  updates: Partial<T>
+  updates: Partial<T>,
+  userId: string
 ): Promise<void> {
   const docRef = doc(db, collectionName, getDocId(companyId, id));
+  const { createdBy: _createdBy, ...safeUpdates } = updates as Partial<T> & { createdBy?: string };
   const prepared = prepareDatesForFirestore({
-    ...updates,
-    updatedAt: updates.updatedAt ?? new Date(),
+    ...safeUpdates,
+    updatedBy: userId,
+    updatedAt: safeUpdates.updatedAt ?? new Date(),
   } as Record<string, unknown>);
   await updateDoc(docRef, prepared as DocumentData);
 }
@@ -139,12 +145,18 @@ async function softDelete(
   deletedBy: string
 ): Promise<void> {
   const now = nowUtc();
-  await update(companyId, collectionName, id, {
-    deleted: true,
-    deletedAt: now,
-    deletedBy,
-    updatedAt: now,
-  } as DocumentData);
+  await update(
+    companyId,
+    collectionName,
+    id,
+    {
+      deleted: true,
+      deletedAt: now,
+      deletedBy,
+      updatedAt: now,
+    } as DocumentData,
+    deletedBy
+  );
 
   const audit = COLLECTION_AUDIT[collectionName];
   if (audit) {
@@ -165,6 +177,8 @@ function normalizeProduct(product: Product): Product {
 }
 
 type DeleteFn = (companyId: string, id: string, deletedBy: string) => Promise<void>;
+type CreateFn<T> = (companyId: string, data: T, userId: string) => Promise<T>;
+type UpdateFn<T> = (companyId: string, id: string, updates: Partial<T>, userId: string) => Promise<void>;
 
 function withDelete(
   companyId: string,
@@ -182,46 +196,48 @@ export const firestoreService = {
       return product ? normalizeProduct(product) : null;
     },
     getAll: (companyId: string) => getAll<Product>(companyId, COLLECTION_PRODUCTS),
-    create: (companyId: string, product: Product) => create(companyId, COLLECTION_PRODUCTS, product),
-    update: (companyId: string, id: string, updates: Partial<Product>) =>
-      update(companyId, COLLECTION_PRODUCTS, id, updates),
+    create: ((companyId, product, userId) =>
+      create(companyId, COLLECTION_PRODUCTS, product, userId)) as CreateFn<Product>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_PRODUCTS, id, updates, userId)) as UpdateFn<Product>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_PRODUCTS, id, deletedBy)) as DeleteFn,
   },
   sales: {
     get: (companyId: string, id: string) => get<Sale>(companyId, COLLECTION_SALES, id),
     getAll: (companyId: string) => getAll<Sale>(companyId, COLLECTION_SALES),
-    create: (companyId: string, sale: Sale) => create(companyId, COLLECTION_SALES, sale),
-    update: (companyId: string, id: string, updates: Partial<Sale>) =>
-      update(companyId, COLLECTION_SALES, id, updates),
-    delete: ((companyId, id, deletedBy) =>
-      withDelete(companyId, COLLECTION_SALES, id, deletedBy)) as DeleteFn,
+    create: ((companyId, sale, userId) => create(companyId, COLLECTION_SALES, sale, userId)) as CreateFn<Sale>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_SALES, id, updates, userId)) as UpdateFn<Sale>,
+    delete: ((companyId, id, deletedBy) => withDelete(companyId, COLLECTION_SALES, id, deletedBy)) as DeleteFn,
   },
   expenses: {
     get: (companyId: string, id: string) => get<Expense>(companyId, COLLECTION_EXPENSES, id),
     getAll: (companyId: string) => getAll<Expense>(companyId, COLLECTION_EXPENSES),
-    create: (companyId: string, expense: Expense) => create(companyId, COLLECTION_EXPENSES, expense),
-    update: (companyId: string, id: string, updates: Partial<Expense>) =>
-      update(companyId, COLLECTION_EXPENSES, id, updates),
+    create: ((companyId, expense, userId) =>
+      create(companyId, COLLECTION_EXPENSES, expense, userId)) as CreateFn<Expense>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_EXPENSES, id, updates, userId)) as UpdateFn<Expense>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_EXPENSES, id, deletedBy)) as DeleteFn,
   },
   vendors: {
     get: (companyId: string, id: string) => get<Vendor>(companyId, COLLECTION_VENDORS, id),
     getAll: (companyId: string) => getAll<Vendor>(companyId, COLLECTION_VENDORS),
-    create: (companyId: string, vendor: Vendor) => create(companyId, COLLECTION_VENDORS, vendor),
-    update: (companyId: string, id: string, updates: Partial<Vendor>) =>
-      update(companyId, COLLECTION_VENDORS, id, updates),
+    create: ((companyId, vendor, userId) =>
+      create(companyId, COLLECTION_VENDORS, vendor, userId)) as CreateFn<Vendor>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_VENDORS, id, updates, userId)) as UpdateFn<Vendor>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_VENDORS, id, deletedBy)) as DeleteFn,
   },
   purchases: {
     get: (companyId: string, id: string) => get<PurchaseOrder>(companyId, COLLECTION_PURCHASES, id),
     getAll: (companyId: string) => getAll<PurchaseOrder>(companyId, COLLECTION_PURCHASES),
-    create: (companyId: string, purchase: PurchaseOrder) =>
-      create(companyId, COLLECTION_PURCHASES, purchase),
-    update: (companyId: string, id: string, updates: Partial<PurchaseOrder>) =>
-      update(companyId, COLLECTION_PURCHASES, id, updates),
+    create: ((companyId, purchase, userId) =>
+      create(companyId, COLLECTION_PURCHASES, purchase, userId)) as CreateFn<PurchaseOrder>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_PURCHASES, id, updates, userId)) as UpdateFn<PurchaseOrder>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_PURCHASES, id, deletedBy)) as DeleteFn,
   },
@@ -230,37 +246,40 @@ export const firestoreService = {
     getAll: (companyId: string) => getAll<ProductStock>(companyId, COLLECTION_STOCK),
     getByProductId: async (companyId: string, productId: string) =>
       get<ProductStock>(companyId, COLLECTION_STOCK, productId),
-    create: (companyId: string, stock: ProductStock) => create(companyId, COLLECTION_STOCK, stock),
-    update: (companyId: string, id: string, updates: Partial<ProductStock>) =>
-      update(companyId, COLLECTION_STOCK, id, updates),
+    create: ((companyId, stock, userId) =>
+      create(companyId, COLLECTION_STOCK, stock, userId)) as CreateFn<ProductStock>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_STOCK, id, updates, userId)) as UpdateFn<ProductStock>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_STOCK, id, deletedBy)) as DeleteFn,
   },
   customers: {
     get: (companyId: string, id: string) => get<Customer>(companyId, COLLECTION_CUSTOMERS, id),
     getAll: (companyId: string) => getAll<Customer>(companyId, COLLECTION_CUSTOMERS),
-    create: (companyId: string, customer: Customer) =>
-      create(companyId, COLLECTION_CUSTOMERS, customer),
-    update: (companyId: string, id: string, updates: Partial<Customer>) =>
-      update(companyId, COLLECTION_CUSTOMERS, id, updates),
+    create: ((companyId, customer, userId) =>
+      create(companyId, COLLECTION_CUSTOMERS, customer, userId)) as CreateFn<Customer>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_CUSTOMERS, id, updates, userId)) as UpdateFn<Customer>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_CUSTOMERS, id, deletedBy)) as DeleteFn,
   },
   invoices: {
     get: (companyId: string, id: string) => get<Invoice>(companyId, COLLECTION_INVOICES, id),
     getAll: (companyId: string) => getAll<Invoice>(companyId, COLLECTION_INVOICES),
-    create: (companyId: string, invoice: Invoice) => create(companyId, COLLECTION_INVOICES, invoice),
-    update: (companyId: string, id: string, updates: Partial<Invoice>) =>
-      update(companyId, COLLECTION_INVOICES, id, updates),
+    create: ((companyId, invoice, userId) =>
+      create(companyId, COLLECTION_INVOICES, invoice, userId)) as CreateFn<Invoice>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_INVOICES, id, updates, userId)) as UpdateFn<Invoice>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_INVOICES, id, deletedBy)) as DeleteFn,
   },
   payments: {
     get: (companyId: string, id: string) => get<Payment>(companyId, COLLECTION_PAYMENTS, id),
     getAll: (companyId: string) => getAll<Payment>(companyId, COLLECTION_PAYMENTS),
-    create: (companyId: string, payment: Payment) => create(companyId, COLLECTION_PAYMENTS, payment),
-    update: (companyId: string, id: string, updates: Partial<Payment>) =>
-      update(companyId, COLLECTION_PAYMENTS, id, updates),
+    create: ((companyId, payment, userId) =>
+      create(companyId, COLLECTION_PAYMENTS, payment, userId)) as CreateFn<Payment>,
+    update: ((companyId, id, updates, userId) =>
+      update(companyId, COLLECTION_PAYMENTS, id, updates, userId)) as UpdateFn<Payment>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_PAYMENTS, id, deletedBy)) as DeleteFn,
   },

@@ -31,6 +31,8 @@ function mapChat(id: string, data: Record<string, unknown>): AiChat {
     deleted: converted.deleted === true,
     deletedAt: converted.deletedAt instanceof Date ? converted.deletedAt : undefined,
     deletedBy: converted.deletedBy ? String(converted.deletedBy) : undefined,
+    createdBy: converted.createdBy ? String(converted.createdBy) : undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     createdAt: converted.createdAt instanceof Date ? converted.createdAt : nowUtc(),
     updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt : nowUtc(),
   };
@@ -64,13 +66,15 @@ export const aiChatService = {
       .filter(isNotDeleted);
   },
 
-  async createChat(companyId: string, title = 'New chat'): Promise<AiChat> {
+  async createChat(companyId: string, userId: string, title = 'New chat'): Promise<AiChat> {
     const id = crypto.randomUUID();
     const now = nowUtc();
     const chat: AiChat = {
       id,
       companyId,
       title,
+      createdBy: userId,
+      updatedBy: userId,
       createdAt: now,
       updatedAt: now,
     };

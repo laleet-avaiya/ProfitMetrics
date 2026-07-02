@@ -32,7 +32,7 @@ type CustomerFormTab = 'details';
 export function CustomerFormPage() {
   const { customerId } = useParams<{ customerId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const isEditing = Boolean(customerId);
 
@@ -75,11 +75,11 @@ export function CustomerFormPage() {
     try {
       const payload = buildCustomerFromForm(form, company.id, customer ?? undefined);
       if (isEditing && customer) {
-        await firestoreService.customers.update(company.id, customer.id, payload);
+        await firestoreService.customers.update(company.id, customer.id, payload, user!.uid);
         notification.success('Customer updated');
         navigate(`/customers/${customer.id}`);
       } else {
-        const created = await firestoreService.customers.create(company.id, payload);
+        const created = await firestoreService.customers.create(company.id, payload, user!.uid);
         notification.success('Customer added');
         navigate(`/customers/${created.id}`);
       }

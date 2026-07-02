@@ -30,7 +30,7 @@ import { formatMoney } from '../../utils/profit';
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { canUpdate } = useModuleAccess(AppModule.INVOICES);
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
@@ -64,8 +64,8 @@ export function InvoiceDetailPage() {
     try {
       const form = { ...paymentForm, kind: PaymentKind.INVOICE, invoiceId: invoice.id, customerId: invoice.customerId ?? '' };
       const payload = buildPaymentFromForm(form, company.id, invoice);
-      await firestoreService.payments.create(company.id, payload);
-      await syncInvoicePaymentRollup(company.id, invoice.id);
+      await firestoreService.payments.create(company.id, payload, user!.uid);
+      await syncInvoicePaymentRollup(company.id, invoice.id, user!.uid);
       setPaymentForm({ ...emptyPaymentForm(PaymentKind.INVOICE), paymentDate: utcToLocalDateInput(new Date()) });
       reload();
       const updatedPayments = await firestoreService.payments.getAll(company.id);

@@ -218,10 +218,10 @@ export function Sales() {
           if (row.kind === 'marketplace') {
             await firestoreService.sales.delete(company.id, row.id, user!.uid);
             await deleteSaleLinkedExpenses(company.id, row.id, user!.uid);
-            await restoreSaleStock(company.id, row.sale);
+            await restoreSaleStock(company.id, row.sale, user!.uid);
           } else {
             if (row.invoice.stockApplied) {
-              await restoreInvoiceStock(company.id, row.invoice);
+              await restoreInvoiceStock(company.id, row.invoice, user!.uid);
             }
             await firestoreService.invoices.delete(company.id, row.id, user!.uid);
           }

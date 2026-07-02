@@ -106,7 +106,7 @@ export function TeamPage() {
     }
 
     try {
-      await membershipService.updateMemberRole(company.id, member.userId, role);
+      await membershipService.updateMemberRole(company.id, member.userId, role, user!.uid);
       notification.success('Role updated');
       await loadTeam();
     } catch (error) {

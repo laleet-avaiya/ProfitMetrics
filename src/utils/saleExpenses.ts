@@ -215,9 +215,9 @@ export async function syncSaleExpenses(
     const expense = expenseFromSpec(sale, spec, expenseNumber, existing);
 
     if (existing) {
-      await firestoreService.expenses.update(companyId, existing.id, expense);
+      await firestoreService.expenses.update(companyId, existing.id, expense, deletedBy);
     } else {
-      await firestoreService.expenses.create(companyId, expense);
+      await firestoreService.expenses.create(companyId, expense, deletedBy);
     }
   }
 }

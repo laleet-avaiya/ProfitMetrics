@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await updateDoc(
       doc(db, COMPANY_COLLECTION, company.id),
-      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc() })
+      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc(), updatedBy: user.uid })
     );
 
     setCompany({ ...company, ...cleanUpdates, updatedAt: nowUtc() } as Company);
@@ -299,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await updateDoc(
       doc(db, ORG_COLLECTION, org.id),
-      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc() })
+      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc(), updatedBy: user.uid })
     );
     setOrg({ ...org, ...cleanUpdates, updatedAt: nowUtc() } as Organization);
   };

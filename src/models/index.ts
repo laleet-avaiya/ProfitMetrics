@@ -1,4 +1,5 @@
 export * from './softDelete';
+export type { Auditable, TrackedDocument } from './softDelete';
 export * from './org';
 export * from './orgMember';
 export * from './userProfile';

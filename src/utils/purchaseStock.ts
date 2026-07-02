@@ -6,17 +6,18 @@ import { receiveStock } from './stockHelpers';
 export async function syncPurchaseStockReceipts(
   companyId: string,
   previous: PurchaseOrder | null,
-  current: PurchaseOrder
+  current: PurchaseOrder,
+  userId: string
 ): Promise<void> {
   if (current.status === 'cancelled') {
     if (previous) {
-      await reversePurchaseStockReceipts(companyId, previous, zeroReceivedLines(previous));
+      await reversePurchaseStockReceipts(companyId, previous, zeroReceivedLines(previous), userId);
     }
     return;
   }
 
   if (previous) {
-    await reversePurchaseStockReceipts(companyId, previous, current);
+    await reversePurchaseStockReceipts(companyId, previous, current, userId);
   }
 
   for (const line of current.lines) {
@@ -32,7 +33,8 @@ export async function syncPurchaseStockReceipts(
       line.productName,
       delta,
       line.purchasePrice,
-      line.sellingPrice
+      line.sellingPrice,
+      userId
     );
   }
 }
@@ -48,7 +50,8 @@ function zeroReceivedLines(purchase: PurchaseOrder): PurchaseOrder {
 export async function reversePurchaseStockReceipts(
   companyId: string,
   previous: PurchaseOrder,
-  current: PurchaseOrder
+  current: PurchaseOrder,
+  userId: string
 ): Promise<void> {
   for (const prevLine of previous.lines) {
     const currLine = current.lines.find((l) => l.id === prevLine.id);
@@ -65,20 +68,26 @@ export async function reversePurchaseStockReceipts(
     }
 
     const newQty = stock.quantityOnHand - delta;
-    await firestoreService.stock.update(companyId, prevLine.productId, {
-      quantityOnHand: newQty,
-      totalValue: Math.round(newQty * stock.avgPurchasePrice * 100) / 100,
-      updatedAt: new Date(),
-    });
+    await firestoreService.stock.update(
+      companyId,
+      prevLine.productId,
+      {
+        quantityOnHand: newQty,
+        totalValue: Math.round(newQty * stock.avgPurchasePrice * 100) / 100,
+        updatedAt: new Date(),
+      },
+      userId
+    );
   }
 }
 
 /** Reverse all received stock when deleting a purchase order. */
 export async function reverseAllPurchaseStock(
   companyId: string,
-  purchase: PurchaseOrder
+  purchase: PurchaseOrder,
+  userId: string
 ): Promise<void> {
-  await reversePurchaseStockReceipts(companyId, purchase, zeroReceivedLines(purchase));
+  await reversePurchaseStockReceipts(companyId, purchase, zeroReceivedLines(purchase), userId);
 }
 
 export function lineReceivedDelta(

@@ -49,6 +49,7 @@ function mapCompany(id: string, data: Record<string, unknown>): Company {
     phone2: converted.phone2 as string | undefined,
     email: converted.email as string | undefined,
     logo: converted.logo as string | undefined,
+    updatedBy: converted.updatedBy ? String(converted.updatedBy) : undefined,
     createdAt: fromFirestoreTimestamp(converted.createdAt) ?? nowUtc(),
     updatedAt: fromFirestoreTimestamp(converted.updatedAt) ?? nowUtc(),
   };
@@ -107,7 +108,7 @@ export const companyService = {
 
     await setDoc(
       doc(db, COLLECTION, companyId),
-      prepareDatesForFirestore(company as unknown as Record<string, unknown>)
+      prepareDatesForFirestore({ ...company, updatedBy: userId } as unknown as Record<string, unknown>)
     );
     await membershipService.createAdminMember(companyId, userId, email);
     await rolePermissionsService.seedDefaults(companyId);

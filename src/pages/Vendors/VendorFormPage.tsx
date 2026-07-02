@@ -35,7 +35,7 @@ type VendorFormTab = 'details';
 export function VendorFormPage() {
   const { vendorId } = useParams<{ vendorId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const isEditing = Boolean(vendorId);
 
@@ -99,11 +99,11 @@ export function VendorFormPage() {
       const payload = buildVendorFromForm(form, company.id, vendor ?? undefined);
 
       if (isEditing && vendor) {
-        await firestoreService.vendors.update(company.id, vendor.id, payload);
+        await firestoreService.vendors.update(company.id, vendor.id, payload, user!.uid);
         notification.success('Vendor updated');
         navigate(`/vendors/${vendor.id}`);
       } else {
-        const created = await firestoreService.vendors.create(company.id, payload);
+        const created = await firestoreService.vendors.create(company.id, payload, user!.uid);
         notification.success('Vendor added');
         navigate(`/vendors/${created.id}`);
       }

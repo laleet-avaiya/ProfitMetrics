@@ -3,8 +3,8 @@ export const DEFAULT_AI_MESSAGE_QUOTA = 30;
 
 export const OPENAI_MODEL = 'gpt-4o-mini';
 
-/** Cloud Functions region — Mumbai */
-export const FUNCTIONS_REGION = 'asia-south1';
+/** Cloud Functions region — USA Free Tier */
+export const FUNCTIONS_REGION = 'us-central1';
 
 export const AI_DATA_DOMAINS = [
   'sales',

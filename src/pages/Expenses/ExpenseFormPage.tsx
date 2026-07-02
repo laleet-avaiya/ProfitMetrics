@@ -58,7 +58,7 @@ export function ExpenseFormPage() {
   const { expenseId } = useParams<{ expenseId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const isEditing = Boolean(expenseId);
   const currency = company?.currency ?? 'AED';
@@ -235,11 +235,11 @@ export function ExpenseFormPage() {
       );
 
       if (isEditing && expense) {
-        await firestoreService.expenses.update(company.id, expense.id, payload);
+        await firestoreService.expenses.update(company.id, expense.id, payload, user!.uid);
         notification.success('Expense updated');
         navigate(`/expenses/${expense.id}`);
       } else {
-        const created = await firestoreService.expenses.create(company.id, payload);
+        const created = await firestoreService.expenses.create(company.id, payload, user!.uid);
         notification.success('Expense added');
         navigate(`/expenses/${created.id}`);
       }

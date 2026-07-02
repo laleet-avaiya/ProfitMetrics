@@ -9,7 +9,8 @@ import { nowUtc } from './firestoreDates';
 /** Deduct stock for all lines on a sent/paid invoice. */
 export async function applyInvoiceStock(
   companyId: string,
-  invoice: Invoice
+  invoice: Invoice,
+  userId: string
 ): Promise<{ ok: true } | { ok: false; productName: string; available: number; needed: number }> {
   if (invoice.stockApplied || invoice.status === InvoiceStatus.VOID || invoice.status === InvoiceStatus.DRAFT) {
     return { ok: true };
@@ -48,16 +49,21 @@ export async function applyInvoiceStock(
   }
 
   for (const line of invoice.lines) {
-    const result = await deductStock(companyId, line.productId, line.quantity);
+    const result = await deductStock(companyId, line.productId, line.quantity, userId);
     if (!result.ok) {
       return { ok: false, productName: line.productName, available: result.available, needed: line.quantity };
     }
   }
 
-  await firestoreService.invoices.update(companyId, invoice.id, {
-    stockApplied: true,
-    updatedAt: nowUtc(),
-  });
+  await firestoreService.invoices.update(
+    companyId,
+    invoice.id,
+    {
+      stockApplied: true,
+      updatedAt: nowUtc(),
+    },
+    userId
+  );
 
   return { ok: true };
 }
@@ -66,27 +72,37 @@ export async function applyInvoiceStock(
 export async function resyncInvoiceStock(
   companyId: string,
   previous: Invoice,
-  updated: Invoice
+  updated: Invoice,
+  userId: string
 ): Promise<{ ok: true } | { ok: false; productName: string; available: number; needed: number }> {
   if (previous.stockApplied) {
-    await restoreInvoiceStock(companyId, previous);
+    await restoreInvoiceStock(companyId, previous, userId);
   }
   if (shouldApplyInvoiceStock(updated)) {
-    return applyInvoiceStock(companyId, { ...updated, stockApplied: false });
+    return applyInvoiceStock(companyId, { ...updated, stockApplied: false }, userId);
   }
   return { ok: true };
 }
 
 /** Restore stock when invoice is voided. */
-export async function restoreInvoiceStock(companyId: string, invoice: Invoice): Promise<void> {
+export async function restoreInvoiceStock(
+  companyId: string,
+  invoice: Invoice,
+  userId: string
+): Promise<void> {
   if (!invoice.stockApplied) return;
 
   for (const line of invoice.lines) {
-    await restoreStock(companyId, line.productId, line.productName, line.quantity);
+    await restoreStock(companyId, line.productId, line.productName, line.quantity, userId);
   }
 
-  await firestoreService.invoices.update(companyId, invoice.id, {
-    stockApplied: false,
-    updatedAt: nowUtc(),
-  });
+  await firestoreService.invoices.update(
+    companyId,
+    invoice.id,
+    {
+      stockApplied: false,
+      updatedAt: nowUtc(),
+    },
+    userId
+  );
 }

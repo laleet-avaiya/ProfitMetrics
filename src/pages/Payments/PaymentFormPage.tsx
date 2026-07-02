@@ -44,7 +44,7 @@ export function PaymentFormPage() {
   const { paymentId } = useParams<{ paymentId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const notification = useNotification();
   const { getPayoutPlatformOptions } = useCompanyMarketplaces();
   const currency = company?.currency ?? 'AED';
@@ -137,16 +137,16 @@ export function PaymentFormPage() {
       const prevInvoiceId = payment?.invoiceId;
 
       if (isEditing && payment) {
-        await firestoreService.payments.update(company.id, payment.id, payload);
+        await firestoreService.payments.update(company.id, payment.id, payload, user!.uid);
       } else {
-        await firestoreService.payments.create(company.id, payload);
+        await firestoreService.payments.create(company.id, payload, user!.uid);
       }
 
       if (payload.invoiceId) {
-        await syncInvoicePaymentRollup(company.id, payload.invoiceId);
+        await syncInvoicePaymentRollup(company.id, payload.invoiceId, user!.uid);
       }
       if (prevInvoiceId && prevInvoiceId !== payload.invoiceId) {
-        await syncInvoicePaymentRollup(company.id, prevInvoiceId);
+        await syncInvoicePaymentRollup(company.id, prevInvoiceId, user!.uid);
       }
 
       notification.success(isEditing ? 'Payment updated' : 'Payment recorded');
