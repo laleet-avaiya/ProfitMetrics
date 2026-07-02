@@ -38,6 +38,7 @@ import { Settings } from './pages/Settings/Settings';
 import { About } from './pages/About/About';
 import { Subscription } from './pages/Subscription/Subscription';
 import { SubscriptionExpired } from './pages/SubscriptionExpired/SubscriptionExpired';
+import { AIAssistantPage } from './pages/AIAssistant/AIAssistantPage';
 import { LoadingView } from './components/AppLoader/AppLoader';
 
 function AuthRedirect() {
@@ -125,6 +126,7 @@ function App() {
         <Route path="/purchases/:purchaseId" element={<ProtectedRoute><PurchaseDetailPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/reports/:reportId" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
         <Route
           path="/terms/accept"
           element={

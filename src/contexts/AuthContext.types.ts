@@ -17,4 +17,5 @@ export interface AuthContextType {
   signOut: () => Promise<void>;
   updateCompany: (updates: Partial<Company>) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  refreshCompany: () => Promise<void>;
 }

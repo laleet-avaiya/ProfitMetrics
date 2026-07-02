@@ -36,6 +36,29 @@ export interface Company {
   createdAt: Date;
   /** UTC instant when the company record was last updated */
   updatedAt: Date;
+  /** Monthly AI assistant message allowance */
+  aiMessageQuota?: number;
+  /** AI assistant messages consumed in the current quota period */
+  aiMessagesUsed?: number;
+}
+
+// ─── AI Assistant ─────────────────────────────────────────────────────────────
+
+export type AiChatMessageRole = 'user' | 'assistant';
+
+export interface AiChatMessage {
+  id: string;
+  role: AiChatMessageRole;
+  content: string;
+  createdAt: Date;
+}
+
+export interface AiChat {
+  id: string;
+  companyId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // ─── Tax ────────────────────────────────────────────────────────────────────

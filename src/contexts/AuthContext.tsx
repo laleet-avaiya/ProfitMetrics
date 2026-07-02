@@ -30,6 +30,7 @@ import {
   isBusinessCountry,
 } from '../constants/countries';
 import { DEFAULT_MARKETPLACES, normalizeMarketplaceList } from '../constants/platforms';
+import { DEFAULT_AI_MESSAGE_QUOTA } from '../constants/aiAssistant';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -70,6 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       usagePolicyAcceptedAt: fromFirestoreTimestamp(converted.usagePolicyAcceptedAt),
       termsVersion: converted.termsVersion as string | undefined,
       legalAcceptedByUserId: converted.legalAcceptedByUserId as string | undefined,
+      aiMessageQuota:
+        typeof converted.aiMessageQuota === 'number'
+          ? converted.aiMessageQuota
+          : DEFAULT_AI_MESSAGE_QUOTA,
+      aiMessagesUsed:
+        typeof converted.aiMessagesUsed === 'number' ? converted.aiMessagesUsed : 0,
       createdAt: fromFirestoreTimestamp(converted.createdAt) ?? nowUtc(),
       updatedAt: fromFirestoreTimestamp(converted.updatedAt) ?? nowUtc(),
     } as Company;
@@ -119,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         marketplaces: [...DEFAULT_MARKETPLACES],
         subscriptionStart: now,
         subscriptionEnd,
+        aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
+        aiMessagesUsed: 0,
         createdAt: now,
         updatedAt: now,
       };
@@ -131,6 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         marketplaces: [...DEFAULT_MARKETPLACES],
         subscriptionStart: now,
         subscriptionEnd,
+        aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
+        aiMessagesUsed: 0,
         createdAt: now,
         updatedAt: now,
       });
@@ -279,6 +290,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const refreshCompany = async (): Promise<void> => {
+    if (!user) return;
+    await loadCompany(user.uid);
+  };
+
   const value: AuthContextType = {
     user,
     company,
@@ -289,6 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     updateCompany,
     changePassword,
+    refreshCompany,
   };
 
   useEffect(() => {
