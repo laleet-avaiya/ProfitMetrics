@@ -540,6 +540,42 @@ export function computeStockSummary(stock: ProductStock[]): StockSummary {
   };
 }
 
+export interface StockReportRow {
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantityOnHand: number;
+  avgPurchasePrice: number;
+  avgSellingPrice: number;
+  totalValue: number;
+  lastReceivedAt?: Date;
+}
+
+export function computeStockReport(
+  stock: ProductStock[],
+  skuByProductId: Map<string, string | undefined> = new Map(),
+  options?: { inStockOnly?: boolean }
+): StockReportRow[] {
+  let rows: StockReportRow[] = stock.map((item) => ({
+    productId: item.productId,
+    productName: item.productName,
+    sku: skuByProductId.get(item.productId),
+    quantityOnHand: item.quantityOnHand,
+    avgPurchasePrice: item.avgPurchasePrice,
+    avgSellingPrice: item.avgSellingPrice,
+    totalValue: item.totalValue,
+    lastReceivedAt: item.lastReceivedAt,
+  }));
+
+  if (options?.inStockOnly !== false) {
+    rows = rows.filter((row) => row.quantityOnHand > 0);
+  }
+
+  return rows.sort(
+    (a, b) => b.totalValue - a.totalValue || a.productName.localeCompare(b.productName)
+  );
+}
+
 function localDayKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

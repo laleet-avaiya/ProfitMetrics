@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Card, CardHeader } from '../../components/ui/Card';
+import { SpreadsheetTable } from '../../components/ui/SpreadsheetTable';
+import { ReportId, type ReportId as ReportIdType } from '../../constants/reportCatalog';
 import { emptyStateClass } from '../../constants/ui';
-import type { ReportId } from '../../constants/reportCatalog';
-import type { Expense, Invoice, PeriodProfitSummary, Sale } from '../../types';
+import type { Expense, Invoice, PeriodProfitSummary, Product, ProductStock, Sale } from '../../types';
+import { formatDateLocal } from '../../utils/date';
 import { formatMoney, formatPercent } from '../../utils/profit';
 import {
   computeByExpenseCategory,
   computeByPlatform,
   computeByProduct,
+  computeStockReport,
+  computeStockSummary,
   computeTaxLedger,
   computeTrend,
   filterOperatingExpenses,
@@ -82,11 +86,13 @@ function TrendBars({
 }
 
 interface ReportContentProps {
-  reportId: ReportId;
+  reportId: ReportIdType;
   currency: string;
   filteredSales: Sale[];
   filteredInvoices: Invoice[];
   filteredExpenses: Expense[];
+  stock: ProductStock[];
+  products: Product[];
   summary: PeriodProfitSummary;
   hasData: boolean;
 }
@@ -97,10 +103,21 @@ export function ReportContent({
   filteredSales,
   filteredInvoices,
   filteredExpenses,
+  stock,
+  products,
   summary,
   hasData,
 }: ReportContentProps) {
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
+  const isStockReport = reportId === ReportId.STOCK_ON_HAND;
+
+  const skuMap = useMemo(
+    () => new Map(products.map((product) => [product.id, product.sku])),
+    [products]
+  );
+
+  const stockRows = useMemo(() => computeStockReport(stock, skuMap), [stock, skuMap]);
+  const stockSummary = useMemo(() => computeStockSummary(stock), [stock]);
 
   const operatingExpenses = useMemo(
     () => filterOperatingExpenses(filteredExpenses),
@@ -128,26 +145,118 @@ export function ReportContent({
     [filteredSales, filteredInvoices, filteredExpenses, trendGranularity]
   );
 
-  const maxExpenseCategory = Math.max(...byCategory.map((c) => c.total), 1);
   const operatingExpenseTotal = useMemo(
-    () => operatingExpenses.reduce((sum, e) => sum + e.amount, 0),
+    () => operatingExpenses.reduce((sum, expense) => sum + expense.amount, 0),
     [operatingExpenses]
   );
 
-  if (!hasData) {
+  if (!isStockReport && !hasData) {
     return (
       <EmptyReport message="No sales, invoices, or expenses in this period. Adjust the date range or log more data." />
     );
   }
 
+  if (isStockReport && stockRows.length === 0) {
+    return (
+      <EmptyReport message="No stock on hand yet. Receive purchase orders to build inventory." />
+    );
+  }
+
   switch (reportId) {
-    case 'profit-loss': {
+    case ReportId.STOCK_ON_HAND:
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Products in stock', value: String(stockSummary.productCount) },
+              { label: 'Total units', value: String(stockSummary.totalUnits) },
+              {
+                label: 'Total stock value',
+                value: formatMoney(stockSummary.totalValue, currency),
+              },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-md border border-emerald-200/70 dark:border-emerald-800/50 bg-gradient-to-br from-emerald-50/90 to-white dark:from-emerald-950/30 dark:to-gray-800 p-3"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
+                <p className="mt-0.5 text-base font-semibold tabular-nums text-gray-900 dark:text-white">
+                  {stat.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <ReportSection
+            title="Stock on hand"
+            description="Spreadsheet view — download XLS for Excel."
+          >
+            <SpreadsheetTable
+              columns={[
+                {
+                  key: 'product',
+                  header: 'Product',
+                  render: (row) => row.productName,
+                },
+                {
+                  key: 'sku',
+                  header: 'SKU',
+                  render: (row) => row.sku ?? '—',
+                },
+                {
+                  key: 'qty',
+                  header: 'Qty on hand',
+                  align: 'right',
+                  render: (row) => row.quantityOnHand,
+                },
+                {
+                  key: 'cost',
+                  header: 'Avg cost',
+                  align: 'right',
+                  render: (row) => formatMoney(row.avgPurchasePrice, currency),
+                },
+                {
+                  key: 'sell',
+                  header: 'Avg selling price',
+                  align: 'right',
+                  render: (row) => formatMoney(row.avgSellingPrice, currency),
+                },
+                {
+                  key: 'value',
+                  header: 'Stock value',
+                  align: 'right',
+                  className: 'font-semibold',
+                  render: (row) => formatMoney(row.totalValue, currency),
+                },
+                {
+                  key: 'received',
+                  header: 'Last received',
+                  align: 'right',
+                  render: (row) =>
+                    row.lastReceivedAt ? formatDateLocal(row.lastReceivedAt) : '—',
+                },
+              ]}
+              rows={stockRows}
+              rowKey={(row) => row.productId}
+              footerRows={[
+                {
+                  cells: [
+                    `Totals · ${stockSummary.productCount} products · ${stockSummary.totalUnits} units · ${formatMoney(stockSummary.totalValue, currency)}`,
+                  ],
+                },
+              ]}
+            />
+          </ReportSection>
+        </div>
+      );
+
+    case ReportId.PROFIT_LOSS: {
       const plLines = [
         { label: 'Gross revenue', value: summary.grossRevenue, emphasize: false },
         ...(summary.offlineRevenue > 0
           ? [
-              { label: '  Online sales', value: summary.onlineRevenue, emphasize: false, indent: true },
-              { label: '  Offline invoices', value: summary.offlineRevenue, emphasize: false, indent: true },
+              { label: '  Online sales', value: summary.onlineRevenue, emphasize: false },
+              { label: '  Offline invoices', value: summary.offlineRevenue, emphasize: false },
             ]
           : []),
         { label: 'Cost of goods (COGS)', value: -summary.totalCogs, emphasize: false },
@@ -192,47 +301,41 @@ export function ReportContent({
           </div>
 
           <ReportSection title="Profit & Loss statement">
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {plLines.map((line) => (
-                    <tr
-                      key={line.label}
-                      className={line.emphasize ? 'bg-gray-50 dark:bg-gray-900/40' : ''}
-                    >
-                      <td
-                        className={`px-4 py-2.5 ${line.emphasize ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'} ${'indent' in line && line.indent ? 'pl-8 text-xs' : ''}`}
-                      >
-                        {line.label}
-                      </td>
-                      <td
-                        className={`px-4 py-2.5 text-right tabular-nums ${line.emphasize ? 'font-bold' : 'font-medium'} ${profitClass(line.value)}`}
-                      >
-                        {line.value < 0 ? '−' : ''}
-                        {formatMoney(Math.abs(line.value), currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-gray-200 dark:border-gray-700">
-                    <td className="px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400">
-                      Net margin
-                    </td>
-                    <td
-                      className={`px-4 py-2.5 text-right font-semibold tabular-nums ${profitClass(summary.netMarginPercent)}`}
-                    >
-                      {formatPercent(summary.netMarginPercent)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            <SpreadsheetTable
+              columns={[
+                {
+                  key: 'label',
+                  header: 'Line item',
+                  render: (line) => (
+                    <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
+                  ),
+                },
+                {
+                  key: 'amount',
+                  header: 'Amount',
+                  align: 'right',
+                  className: 'font-medium',
+                  render: (line) => (
+                    <span className={profitClass(line.value)}>
+                      {line.value < 0 ? '−' : ''}
+                      {formatMoney(Math.abs(line.value), currency)}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={plLines}
+              rowKey={(line) => line.label}
+              footerRows={[
+                {
+                  cells: ['Net margin', formatPercent(summary.netMarginPercent)],
+                },
+              ]}
+            />
             {summary.excludedAutoExpenses > 0 && (
               <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                {formatMoney(summary.excludedAutoExpenses, currency)} in auto-generated sale fees and
-                inventory purchases is excluded from operating expenses (already in order profit or
-                stock).
+                {formatMoney(summary.excludedAutoExpenses, currency)} in auto-generated sale fees
+                and inventory purchases is excluded from operating expenses (already in order profit
+                or stock).
               </p>
             )}
           </ReportSection>
@@ -240,181 +343,149 @@ export function ReportContent({
       );
     }
 
-    case 'sales-by-product':
+    case ReportId.SALES_BY_PRODUCT:
       return (
         <ReportSection
           title="Sales by product"
           description="Online orders and offline invoice line items combined."
         >
-          {byProduct.length === 0 ? (
-            <EmptyReport message="No sales or invoices in this period." />
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                    <th className="px-3 py-2">Product</th>
-                    <th className="px-3 py-2 text-right">Lines</th>
-                    <th className="px-3 py-2 text-right">Revenue</th>
-                    <th className="px-3 py-2 text-right">Profit</th>
-                    <th className="px-3 py-2 text-right">Margin</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {byProduct.map((row) => (
-                    <tr key={row.productId}>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
-                        {row.productName}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{row.saleCount}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatMoney(row.revenue, currency)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums font-medium ${profitClass(row.profit)}`}
-                      >
-                        {formatMoney(row.profit, currency)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums ${profitClass(row.profit)}`}
-                      >
-                        {formatPercent(row.marginPercent)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <SpreadsheetTable
+            columns={[
+              { key: 'product', header: 'Product', render: (row) => row.productName },
+              { key: 'lines', header: 'Lines', align: 'right', render: (row) => row.saleCount },
+              {
+                key: 'revenue',
+                header: 'Revenue',
+                align: 'right',
+                render: (row) => formatMoney(row.revenue, currency),
+              },
+              {
+                key: 'profit',
+                header: 'Profit',
+                align: 'right',
+                className: 'font-medium',
+                render: (row) => (
+                  <span className={profitClass(row.profit)}>
+                    {formatMoney(row.profit, currency)}
+                  </span>
+                ),
+              },
+              {
+                key: 'margin',
+                header: 'Margin',
+                align: 'right',
+                render: (row) => (
+                  <span className={profitClass(row.profit)}>
+                    {formatPercent(row.marginPercent)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={byProduct}
+            rowKey={(row) => row.productId}
+            emptyMessage="No sales or invoices in this period."
+          />
         </ReportSection>
       );
 
-    case 'sales-by-platform':
+    case ReportId.SALES_BY_PLATFORM:
       return (
-        <ReportSection
-          title="Sales by channel"
-          description="Online marketplaces vs invoices."
-        >
-          {byPlatform.length === 0 ? (
-            <EmptyReport message="No sales or invoices in this period." />
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                    <th className="px-3 py-2">Channel</th>
-                    <th className="px-3 py-2 text-right">Count</th>
-                    <th className="px-3 py-2 text-right">Revenue</th>
-                    <th className="px-3 py-2 text-right">Profit</th>
-                    <th className="px-3 py-2 text-right">Margin</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {byPlatform.map((row) => (
-                    <tr key={row.platform}>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
-                        {row.platform}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{row.saleCount}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatMoney(row.revenue, currency)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums font-medium ${profitClass(row.profit)}`}
-                      >
-                        {formatMoney(row.profit, currency)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums ${profitClass(row.profit)}`}
-                      >
-                        {formatPercent(row.marginPercent)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <ReportSection title="Sales by channel" description="Online marketplaces vs invoices.">
+          <SpreadsheetTable
+            columns={[
+              { key: 'channel', header: 'Channel', render: (row) => row.platform },
+              { key: 'count', header: 'Count', align: 'right', render: (row) => row.saleCount },
+              {
+                key: 'revenue',
+                header: 'Revenue',
+                align: 'right',
+                render: (row) => formatMoney(row.revenue, currency),
+              },
+              {
+                key: 'profit',
+                header: 'Profit',
+                align: 'right',
+                className: 'font-medium',
+                render: (row) => (
+                  <span className={profitClass(row.profit)}>
+                    {formatMoney(row.profit, currency)}
+                  </span>
+                ),
+              },
+              {
+                key: 'margin',
+                header: 'Margin',
+                align: 'right',
+                render: (row) => (
+                  <span className={profitClass(row.profit)}>
+                    {formatPercent(row.marginPercent)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={byPlatform}
+            rowKey={(row) => row.platform}
+            emptyMessage="No sales or invoices in this period."
+          />
         </ReportSection>
       );
 
-    case 'expense-breakdown':
+    case ReportId.EXPENSE_BREAKDOWN:
       return (
         <ReportSection
           title="Expense breakdown"
-          description="All expense categories. Items marked † are excluded from net profit (already in order profit or inventory)."
+          description="All expense categories. Items marked † are excluded from net profit."
         >
-          {byCategory.length === 0 ? (
-            <EmptyReport message="No expenses in this period." />
-          ) : (
-            <div className="space-y-4">
-              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-                      <th className="px-3 py-2">Category</th>
-                      <th className="px-3 py-2 text-right">Count</th>
-                      <th className="px-3 py-2 text-right">Total</th>
-                      <th className="px-3 py-2 text-right">Share</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {byCategory.map((row) => (
-                      <tr key={row.category}>
-                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
-                          {row.category}
-                          {row.excludedFromNetProfit ? (
-                            <span className="text-xs text-gray-400 ml-1">†</span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-medium">
-                          {formatMoney(row.total, currency)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-500 dark:text-gray-400">
-                          {operatingExpenseTotal > 0 && !row.excludedFromNetProfit
-                            ? formatPercent((row.total / operatingExpenseTotal) * 100)
-                            : row.excludedFromNetProfit
-                              ? '—'
-                              : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="space-y-2">
-                {byCategory.map((row) => (
-                  <div
-                    key={row.category}
-                    className="grid grid-cols-[1fr_1fr_80px] gap-2 items-center text-xs"
-                  >
-                    <span className="text-gray-700 dark:text-gray-300 truncate">
-                      {row.category}
-                      {row.excludedFromNetProfit ? ' †' : ''}
-                    </span>
-                    <div className="h-2 bg-gray-100 dark:bg-gray-900/50 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-amber-500 dark:bg-amber-400 rounded-full"
-                        style={{ width: `${(row.total / maxExpenseCategory) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-right tabular-nums text-gray-600 dark:text-gray-400">
-                      {formatMoney(row.total, currency)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SpreadsheetTable
+            columns={[
+              {
+                key: 'category',
+                header: 'Category',
+                render: (row) => (
+                  <>
+                    {row.category}
+                    {row.excludedFromNetProfit ? (
+                      <span className="text-xs text-gray-400 ml-1">†</span>
+                    ) : null}
+                  </>
+                ),
+              },
+              { key: 'count', header: 'Count', align: 'right', render: (row) => row.count },
+              {
+                key: 'total',
+                header: 'Total',
+                align: 'right',
+                className: 'font-medium',
+                render: (row) => formatMoney(row.total, currency),
+              },
+              {
+                key: 'share',
+                header: 'Share',
+                align: 'right',
+                render: (row) =>
+                  operatingExpenseTotal > 0 && !row.excludedFromNetProfit
+                    ? formatPercent((row.total / operatingExpenseTotal) * 100)
+                    : '—',
+              },
+            ]}
+            rows={byCategory}
+            rowKey={(row) => row.category}
+            emptyMessage="No expenses in this period."
+          />
         </ReportSection>
       );
 
-    case 'tax-summary': {
+    case ReportId.TAX_SUMMARY: {
       const taxLines = [
         { label: 'Output tax — online sales', value: taxLedger.onlineOutputTax, emphasize: false },
         ...(taxLedger.offlineOutputTax > 0
-          ? [{ label: 'Output tax — offline invoices', value: taxLedger.offlineOutputTax, emphasize: false }]
+          ? [
+              {
+                label: 'Output tax — offline invoices',
+                value: taxLedger.offlineOutputTax,
+                emphasize: false,
+              },
+            ]
           : []),
         { label: 'Total output tax', value: taxLedger.outputTax, emphasize: true },
         { label: 'Input tax — purchase / COGS (ITC)', value: -taxLedger.saleInputTax, emphasize: false },
@@ -450,41 +521,42 @@ export function ReportContent({
           </div>
 
           <ReportSection title="Tax ledger">
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {taxLines.map((line) => (
-                    <tr
-                      key={line.label}
-                      className={line.emphasize ? 'bg-gray-50 dark:bg-gray-900/40' : ''}
-                    >
-                      <td
-                        className={`px-4 py-2.5 ${line.emphasize ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}
-                      >
-                        {line.label}
-                      </td>
-                      <td
-                        className={`px-4 py-2.5 text-right tabular-nums ${line.emphasize ? 'font-bold' : 'font-medium'} ${profitClass(line.value)}`}
-                      >
-                        {line.value < 0 ? '−' : ''}
-                        {formatMoney(Math.abs(line.value), currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SpreadsheetTable
+              columns={[
+                {
+                  key: 'label',
+                  header: 'Line item',
+                  render: (line) => (
+                    <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
+                  ),
+                },
+                {
+                  key: 'amount',
+                  header: 'Amount',
+                  align: 'right',
+                  className: 'font-medium',
+                  render: (line) => (
+                    <span className={profitClass(line.value)}>
+                      {line.value < 0 ? '−' : ''}
+                      {formatMoney(Math.abs(line.value), currency)}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={taxLines}
+              rowKey={(line) => line.label}
+            />
             <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
               Platform fees, delivery, and return/cancellation charges are tracked as expenses with
-              ITC. Purchase tax on online COGS is on sales; inventory purchase payments are capitalized
-              in stock until sold.
+              ITC. Purchase tax on online COGS is on sales; inventory purchase payments are
+              capitalized in stock until sold.
             </p>
           </ReportSection>
         </div>
       );
     }
 
-    case 'trend':
+    case ReportId.TREND:
       return (
         <ReportSection title="Profit trend" description="Online sales and offline invoices combined.">
           <div className="flex gap-2 mb-4">
@@ -507,31 +579,58 @@ export function ReportContent({
           {trend.length === 0 ? (
             <EmptyReport message="No data points in this period." />
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Revenue
-                </p>
-                <TrendBars rows={trend} currency={currency} metric="revenue" />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Revenue
+                  </p>
+                  <TrendBars rows={trend} currency={currency} metric="revenue" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Net profit
+                  </p>
+                  <TrendBars rows={trend} currency={currency} metric="netProfit" />
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Net profit
-                </p>
-                <TrendBars rows={trend} currency={currency} metric="netProfit" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Order profit
-                </p>
-                <TrendBars rows={trend} currency={currency} metric="orderProfit" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Operating expenses
-                </p>
-                <TrendBars rows={trend} currency={currency} metric="expenses" />
-              </div>
+
+              <SpreadsheetTable
+                columns={[
+                  { key: 'period', header: 'Period', render: (row) => row.label },
+                  {
+                    key: 'revenue',
+                    header: 'Revenue',
+                    align: 'right',
+                    render: (row) => formatMoney(row.revenue, currency),
+                  },
+                  {
+                    key: 'orderProfit',
+                    header: 'Order profit',
+                    align: 'right',
+                    render: (row) => formatMoney(row.orderProfit, currency),
+                  },
+                  {
+                    key: 'expenses',
+                    header: 'Operating expenses',
+                    align: 'right',
+                    render: (row) => formatMoney(row.expenses, currency),
+                  },
+                  {
+                    key: 'netProfit',
+                    header: 'Net profit',
+                    align: 'right',
+                    className: 'font-medium',
+                    render: (row) => (
+                      <span className={profitClass(row.netProfit)}>
+                        {formatMoney(row.netProfit, currency)}
+                      </span>
+                    ),
+                  },
+                ]}
+                rows={trend}
+                rowKey={(row) => row.key}
+              />
             </div>
           )}
         </ReportSection>

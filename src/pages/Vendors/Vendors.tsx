@@ -7,8 +7,10 @@ import {
   Eye,
   Pencil,
   Plus,
+  Receipt,
   Search,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
@@ -165,11 +167,11 @@ export function Vendors() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Vendors', value: String(summary.count) },
-          { label: 'Linked expenses', value: String(summary.linkedExpenses) },
-          { label: 'Total paid', value: formatMoney(summary.totalPaid, currency) },
+          { label: 'Vendors', value: String(summary.count), tone: 'indigo' as const, icon: Building2 },
+          { label: 'Linked expenses', value: String(summary.linkedExpenses), tone: 'violet' as const, icon: Receipt },
+          { label: 'Total paid', value: formatMoney(summary.totalPaid, currency), tone: 'emerald' as const, icon: Wallet },
         ].map((stat) => (
-          <StatCard key={stat.label} label={stat.label} value={stat.value} subtext="Filtered results" />
+          <StatCard key={stat.label} label={stat.label} value={stat.value} subtext="Filtered results" tone={stat.tone} icon={stat.icon} />
         ))}
       </div>
 

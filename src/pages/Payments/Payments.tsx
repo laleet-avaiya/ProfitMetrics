@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -115,8 +115,14 @@ export function Payments() {
       description={`Money received — invoice payments, direct receipts, and marketplace payouts (${marketplaceSummary}).`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <StatCard label="Payments" value={String(summary.count)} subtext="Filtered results" />
-        <StatCard label="Total received" value={formatMoney(summary.total, currency)} subtext="Filtered period" />
+        <StatCard label="Payments" value={String(summary.count)} subtext="Filtered results" tone="indigo" icon={Wallet} />
+        <StatCard
+          label="Total received"
+          value={formatMoney(summary.total, currency)}
+          subtext="Filtered period"
+          tone="emerald"
+          icon={TrendingUp}
+        />
       </div>
       <Card className="space-y-3">
         <div className={toolbarClass}>

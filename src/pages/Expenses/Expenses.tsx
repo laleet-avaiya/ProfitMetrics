@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, Pencil, Plus, Receipt, Search, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -138,12 +138,14 @@ export function Expenses() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Expenses', value: String(summary.count) },
-          { label: 'Total spent', value: formatMoney(summary.total, currency) },
+          { label: 'Expenses', value: String(summary.count), tone: 'indigo' as const, icon: Receipt },
+          { label: 'Total spent', value: formatMoney(summary.total, currency), tone: 'rose' as const, icon: Wallet },
           {
             label: 'Input tax',
             value: formatMoney(summary.inputTax, currency),
             subtext: summary.inputTax > 0 ? 'GST/VAT tracked on expenses' : 'Track tax on expenses optionally',
+            tone: 'emerald' as const,
+            icon: Receipt,
           },
         ].map((stat) => (
           <StatCard
@@ -151,6 +153,8 @@ export function Expenses() {
             label={stat.label}
             value={stat.value}
             subtext={stat.subtext ?? 'Filtered results'}
+            tone={stat.tone}
+            icon={stat.icon}
           />
         ))}
       </div>

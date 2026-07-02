@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, ShoppingCart, Target, Trash2, TrendingUp } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -249,11 +249,25 @@ export function Sales() {
               summary.returned > 0
                 ? `${summary.returned} returned in filter`
                 : 'Filtered results',
+            tone: 'indigo' as const,
+            icon: ShoppingCart,
           },
-          { label: 'Revenue', value: formatMoney(summary.revenue, currency), subtext: 'Filtered results' },
-          { label: 'Order profit', value: formatMoney(summary.profit, currency), subtext: 'Filtered results' },
+          {
+            label: 'Revenue',
+            value: formatMoney(summary.revenue, currency),
+            subtext: 'Filtered results',
+            tone: 'violet' as const,
+            icon: TrendingUp,
+          },
+          {
+            label: 'Order profit',
+            value: formatMoney(summary.profit, currency),
+            subtext: 'Filtered results',
+            tone: summary.profit >= 0 ? ('emerald' as const) : ('rose' as const),
+            icon: Target,
+          },
         ].map((stat) => (
-          <StatCard key={stat.label} label={stat.label} value={stat.value} subtext={stat.subtext} />
+          <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 

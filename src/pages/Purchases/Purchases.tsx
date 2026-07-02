@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Eye, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Building2, ClipboardList, Eye, Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -159,16 +159,20 @@ export function Purchases() {
       description="Create purchase orders from vendors, track delivery receipts, payments, and inventory stock."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard label="Orders" value={String(summary.count)} subtext="Filtered results" />
+        <StatCard label="Orders" value={String(summary.count)} subtext="Filtered results" tone="indigo" icon={ClipboardList} />
         <StatCard
           label="Order value"
           value={formatMoney(summary.total, currency)}
           subtext="Total PO amount"
+          tone="violet"
+          icon={Wallet}
         />
         <StatCard
           label="Balance due"
           value={formatMoney(summary.balanceDue, currency)}
           subtext="Unpaid on filtered orders"
+          tone={summary.balanceDue > 0 ? 'amber' : 'emerald'}
+          icon={Building2}
         />
       </div>
 

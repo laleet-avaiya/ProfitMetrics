@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, Pencil, Plus, Search, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -126,9 +126,19 @@ export function Invoices() {
       description="Customer invoices with products, taxes, and payment tracking."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard label="Invoices" value={String(summary.count)} />
-        <StatCard label="Total invoiced" value={formatMoney(summary.total, currency)} />
-        <StatCard label="Balance due" value={formatMoney(summary.balanceDue, currency)} />
+        <StatCard label="Invoices" value={String(summary.count)} tone="indigo" icon={FileText} />
+        <StatCard
+          label="Total invoiced"
+          value={formatMoney(summary.total, currency)}
+          tone="violet"
+          icon={TrendingUp}
+        />
+        <StatCard
+          label="Balance due"
+          value={formatMoney(summary.balanceDue, currency)}
+          tone={summary.balanceDue > 0 ? 'amber' : 'emerald'}
+          icon={Wallet}
+        />
       </div>
       <Card className="space-y-3">
         <div className={toolbarClass}>

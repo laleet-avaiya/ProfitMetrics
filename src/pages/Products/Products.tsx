@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye,
+  Layers,
   Package,
   Pencil,
   Plus,
   Search,
+  Target,
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
@@ -123,14 +125,16 @@ export function Products() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Products', value: String(summary.count) },
-          { label: 'Platform listings', value: String(summary.listings) },
+          { label: 'Products', value: String(summary.count), tone: 'indigo' as const, icon: Package },
+          { label: 'Platform listings', value: String(summary.listings), tone: 'violet' as const, icon: Layers },
           {
             label: 'Avg margin',
             value: summary.avgMargin != null ? formatPercent(summary.avgMargin) : '—',
+            tone: 'emerald' as const,
+            icon: Target,
           },
         ].map((stat) => (
-          <StatCard key={stat.label} label={stat.label} value={stat.value} subtext="Filtered results" />
+          <StatCard key={stat.label} label={stat.label} value={stat.value} subtext="Filtered results" tone={stat.tone} icon={stat.icon} />
         ))}
       </div>
 

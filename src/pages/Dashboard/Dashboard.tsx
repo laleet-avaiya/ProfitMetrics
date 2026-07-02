@@ -427,81 +427,91 @@ export function Dashboard() {
                   label="Revenue"
                   value={formatMoney(summary.grossRevenue, currency)}
                   subtext={revenueSubtext}
+                  tone="violet"
+                  icon={TrendingUp}
                 />
                 <StatCard
                   label="Order profit"
                   value={formatMoney(summary.grossProfit, currency)}
                   subtext={`Online + offline · ${periodSubtext}`}
+                  tone={summary.grossProfit >= 0 ? 'emerald' : 'rose'}
+                  icon={Target}
                   valueClassName={profitClass(summary.grossProfit)}
                 />
                 <StatCard
                   label="Expenses"
                   value={formatMoney(summary.totalExpenses, currency)}
                   subtext={`${filteredExpenses.length} entr${filteredExpenses.length === 1 ? 'y' : 'ies'} · ${periodSubtext}`}
+                  tone="amber"
+                  icon={Receipt}
                 />
                 <StatCard
                   label="Net profit"
                   value={formatMoney(summary.netProfit, currency)}
                   subtext={`${formatPercent(summary.netMarginPercent)} margin · ${periodSubtext}`}
+                  tone={summary.netProfit >= 0 ? 'emerald' : 'rose'}
+                  icon={BarChart3}
                   valueClassName={profitClass(summary.netProfit)}
                 />
               </div>
 
               {hasPeriodData && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Warehouse className="w-3 h-3" />
-                      Stock on hand
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-gray-900 dark:text-white">
-                      {formatMoney(stockSummary.totalValue, currency)}
-                    </p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                      {stockSummary.totalUnits} units · {stockSummary.productCount} products
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Target className="w-3 h-3" />
-                      Avg order profit
-                    </p>
-                    <p className={`text-sm font-semibold tabular-nums mt-0.5 ${profitClass(avgOrderProfit)}`}>
-                      {formatMoney(avgOrderProfit, currency)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <RotateCcw className="w-3 h-3" />
-                      Return rate
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-gray-900 dark:text-white">
-                      {formatPercent(returnStats.returnRatePercent)}
-                      {returnStats.returnedCount > 0 && (
-                        <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">
-                          ({returnStats.returnedCount})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Platform fees</p>
-                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-gray-900 dark:text-white">
-                      {formatMoney(summary.totalPlatformFees, currency)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Return charges</p>
-                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-red-600 dark:text-red-400">
-                      {formatMoney(returnStats.totalReturnCharges, currency)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Cancellation charges</p>
-                    <p className="text-sm font-semibold tabular-nums mt-0.5 text-red-600 dark:text-red-400">
-                      {formatMoney(returnStats.totalCancellationCharges, currency)}
-                    </p>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <StatCard
+                    compact
+                    label="Stock on hand"
+                    value={formatMoney(stockSummary.totalValue, currency)}
+                    subtext={`${stockSummary.totalUnits} units · ${stockSummary.productCount} products`}
+                    tone="violet"
+                    icon={Warehouse}
+                  />
+                  <StatCard
+                    compact
+                    label="Avg order profit"
+                    value={formatMoney(avgOrderProfit, currency)}
+                    tone={avgOrderProfit >= 0 ? 'emerald' : 'rose'}
+                    icon={Target}
+                    valueClassName={profitClass(avgOrderProfit)}
+                  />
+                  <StatCard
+                    compact
+                    label="Return rate"
+                    value={
+                      <>
+                        {formatPercent(returnStats.returnRatePercent)}
+                        {returnStats.returnedCount > 0 && (
+                          <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">
+                            ({returnStats.returnedCount})
+                          </span>
+                        )}
+                      </>
+                    }
+                    tone={returnStats.returnRatePercent > 0 ? 'rose' : 'slate'}
+                    icon={RotateCcw}
+                  />
+                  <StatCard
+                    compact
+                    label="Platform fees"
+                    value={formatMoney(summary.totalPlatformFees, currency)}
+                    tone="amber"
+                    icon={ShoppingCart}
+                  />
+                  <StatCard
+                    compact
+                    label="Return charges"
+                    value={formatMoney(returnStats.totalReturnCharges, currency)}
+                    tone="rose"
+                    icon={RotateCcw}
+                    valueClassName="text-red-600 dark:text-red-400"
+                  />
+                  <StatCard
+                    compact
+                    label="Cancellation charges"
+                    value={formatMoney(returnStats.totalCancellationCharges, currency)}
+                    tone="rose"
+                    icon={RotateCcw}
+                    valueClassName="text-red-600 dark:text-red-400"
+                  />
                 </div>
               )}
             </>
@@ -527,13 +537,15 @@ export function Dashboard() {
                 label="Received"
                 value={formatMoney(cashFlow.received, currency)}
                 subtext={`${cashFlow.receivedCount} receipt${cashFlow.receivedCount === 1 ? '' : 's'} · ${periodSubtext}`}
-                valueClassName="text-emerald-700 dark:text-emerald-400"
+                tone="emerald"
+                icon={ArrowDownLeft}
               />
               <StatCard
                 label="Paid out"
                 value={formatMoney(cashFlow.paid, currency)}
                 subtext={`${cashFlow.paidCount} outflow${cashFlow.paidCount === 1 ? '' : 's'} · ${periodSubtext}`}
-                valueClassName="text-amber-700 dark:text-amber-400"
+                tone="amber"
+                icon={ArrowUpRight}
               />
               <StatCard
                 label="Net cash flow"
@@ -545,75 +557,59 @@ export function Dashboard() {
                       ? 'Negative — more paid than received'
                       : 'Balanced'
                 }
+                tone={cashFlow.netCashFlow >= 0 ? 'emerald' : 'rose'}
+                icon={TrendingUp}
                 valueClassName={profitClass(cashFlow.netCashFlow)}
               />
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
-                  Invoice payments
-                </p>
-                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
-                  {formatMoney(paymentSummary.invoicePayments, currency)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
-                  Direct receipts
-                </p>
-                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
-                  {formatMoney(paymentSummary.directPayments, currency)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
-                  Marketplace payouts
-                </p>
-                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
-                  {formatMoney(paymentSummary.marketplacePayouts, currency)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <ArrowUpRight className="w-3 h-3 text-amber-600" />
-                  PO payments
-                </p>
-                <p className="text-sm font-semibold tabular-nums mt-0.5 text-amber-700 dark:text-amber-400">
-                  {formatMoney(cashFlow.poPayments, currency)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <ArrowUpRight className="w-3 h-3 text-amber-600" />
-                  Operating expenses
-                </p>
-                <p className="text-sm font-semibold tabular-nums mt-0.5 text-amber-700 dark:text-amber-400">
-                  {formatMoney(cashFlow.operatingExpenses, currency)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
-                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                  <Wallet className="w-3 h-3" />
-                  Outstanding (AR)
-                </p>
-                <p
-                  className={`text-sm font-semibold tabular-nums mt-0.5 ${
-                    receivables.balanceDue > 0
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : 'text-gray-900 dark:text-white'
-                  }`}
-                >
-                  {formatMoney(receivables.balanceDue, currency)}
-                </p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {receivables.openCount > 0
+              <StatCard
+                compact
+                label="Invoice payments"
+                value={formatMoney(paymentSummary.invoicePayments, currency)}
+                tone="emerald"
+                icon={FileText}
+              />
+              <StatCard
+                compact
+                label="Direct receipts"
+                value={formatMoney(paymentSummary.directPayments, currency)}
+                tone="emerald"
+                icon={ArrowDownLeft}
+              />
+              <StatCard
+                compact
+                label="Marketplace payouts"
+                value={formatMoney(paymentSummary.marketplacePayouts, currency)}
+                tone="emerald"
+                icon={ShoppingCart}
+              />
+              <StatCard
+                compact
+                label="PO payments"
+                value={formatMoney(cashFlow.poPayments, currency)}
+                tone="amber"
+                icon={ClipboardList}
+              />
+              <StatCard
+                compact
+                label="Operating expenses"
+                value={formatMoney(cashFlow.operatingExpenses, currency)}
+                tone="amber"
+                icon={Receipt}
+              />
+              <StatCard
+                compact
+                label="Outstanding (AR)"
+                value={formatMoney(receivables.balanceDue, currency)}
+                subtext={
+                  receivables.openCount > 0
                     ? `${receivables.openCount} open invoice${receivables.openCount === 1 ? '' : 's'}`
-                    : 'Current balance'}
-                </p>
-              </div>
+                    : 'Current balance'
+                }
+                tone={receivables.balanceDue > 0 ? 'amber' : 'emerald'}
+                icon={Wallet}
+              />
             </div>
           </Card>
         )}
@@ -677,24 +673,29 @@ export function Dashboard() {
                         ? 'Online + offline invoices'
                         : 'Collected on sales'
                     }
-                    valueClassName="text-amber-700 dark:text-amber-400"
+                    tone="amber"
+                    icon={Receipt}
                   />
                   <StatCard
                     label="ITC — purchase"
                     value={formatMoney(taxLedger.saleInputTax, currency)}
                     subtext="Input tax on COGS"
-                    valueClassName="text-emerald-600 dark:text-emerald-400"
+                    tone="emerald"
+                    icon={Package}
                   />
                   <StatCard
                     label="ITC — expenses"
                     value={formatMoney(taxLedger.expenseInputTax, currency)}
                     subtext="Platform, delivery, fees & more"
-                    valueClassName="text-emerald-600 dark:text-emerald-400"
+                    tone="emerald"
+                    icon={Receipt}
                   />
                   <StatCard
                     label="Net tax payable"
                     value={formatMoney(taxLedger.netTax, currency)}
                     subtext={`Total ITC ${formatMoney(taxLedger.inputTax, currency)}`}
+                    tone={taxLedger.netTax <= 0 ? 'emerald' : 'amber'}
+                    icon={BarChart3}
                     valueClassName={profitClass(-taxLedger.netTax)}
                   />
                 </div>

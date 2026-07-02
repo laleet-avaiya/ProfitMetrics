@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, ArchiveRestore, Eye, Pencil, Plus, Search, Trash2, UserCircle } from 'lucide-react';
+import { Archive, ArchiveRestore, Eye, Pencil, Plus, Search, Trash2, UserCircle, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -119,7 +119,7 @@ export function Customers() {
       description="Buyers for invoicing and payment tracking."
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <StatCard label="Customers" value={String(filtered.length)} subtext="Filtered results" />
+        <StatCard label="Customers" value={String(filtered.length)} subtext="Filtered results" tone="indigo" icon={UserCircle} />
         <StatCard
           label="Open balances"
           value={formatMoney(
@@ -127,6 +127,8 @@ export function Customers() {
             currency
           )}
           subtext="Unpaid on invoices"
+          tone="amber"
+          icon={Wallet}
         />
       </div>
 

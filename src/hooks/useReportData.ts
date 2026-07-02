@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useNotification } from './useNotification';
 import { firestoreService } from '../services/firestore';
-import type { Expense, Invoice, Sale } from '../types';
+import type { Expense, Invoice, Product, ProductStock, Sale } from '../types';
 import {
   computePeriodSummary,
   filterExpensesInRange,
@@ -19,6 +19,8 @@ export function useReportData() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [stock, setStock] = useState<ProductStock[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<ReportPreset>('30d');
   const [customFrom, setCustomFrom] = useState('');
@@ -28,14 +30,18 @@ export function useReportData() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, expensesList] = await Promise.all([
+      const [salesList, invoicesList, expensesList, stockList, productsList] = await Promise.all([
         firestoreService.sales.getAll(company.id),
         firestoreService.invoices.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
+        firestoreService.stock.getAll(company.id),
+        firestoreService.products.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
       setInvoices(invoicesList.filter((i) => !i.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
+      setStock(stockList);
+      setProducts(productsList.filter((p) => !p.deleted));
     } catch (err) {
       console.error('Failed to load report data:', err);
       notification.error('Failed to load report data');
@@ -99,6 +105,8 @@ export function useReportData() {
     filteredSales,
     filteredInvoices,
     filteredExpenses,
+    stock,
+    products,
     summary,
     hasData,
   };

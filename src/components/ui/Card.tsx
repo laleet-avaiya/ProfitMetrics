@@ -1,4 +1,6 @@
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { statCardToneStyles, type StatCardTone } from '../../constants/statCardTones';
 import { cardClass, cardPaddingClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
 
 interface CardProps {
@@ -34,23 +36,63 @@ export function CardHeader({ title, description, action, className = '' }: CardH
   );
 }
 
-interface StatCardProps {
+export interface StatCardProps {
   label: string;
   value: ReactNode;
   subtext?: string;
   valueClassName?: string;
+  tone?: StatCardTone;
+  icon?: LucideIcon;
+  compact?: boolean;
 }
 
-export function StatCard({ label, value, subtext, valueClassName = '' }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  subtext,
+  valueClassName = '',
+  tone = 'slate',
+  icon: Icon,
+  compact = false,
+}: StatCardProps) {
+  const styles = statCardToneStyles[tone];
+
   return (
-    <Card>
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-        {label}
-      </p>
-      <p className={`mt-0.5 text-lg font-semibold tabular-nums text-gray-900 dark:text-white ${valueClassName}`}>
+    <div className={`rounded-xl border ${compact ? 'p-3' : 'p-4'} ${styles.card}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p
+          className={`font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 ${
+            compact ? 'text-[10px]' : 'text-[11px]'
+          }`}
+        >
+          {label}
+        </p>
+        {Icon ? (
+          <div
+            className={`flex shrink-0 items-center justify-center rounded-lg ${
+              compact ? 'h-7 w-7' : 'h-8 w-8'
+            } ${styles.icon}`}
+          >
+            <Icon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} aria-hidden />
+          </div>
+        ) : null}
+      </div>
+      <p
+        className={`mt-1.5 font-bold tabular-nums tracking-tight text-gray-900 dark:text-white ${
+          compact ? 'text-sm' : 'text-xl'
+        } ${valueClassName}`}
+      >
         {value}
       </p>
-      {subtext ? <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtext}</p> : null}
-    </Card>
+      {subtext ? (
+        <p
+          className={`text-gray-500 dark:text-gray-400 mt-1 ${
+            compact ? 'text-[10px]' : 'text-xs'
+          }`}
+        >
+          {subtext}
+        </p>
+      ) : null}
+    </div>
   );
 }

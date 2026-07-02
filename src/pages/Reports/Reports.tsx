@@ -6,6 +6,7 @@ import {
   PieChart,
   Receipt,
   Store,
+  Warehouse,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -20,6 +21,7 @@ const REPORT_ICONS: Record<ReportId, LucideIcon> = {
   'expense-breakdown': PieChart,
   'tax-summary': Receipt,
   trend: LineChart,
+  'stock-on-hand': Warehouse,
 };
 
 export function Reports() {
