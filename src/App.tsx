@@ -33,6 +33,7 @@ import { Reports } from './pages/Reports/Reports';
 import { ReportViewPage } from './pages/Reports/ReportViewPage';
 import { TermsPage } from './pages/Terms/TermsPage';
 import { TermsAcceptancePage } from './pages/Terms/TermsAcceptancePage';
+import { Configuration } from './pages/Configuration/Configuration';
 import { Settings } from './pages/Settings/Settings';
 import { About } from './pages/About/About';
 import { Subscription } from './pages/Subscription/Subscription';
@@ -142,6 +143,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
         <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />

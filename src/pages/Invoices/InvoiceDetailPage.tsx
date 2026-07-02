@@ -7,16 +7,19 @@ import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/Det
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
+import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
+import { Select } from '../../components/Select/Select';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { invoiceStatusLabel } from '../../constants/invoiceStatuses';
+import { PAYMENT_MODE_OPTIONS, paymentModeLabel } from '../../constants/paymentModes';
 import { purchasePaymentStatusLabel } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
 import type { Payment } from '../../types';
-import { InvoiceStatus, PaymentKind, PurchasePaymentStatus } from '../../types';
+import { InvoiceStatus, PaymentKind, PaymentMode, PurchasePaymentStatus } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { buildPaymentFromForm, emptyPaymentForm, syncInvoicePaymentRollup } from '../../utils/paymentHelpers';
 import { utcToLocalDateInput } from '../../utils/firestoreDates';
@@ -86,7 +89,7 @@ export function InvoiceDetailPage() {
       notFoundTitle="Invoice not found"
       notFoundDescription="This invoice may have been deleted."
       backTo="/invoices"
-      backLabel="Back to offline sales"
+      backLabel="Back to invoices"
       title={invoice ? `Invoice ${invoice.invoiceNumber}` : 'Invoice'}
       description={invoice?.customerName ?? undefined}
       meta={
@@ -159,11 +162,12 @@ export function InvoiceDetailPage() {
               {payments.length > 0 && (
                 <div className="mb-4 overflow-x-auto rounded-lg border">
                   <table className="w-full text-sm">
-                    <thead><tr className="text-xs uppercase text-gray-500"><th className="px-3 py-2">Date</th><th className="px-3 py-2">Reference</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2"></th></tr></thead>
+                    <thead><tr className="text-xs uppercase text-gray-500"><th className="px-3 py-2">Date</th><th className="px-3 py-2">Mode</th><th className="px-3 py-2">Reference</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2"></th></tr></thead>
                     <tbody>
                       {payments.map((p) => (
                         <tr key={p.id}>
                           <td className="px-3 py-2">{formatDateLocal(p.paymentDate)}</td>
+                          <td className="px-3 py-2">{paymentModeLabel(p.paymentMode)}</td>
                           <td className="px-3 py-2">{p.reference ?? '—'}</td>
                           <td className="px-3 py-2 text-right tabular-nums font-medium">{formatMoney(p.amount, currency)}</td>
                           <td className="px-3 py-2"><Link to={`/payments/${p.id}`} className={detailLinkClass}>View</Link></td>
@@ -177,7 +181,18 @@ export function InvoiceDetailPage() {
                 <form onSubmit={handleAddPayment} className="rounded-lg border p-4 space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input label="Payment date" type="date" value={paymentForm.paymentDate} onChange={(e) => setPaymentForm((p) => ({ ...p, paymentDate: e.target.value }))} />
-                    <Input label="Amount" type="number" min={0} step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))} placeholder={invoice.balanceDue > 0 ? String(invoice.balanceDue) : undefined} />
+                    <PaymentAmountField
+                      value={paymentForm.amount}
+                      onChange={(amount) => setPaymentForm((p) => ({ ...p, amount }))}
+                      pendingAmount={invoice.balanceDue}
+                      currency={currency}
+                    />
+                    <Select
+                      label="Payment mode"
+                      value={paymentForm.paymentMode}
+                      onChange={(e) => setPaymentForm((p) => ({ ...p, paymentMode: e.target.value as PaymentMode }))}
+                      options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                    />
                     <Input label="Reference" value={paymentForm.reference} onChange={(e) => setPaymentForm((p) => ({ ...p, reference: e.target.value }))} />
                   </div>
                   <Textarea value={paymentForm.notes} onChange={(e) => setPaymentForm((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Notes" />

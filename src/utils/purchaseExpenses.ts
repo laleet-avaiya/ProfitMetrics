@@ -21,7 +21,7 @@ function expenseFromPayment(
     expenseNumber,
     expenseDate: payment.paymentDate,
     category: 'Inventory Purchase',
-    description: `Payment for PO ${purchase.poNumber}${payment.reference ? ` — ${payment.reference}` : ''}`,
+    description: `Payment for PO ${purchase.poNumber}${purchase.reference ? ` (ref ${purchase.reference})` : ''}${payment.reference ? ` — ${payment.reference}` : ''}`,
     amount: roundMoney(payment.amount),
     vendorId: purchase.vendorId,
     vendorName: purchase.vendorName,

@@ -150,7 +150,7 @@ export function CustomerDetailPage() {
             icon={FileText}
             iconTone="violet"
             title="Invoices"
-            description="Offline sales invoices for this customer."
+            description="Invoices for this customer."
             headerAction={
               <Link to={`/invoices/new?customer=${customer.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
                 New invoice →

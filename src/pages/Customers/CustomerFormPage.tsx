@@ -95,7 +95,7 @@ export function CustomerFormPage() {
       <PageShell>
         <PageHeader
           title={isEditing ? 'Edit customer' : 'New customer'}
-          description="Contact details for offline sales."
+          description="Contact details for invoicing."
         />
         <form onSubmit={handleSubmit} className="space-y-6 pb-24">
           <FormSection icon={UserCircle} title="Customer details" description="Name and contact info.">

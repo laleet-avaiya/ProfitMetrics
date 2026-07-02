@@ -9,6 +9,7 @@ import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { Input } from '../../components/Input/Input';
 import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
@@ -82,7 +83,7 @@ const quickLinks = [
     label: 'Invoices',
     path: '/invoices',
     icon: FileText,
-    description: 'Offline sales',
+    description: 'Customer invoices',
   },
   {
     label: 'Purchases',
@@ -126,6 +127,7 @@ const RECENT_LIMIT = 5;
 
 export function Dashboard() {
   const { company } = useAuth();
+  const { summary: marketplaceSummary } = useCompanyMarketplaces();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -610,7 +612,7 @@ export function Dashboard() {
             <Card>
               <CardHeader
                 title="Sales by channel"
-                description="Online vs offline sales"
+                description="Online sales vs invoices"
                 action={
                   topPlatforms.length > 0 ? (
                     <Link
@@ -680,7 +682,7 @@ export function Dashboard() {
             <Card>
               <CardHeader
                 title="Recent invoices"
-                description={`Offline sales · ${dateRange.label.toLowerCase()}`}
+                description={`Invoices · ${dateRange.label.toLowerCase()}`}
                 action={
                   <Link
                     to="/invoices"
@@ -769,7 +771,7 @@ export function Dashboard() {
                   Get started with {BRAND_NAME}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Add products, log online marketplace sales, create offline invoices, record
+                  Add products, log online sales on {marketplaceSummary}, create invoices, record
                   purchases to build stock, and track expenses. Your dashboard fills in as you go.
                 </p>
               </div>
@@ -778,7 +780,10 @@ export function Dashboard() {
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {quickLinks.map((item) => (
+          {quickLinks.map((item) => {
+            const description =
+              item.path === '/sales' ? `${marketplaceSummary} orders` : item.description;
+            return (
             <Link
               key={item.path}
               to={item.path}
@@ -792,10 +797,11 @@ export function Dashboard() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.label}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{item.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{description}</p>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       </PageShell>
     </Layout>

@@ -23,6 +23,7 @@ import {
   toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Product, ProductStock } from '../../types';
@@ -45,6 +46,7 @@ function averageListingMargin(product: Product): number | null {
 export function Products() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { summary: marketplaceSummary } = useCompanyMarketplaces();
   const notification = useNotification();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -117,7 +119,7 @@ export function Products() {
   return (
     <SectionPage
       title="Products"
-      description="Manage SKUs and per-platform economics — Amazon, Shopify, Noon, eBay, Flipkart, and more."
+      description={`Manage SKUs and per-platform economics for ${marketplaceSummary}.`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[

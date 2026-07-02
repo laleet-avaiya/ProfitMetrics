@@ -20,6 +20,8 @@ export interface Company {
   defaultTaxType: TaxType;
   defaultTaxMode: TaxMode;
   defaultTaxPercentage: number;
+  /** Configurable marketplace names for product listings and payout tracking */
+  marketplaces?: string[];
   subscriptionStart?: Date;
   subscriptionEnd?: Date;
   /** Version of T&C / usage policy accepted by the company */
@@ -83,7 +85,7 @@ export interface LineTaxSettings {
 
 export interface ProductPlatformListing {
   id: string;
-  /** e.g. Amazon, Shopify, Noon, eBay, Flipkart, Custom */
+  /** e.g. Amazon, Shopify, Noon — from company Configuration */
   platform: string;
   /** Optional marketplace identifiers */
   platformSku?: string;
@@ -194,6 +196,10 @@ export interface Sale {
   quantity: number;
   /** pending · shipped · delivered · returned · cancelled — omitted on legacy records */
   status?: SaleStatus;
+  /** Tracking only — how marketplace payout was received */
+  paymentMode?: PaymentMode;
+  /** Tracking only — unpaid · partial · paid */
+  paymentStatus?: PurchasePaymentStatus;
   /** Reverse logistics, restocking, return shipping — reduces profit */
   returnCharges?: number;
   returnTaxPercentage?: number;
@@ -360,6 +366,7 @@ export interface PurchasePayment {
   id: string;
   paymentDate: Date;
   amount: number;
+  paymentMode?: PaymentMode;
   reference?: string;
   notes?: string;
   /** Linked auto-generated expense */
@@ -369,8 +376,10 @@ export interface PurchasePayment {
 export interface PurchaseOrder {
   id: string;
   companyId: string;
-  /** Vendor PO / invoice reference */
+  /** Auto-generated PO number, e.g. PO-2026-0001 */
   poNumber: string;
+  /** Optional vendor quote or external reference */
+  reference?: string;
   /** Business date of the purchase order */
   purchaseDate: Date;
   vendorId?: string;
@@ -470,6 +479,13 @@ export interface Invoice {
 
 // ─── Payments (invoice-linked or direct / marketplace payouts) ────────────────
 
+export const PaymentMode = {
+  CASH: 'cash',
+  BANK_ACCOUNT: 'bank_account',
+} as const;
+
+export type PaymentMode = (typeof PaymentMode)[keyof typeof PaymentMode];
+
 export const PaymentKind = {
   INVOICE: 'invoice',
   DIRECT: 'direct',
@@ -484,6 +500,7 @@ export interface Payment {
   paymentDate: Date;
   amount: number;
   kind: PaymentKind;
+  paymentMode?: PaymentMode;
   invoiceId?: string;
   invoiceNumber?: string;
   customerId?: string;

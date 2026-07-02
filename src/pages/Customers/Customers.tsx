@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, ArchiveRestore, Pencil, Plus, Search, Trash2, UserCircle } from 'lucide-react';
+import { Archive, ArchiveRestore, Eye, Pencil, Plus, Search, Trash2, UserCircle } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -116,7 +116,7 @@ export function Customers() {
   return (
     <SectionPage
       title="Customers"
-      description="Buyers for offline sales and invoicing."
+      description="Buyers for invoicing and payment tracking."
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <StatCard label="Customers" value={String(filtered.length)} subtext="Filtered results" />
@@ -209,13 +209,16 @@ export function Customers() {
                       </td>
                       <td className={tableCellClass}>
                         <div className="flex justify-end gap-1">
-                          <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg hover:bg-gray-100">
+                          <button type="button" onClick={() => navigate(`/customers/${customer.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View customer">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit customer">
                             <Pencil className="w-4 h-4" />
                           </button>
-                          <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg hover:bg-gray-100">
+                          <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}>
                             {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
                           </button>
-                          <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50">
+                          <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete customer">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>

@@ -1,5 +1,5 @@
 import type { Customer, Invoice, Payment } from '../types';
-import { PaymentKind } from '../types';
+import { PaymentKind, PaymentMode } from '../types';
 import { paymentKindLabel as paymentKindLabelFromConstants } from '../constants/paymentKinds';
 import { derivePaymentStatus } from './purchaseHelpers';
 import { deriveInvoiceStatusFromPayment } from './invoiceHelpers';
@@ -15,6 +15,7 @@ export interface PaymentFormState {
   paymentDate: string;
   amount: string;
   kind: PaymentKind;
+  paymentMode: PaymentMode;
   invoiceId: string;
   customerId: string;
   platform: string;
@@ -27,6 +28,7 @@ export function emptyPaymentForm(kind: PaymentKind = PaymentKind.DIRECT): Paymen
     paymentDate: utcToLocalDateInput(new Date()),
     amount: '',
     kind,
+    paymentMode: PaymentMode.CASH,
     invoiceId: '',
     customerId: '',
     platform: '',
@@ -40,6 +42,7 @@ export function paymentToForm(payment: Payment): PaymentFormState {
     paymentDate: utcToLocalDateInput(payment.paymentDate),
     amount: String(payment.amount),
     kind: payment.kind,
+    paymentMode: payment.paymentMode ?? PaymentMode.CASH,
     invoiceId: payment.invoiceId ?? '',
     customerId: payment.customerId ?? '',
     platform: payment.platform ?? '',
@@ -64,6 +67,7 @@ export function buildPaymentFromForm(
     paymentDate: localDateInputToUtc(form.paymentDate),
     amount,
     kind: form.kind,
+    paymentMode: form.paymentMode,
     invoiceId:
       form.kind === PaymentKind.INVOICE
         ? (invoice?.id ?? (form.invoiceId || undefined))

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -9,13 +9,23 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import { filterRowClass, tableCellClass, tableHeadCellClass, tableTruncateCellClass, toolbarClass } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
+import { paymentModeLabel } from '../../constants/paymentModes';
+import {
+  PURCHASE_PAYMENT_STATUS_OPTIONS,
+  normalizeSalePaymentStatus,
+  purchasePaymentStatusLabel,
+  salePaymentStatusBadgeClass,
+} from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
 import type { Product, Sale } from '../../types';
+import { PurchasePaymentStatus } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import {
   localDateInputToUtc,
   localDateInputToUtcEndOfDay,
+  nowUtc,
   utcToLocalDateInput,
 } from '../../utils/firestoreDates';
 import { formatMoney, formatPercent } from '../../utils/profit';
@@ -28,6 +38,7 @@ import { SaleStatus } from '../../types';
 
 type DateFilter = 'all' | 'today' | '7d' | '30d';
 type StatusFilter = 'all' | SaleStatus;
+type PlatformFilter = 'all' | string;
 
 function startOfLocalTodayStr(): string {
   return utcToLocalDateInput(new Date());
@@ -62,6 +73,7 @@ function saleInDateRange(sale: Sale, from?: Date, to?: Date): boolean {
 export function Sales() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { summary: marketplaceSummary, getFilterPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -71,6 +83,12 @@ export function Sales() {
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkPaymentStatus, setBulkPaymentStatus] = useState<PurchasePaymentStatus>(
+    PurchasePaymentStatus.PAID
+  );
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const activeProducts = useMemo(() => getActiveProducts(products), [products]);
 
@@ -96,6 +114,11 @@ export function Sales() {
     loadData();
   }, [loadData]);
 
+  const platformFilterOptions = useMemo(
+    () => getFilterPlatformOptions(sales.map((s) => s.platform)),
+    [getFilterPlatformOptions, sales]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const { from, to } = dateFilterRange(dateFilter);
@@ -103,6 +126,7 @@ export function Sales() {
     return sales.filter((s) => {
       if (!saleInDateRange(s, from, to)) return false;
       if (statusFilter !== 'all' && normalizeSaleStatus(s.status) !== statusFilter) return false;
+      if (platformFilter !== 'all' && s.platform !== platformFilter) return false;
       if (!q) return true;
       return (
         s.orderId.toLowerCase().includes(q) ||
@@ -112,7 +136,7 @@ export function Sales() {
         (s.notes?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [sales, search, dateFilter, statusFilter]);
+  }, [sales, search, dateFilter, statusFilter, platformFilter]);
 
   const summary = useMemo(() => {
     return filtered.reduce(
@@ -126,9 +150,64 @@ export function Sales() {
     );
   }, [filtered]);
 
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const visible = new Set(filtered.map((s) => s.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filtered]);
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((sale) => selectedIds.has(sale.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(filtered.map((s) => s.id)));
+  };
+
+  const toggleSelect = (saleId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(saleId)) next.delete(saleId);
+      else next.add(saleId);
+      return next;
+    });
+  };
+
+  const handleBulkUpdatePaymentStatus = async () => {
+    if (!company || selectedIds.size === 0) return;
+    setBulkSaving(true);
+    try {
+      const now = nowUtc();
+      await Promise.all(
+        [...selectedIds].map((id) =>
+          firestoreService.sales.update(company.id, id, {
+            paymentStatus: bulkPaymentStatus,
+            updatedAt: now,
+          })
+        )
+      );
+      notification.success(
+        `Updated payment status for ${selectedIds.size} order${selectedIds.size === 1 ? '' : 's'}`
+      );
+      setSelectedIds(new Set());
+      loadData();
+    } catch (err) {
+      console.error(err);
+      notification.error('Failed to update payment status');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   const openCreate = () => navigate('/sales/new');
 
-  const openDetail = (sale: Sale) => navigate(`/sales/${sale.id}`);
+  const openView = (sale: Sale) => navigate(`/sales/${sale.id}`);
+  const openEdit = (sale: Sale) => navigate(`/sales/${sale.id}/edit`);
 
   const handleDelete = (sale: Sale) => {
     if (!company) return;
@@ -159,7 +238,7 @@ export function Sales() {
   return (
     <SectionPage
       title="Online sales"
-      description="Log daily marketplace orders. Select a product and platform — costs auto-fill from your listing, then profit is calculated instantly."
+      description={`Log daily marketplace orders (${marketplaceSummary}). Select a product and platform — costs auto-fill from your listing.`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
@@ -199,6 +278,19 @@ export function Sales() {
               {SALE_STATUS_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+              aria-label="Filter by marketplace"
+              wide
+            >
+              <option value="all">All marketplaces</option>
+              {platformFilterOptions.map((platform) => (
+                <option key={platform} value={platform}>
+                  {platform}
                 </option>
               ))}
             </FilterSelect>
@@ -254,16 +346,64 @@ export function Sales() {
           />
         ) : (
           <>
+            {selectedIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-900/20 px-3 py-2.5">
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {selectedIds.size} selected
+                </span>
+                <FilterSelect
+                  value={bulkPaymentStatus}
+                  onChange={(e) => setBulkPaymentStatus(e.target.value as PurchasePaymentStatus)}
+                  aria-label="Bulk payment status"
+                >
+                  {PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FilterSelect>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  loading={bulkSaving}
+                  onClick={handleBulkUpdatePaymentStatus}
+                >
+                  Update payment status
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={bulkSaving}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+
             <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <th className={`${tableHeadCellClass} w-10`}>
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAll}
+                        aria-label="Select all orders"
+                        className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
                     <th className={tableHeadCellClass}>Date</th>
                     <th className={tableHeadCellClass}>Order ID</th>
                     <th className={tableHeadCellClass}>Tracking</th>
                     <th className={tableHeadCellClass}>Product</th>
                     <th className={tableHeadCellClass}>Platform</th>
                     <th className={tableHeadCellClass}>Status</th>
+                    <th className={tableHeadCellClass}>Payment</th>
+                    <th className={tableHeadCellClass}>Mode</th>
                     <th className={tableHeadCellClass}>Qty</th>
                     <th className={`${tableHeadCellClass} text-right`}>Revenue</th>
                     <th className={`${tableHeadCellClass} text-right`}>Profit</th>
@@ -274,6 +414,15 @@ export function Sales() {
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {filtered.map((sale) => (
                     <tr key={sale.id} className="bg-white dark:bg-gray-800">
+                      <td className={tableCellClass}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(sale.id)}
+                          onChange={() => toggleSelect(sale.id)}
+                          aria-label={`Select order ${sale.orderId}`}
+                          className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
                       <td className={`${tableCellClass} text-gray-700 dark:text-gray-300`}>
                         {formatDateLocal(sale.orderDate)}
                       </td>
@@ -299,6 +448,14 @@ export function Sales() {
                       <td className={tableCellClass}>
                         <SaleStatusBadge status={sale.status} />
                       </td>
+                      <td className={tableCellClass}>
+                        <span
+                          className={`inline-flex text-xs px-2 py-0.5 rounded-full ${salePaymentStatusBadgeClass(sale.paymentStatus)}`}
+                        >
+                          {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}
+                        </span>
+                      </td>
+                      <td className={tableCellClass}>{paymentModeLabel(sale.paymentMode)}</td>
                       <td className={`${tableCellClass} tabular-nums`}>{sale.quantity}</td>
                       <td className={`${tableCellClass} text-right tabular-nums`}>
                         {formatMoney(sale.grossRevenue, currency)}
@@ -325,7 +482,15 @@ export function Sales() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => openDetail(sale)}
+                            onClick={() => openView(sale)}
+                            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label={`View order ${sale.orderId}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(sale)}
                             className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                             aria-label={`Edit order ${sale.orderId}`}
                           >
@@ -348,13 +513,61 @@ export function Sales() {
             </div>
 
             <div className="md:hidden space-y-3">
+              {selectedIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-900/20 p-3">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white w-full">
+                    {selectedIds.size} selected
+                  </span>
+                  <FilterSelect
+                    value={bulkPaymentStatus}
+                    onChange={(e) => setBulkPaymentStatus(e.target.value as PurchasePaymentStatus)}
+                    aria-label="Bulk payment status"
+                  >
+                    {PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </FilterSelect>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    loading={bulkSaving}
+                    onClick={handleBulkUpdatePaymentStatus}
+                  >
+                    Update payment status
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    disabled={bulkSaving}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
               {filtered.map((sale) => (
                 <div
                   key={sale.id}
-                  className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+                  className={`rounded-xl border p-4 space-y-2 ${
+                    selectedIds.has(sale.id)
+                      ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/10'
+                      : 'border-gray-200 dark:border-gray-700'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <label className="flex items-start gap-2 min-w-0 flex-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(sale.id)}
+                        onChange={() => toggleSelect(sale.id)}
+                        aria-label={`Select order ${sale.orderId}`}
+                        className="mt-1 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div className="min-w-0">
                       <p className="font-semibold text-gray-900 dark:text-white">
                         <Link
                           to={`/sales/${sale.id}`}
@@ -376,7 +589,8 @@ export function Sales() {
                           {sale.notes}
                         </p>
                       )}
-                    </div>
+                      </div>
+                    </label>
                     <div className="flex flex-col items-end gap-1">
                       <SaleStatusBadge status={sale.status} />
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -386,6 +600,11 @@ export function Sales() {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-gray-600 dark:text-gray-400">
                     <span>Qty {sale.quantity}</span>
+                    <span>
+                      Payment{' '}
+                      {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}
+                    </span>
+                    <span>Mode {paymentModeLabel(sale.paymentMode)}</span>
                     <span>Rev {formatMoney(sale.grossRevenue, currency)}</span>
                     <span
                       className={
@@ -398,7 +617,11 @@ export function Sales() {
                     </span>
                   </div>
                   <div className="flex gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(sale)}>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openView(sale)}>
+                      <Eye className="w-4 h-4" />
+                      View
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(sale)}>
                       <Pencil className="w-4 h-4" />
                       Edit
                     </Button>

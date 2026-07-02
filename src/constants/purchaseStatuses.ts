@@ -30,3 +30,23 @@ export function normalizePurchaseStatus(
   }
   return PurchaseOrderStatus.DRAFT;
 }
+
+export function normalizeSalePaymentStatus(
+  status: PurchasePaymentStatus | undefined
+): PurchasePaymentStatus {
+  if (status && PURCHASE_PAYMENT_STATUS_OPTIONS.some((o) => o.value === status)) {
+    return status;
+  }
+  return PurchasePaymentStatus.UNPAID;
+}
+
+export function salePaymentStatusBadgeClass(status: PurchasePaymentStatus | undefined): string {
+  switch (normalizeSalePaymentStatus(status)) {
+    case PurchasePaymentStatus.PAID:
+      return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200';
+    case PurchasePaymentStatus.PARTIAL:
+      return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200';
+    default:
+      return 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200';
+  }
+}

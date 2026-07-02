@@ -18,6 +18,12 @@ import { Button } from '../../components/Button/Button';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
+import { paymentModeLabel } from '../../constants/paymentModes';
+import {
+  purchasePaymentStatusLabel,
+  normalizeSalePaymentStatus,
+  salePaymentStatusBadgeClass,
+} from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
 import { PlatformFeeKind, SaleStatus } from '../../types';
 import { amountIncludesTaxLabel, taxPercentLabel } from '../../utils/listingTax';
@@ -138,6 +144,17 @@ export function SaleDetailPage() {
               />
               <DetailField label="Platform" value={sale.platform} />
               <DetailField label="Status" value={<SaleStatusBadge status={sale.status} />} />
+              <DetailField label="Payment mode" value={paymentModeLabel(sale.paymentMode)} />
+              <DetailField
+                label="Payment status"
+                value={
+                  <span
+                    className={`inline-flex text-xs px-2 py-0.5 rounded-full ${salePaymentStatusBadgeClass(sale.paymentStatus)}`}
+                  >
+                    {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}
+                  </span>
+                }
+              />
               <DetailField label="Tracking ID" value={sale.trackingId} valueClassName="font-mono text-xs" />
               {sale.status === SaleStatus.RETURNED && (
                 <>

@@ -2,17 +2,20 @@ import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Link } from 'react-router-dom';
 import { Building2, FileText, Shield } from 'lucide-react';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import packageJson from '../../../package.json';
 
 const APP_VERSION = packageJson.version;
 
 export function About() {
+  const { summary: marketplaceSummary } = useCompanyMarketplaces();
+
   return (
     <Layout>
       <PageShell>
         <PageHeader
           title="About"
-          description="Profit Metrics — ecommerce profit & loss tracking across Amazon, Shopify, and other platforms."
+          description={`Profit Metrics — ecommerce profit & loss tracking across ${marketplaceSummary}.`}
         />
 
         <div className="space-y-5">

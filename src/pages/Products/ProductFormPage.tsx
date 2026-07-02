@@ -15,10 +15,12 @@ import { FormStickyActions } from '../../components/FormStickyActions/FormSticky
 import { Button } from '../../components/Button/Button';
 import { PlatformListingEditor } from '../../components/PlatformListingEditor/PlatformListingEditor';
 import { useAuth } from '../../hooks/useAuth';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
+import { isConfiguredMarketplace } from '../../constants/platforms';
 import { useNotification } from '../../hooks/useNotification';
+import { createListingId, normalizeListings } from '../../utils/productDefaults';
 import { firestoreService } from '../../services/firestore';
 import type { Product, ProductPlatformListing } from '../../types';
-import { createListingId, normalizeListings, platformToFormValues } from '../../utils/productDefaults';
 import { nowUtc } from '../../utils/firestoreDates';
 
 interface FormState {
@@ -56,6 +58,7 @@ export function ProductFormPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { marketplaces } = useCompanyMarketplaces();
   const notification = useNotification();
   const isEditing = Boolean(productId);
 
@@ -109,14 +112,14 @@ export function ProductFormPage() {
     if (form.platformListings.length === 0) {
       next.listings = 'Add at least one platform listing';
     }
+    const marketplacesForValidation = marketplaces;
     for (const listing of form.platformListings) {
-      const { preset, customName } = platformToFormValues(listing.platform);
-      if (!preset) {
+      if (!listing.platform.trim()) {
         next.listings = 'Select a platform for each listing';
         break;
       }
-      if (preset === 'Custom' && !customName.trim()) {
-        next.listings = 'Enter a name for custom platforms';
+      if (!isConfiguredMarketplace(listing.platform, marketplacesForValidation)) {
+        next.listings = `"${listing.platform}" is not in your marketplace list — add it under Configuration or pick another platform`;
         break;
       }
     }

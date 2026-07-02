@@ -15,6 +15,8 @@ import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
+import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
+import { Select } from '../../components/Select/Select';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -23,9 +25,11 @@ import {
   purchasePaymentStatusLabel,
   purchaseStatusLabel,
 } from '../../constants/purchaseStatuses';
+import { PAYMENT_MODE_OPTIONS, paymentModeLabel } from '../../constants/paymentModes';
 import { firestoreService } from '../../services/firestore';
 import type { PurchaseOrder, PurchaseOrderLine } from '../../types';
 import {
+  PaymentMode,
   PurchaseOrderStatus,
   PurchasePaymentStatus,
 } from '../../types';
@@ -59,9 +63,16 @@ export function PurchaseDetailPage() {
 
   const [receivedQty, setReceivedQty] = useState<Record<string, string>>({});
   const [savingReceipt, setSavingReceipt] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({
+  const [paymentForm, setPaymentForm] = useState<{
+    paymentDate: string;
+    amount: string;
+    paymentMode: PaymentMode;
+    reference: string;
+    notes: string;
+  }>({
     paymentDate: utcToLocalDateInput(new Date()),
     amount: '',
+    paymentMode: PaymentMode.CASH,
     reference: '',
     notes: '',
   });
@@ -144,6 +155,7 @@ export function PurchaseDetailPage() {
         id: createListingId(),
         paymentDate: localDateInputToUtc(paymentForm.paymentDate),
         amount,
+        paymentMode: paymentForm.paymentMode,
         reference: paymentForm.reference.trim() || undefined,
         notes: paymentForm.notes.trim() || undefined,
       };
@@ -174,6 +186,7 @@ export function PurchaseDetailPage() {
       setPaymentForm({
         paymentDate: utcToLocalDateInput(new Date()),
         amount: '',
+        paymentMode: PaymentMode.CASH,
         reference: '',
         notes: '',
       });
@@ -251,6 +264,29 @@ export function PurchaseDetailPage() {
               },
             ]}
           />
+
+          <DetailSection
+            icon={ClipboardList}
+            iconTone="indigo"
+            title="Order details"
+          >
+            <DetailGrid columns={3}>
+              <DetailField label="PO number" value={purchase.poNumber} valueClassName="font-mono text-xs" />
+              <DetailField label="Reference" value={purchase.reference ?? '—'} valueClassName="font-mono text-xs" />
+              <DetailField
+                label="Vendor"
+                value={
+                  purchase.vendorId ? (
+                    <Link to={`/vendors/${purchase.vendorId}`} className={detailLinkClass}>
+                      {purchase.vendorName}
+                    </Link>
+                  ) : (
+                    purchase.vendorName ?? '—'
+                  )
+                }
+              />
+            </DetailGrid>
+          </DetailSection>
 
           <DetailSection
             icon={Package}
@@ -362,6 +398,7 @@ export function PurchaseDetailPage() {
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 uppercase">
                         <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Mode</th>
                         <th className="px-3 py-2">Reference</th>
                         <th className="px-3 py-2 text-right">Amount</th>
                         <th className="px-3 py-2">Expense</th>
@@ -371,6 +408,7 @@ export function PurchaseDetailPage() {
                       {purchase.payments.map((payment) => (
                         <tr key={payment.id}>
                           <td className="px-3 py-2">{formatDateLocal(payment.paymentDate)}</td>
+                          <td className="px-3 py-2">{paymentModeLabel(payment.paymentMode)}</td>
                           <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
                             {payment.reference ?? '—'}
                           </td>
@@ -407,16 +445,19 @@ export function PurchaseDetailPage() {
                         setPaymentForm((p) => ({ ...p, paymentDate: e.target.value }))
                       }
                     />
-                    <Input
-                      label="Amount"
-                      type="number"
-                      min={0}
-                      step="0.01"
+                    <PaymentAmountField
                       value={paymentForm.amount}
-                      onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
-                      placeholder={
-                        purchase.balanceDue > 0 ? String(purchase.balanceDue) : undefined
+                      onChange={(amount) => setPaymentForm((p) => ({ ...p, amount }))}
+                      pendingAmount={purchase.balanceDue}
+                      currency={currency}
+                    />
+                    <Select
+                      label="Payment mode"
+                      value={paymentForm.paymentMode}
+                      onChange={(e) =>
+                        setPaymentForm((p) => ({ ...p, paymentMode: e.target.value as PaymentMode }))
                       }
+                      options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                     />
                     <Input
                       label="Reference"

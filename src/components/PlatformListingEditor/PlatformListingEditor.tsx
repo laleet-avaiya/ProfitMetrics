@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Layers, Plus, Trash2 } from 'lucide-react';
 import { Input } from '../Input/Input';
 import { Textarea } from '../Textarea/Textarea';
@@ -6,7 +7,8 @@ import { Select } from '../Select/Select';
 import { AmountIncludesTaxField } from '../AmountIncludesTaxField/AmountIncludesTaxField';
 import { Button } from '../Button/Button';
 import { useNotification } from '../../hooks/useNotification';
-import { PLATFORM_PRESETS } from '../../constants/platforms';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
+import { formatMarketplaceSummary } from '../../constants/platforms';
 import type { ProductPlatformListing } from '../../types';
 import { PlatformFeeKind, TaxType } from '../../types';
 import {
@@ -36,25 +38,23 @@ import {
 import type { Company } from '../../types';
 
 interface ListingFormState extends ProductPlatformListing {
-  platformPreset: (typeof PLATFORM_PRESETS)[number] | '';
-  customPlatformName: string;
+  platformPreset: string;
 }
 
 function listingToFormState(listing: ProductPlatformListing): ListingFormState {
   const normalized = normalizeListingTax(listing);
-  const { preset, customName } = platformToFormValues(normalized.platform);
+  const { preset } = platformToFormValues(normalized.platform);
   return {
     ...normalized,
     platformPreset: preset,
-    customPlatformName: customName,
   };
 }
 
 function formStateToListing(state: ListingFormState): ProductPlatformListing {
-  const { platformPreset, customPlatformName, ...listing } = state;
+  const { platformPreset, ...listing } = state;
   return normalizeListingTax({
     ...listing,
-    platform: formValuesToPlatform(platformPreset, customPlatformName),
+    platform: formValuesToPlatform(platformPreset),
   });
 }
 
@@ -67,11 +67,6 @@ interface PlatformListingEditorProps {
   /** Hide section title when nested inside FormSection */
   embedded?: boolean;
 }
-
-const platformOptions = [
-  { value: '', label: 'Select platform…' },
-  ...PLATFORM_PRESETS.map((p) => ({ value: p, label: p })),
-];
 
 const taxTypeOptions = [
   { value: TaxType.NONE, label: 'None' },
@@ -94,8 +89,16 @@ export function PlatformListingEditor({
   embedded = false,
 }: PlatformListingEditorProps) {
   const notification = useNotification();
+  const { marketplaces, getProductPlatformOptions } = useCompanyMarketplaces();
+  const platformOptions = useMemo(
+    () => getProductPlatformOptions(listings.map((listing) => listing.platform)),
+    [getProductPlatformOptions, listings]
+  );
   const [expandedId, setExpandedId] = useState<string | null>(listings[0]?.id ?? null);
-  const formStates = useMemo(() => listings.map(listingToFormState), [listings]);
+  const formStates = useMemo(
+    () => listings.map((listing) => listingToFormState(listing)),
+    [listings]
+  );
 
   const updateListings = (next: ListingFormState[]) => {
     onChange(next.map(formStateToListing));
@@ -124,9 +127,7 @@ export function PlatformListingEditor({
 
   const requestRemoveListing = (id: string) => {
     const listing = formStates.find((l) => l.id === id);
-    const platformName = listing
-      ? formValuesToPlatform(listing.platformPreset, listing.customPlatformName) || 'this platform'
-      : 'this platform';
+    const platformName = listing?.platformPreset.trim() || 'this platform';
 
     notification.confirm({
       title: 'Remove platform listing?',
@@ -172,8 +173,13 @@ export function PlatformListingEditor({
           <div className="space-y-1 max-w-sm">
             <p className="text-sm font-medium text-gray-900 dark:text-white">No platforms yet</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-              Add Amazon, Shopify, Noon, or any marketplace when you&apos;re ready — each with its
-              own purchase, selling, and tax settings.
+              Add {formatMarketplaceSummary(marketplaces)} when you&apos;re ready — each with its own
+              purchase, selling, and tax settings.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              <Link to="/configuration" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                Manage marketplaces
+              </Link>
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={addListing}>
@@ -185,11 +191,7 @@ export function PlatformListingEditor({
       <div className="space-y-2">
         {formStates.map((listing) => {
           const isExpanded = expandedId === listing.id;
-          const displayPlatform = !listing.platformPreset
-            ? 'New platform'
-            : listing.platformPreset === 'Custom'
-              ? listing.customPlatformName.trim() || 'Custom'
-              : listing.platformPreset;
+          const displayPlatform = listing.platformPreset.trim() || 'New platform';
           const resolved = resolveListingTax(listing);
           const tracksTax = resolved.taxType !== TaxType.NONE;
           const pctLabel = taxPercentLabel(resolved.taxType);
@@ -238,17 +240,6 @@ export function PlatformListingEditor({
                             })
                           }
                         />
-                        {listing.platformPreset === 'Custom' && (
-                          <Input
-                            label="Custom platform name"
-                            value={listing.customPlatformName}
-                            onChange={(e) =>
-                              updateListing(listing.id, { customPlatformName: e.target.value })
-                            }
-                            placeholder="e.g. My own website"
-                            required
-                          />
-                        )}
                         <Input
                           label="Platform SKU"
                           value={listing.platformSku ?? ''}

@@ -4,6 +4,7 @@ import {
   Archive,
   ArchiveRestore,
   Building2,
+  Eye,
   Pencil,
   Plus,
   Search,
@@ -105,7 +106,8 @@ export function Vendors() {
 
   const openCreate = () => navigate('/vendors/new');
 
-  const openDetail = (vendor: Vendor) => navigate(`/vendors/${vendor.id}`);
+  const openView = (vendor: Vendor) => navigate(`/vendors/${vendor.id}`);
+  const openEdit = (vendor: Vendor) => navigate(`/vendors/${vendor.id}/edit`);
 
   const handleArchiveToggle = (vendor: Vendor) => {
     if (!company) return;
@@ -292,7 +294,15 @@ export function Vendors() {
                             )}
                             <button
                               type="button"
-                              onClick={() => openDetail(vendor)}
+                              onClick={() => openView(vendor)}
+                              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              aria-label={`View ${vendor.name}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(vendor)}
                               className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                               aria-label={`Edit ${vendor.name}`}
                             >
@@ -370,7 +380,11 @@ export function Vendors() {
                           </Button>
                         </Link>
                       )}
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(vendor)}>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openView(vendor)}>
+                        <Eye className="w-4 h-4" />
+                        View
+                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(vendor)}>
                         <Pencil className="w-4 h-4" />
                         Edit
                       </Button>

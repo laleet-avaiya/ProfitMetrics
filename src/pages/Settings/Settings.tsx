@@ -4,6 +4,7 @@ import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Select } from '../../components/Select/Select';
+import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
 import { Button } from '../../components/Button/Button';
 import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
@@ -371,16 +372,10 @@ export function Settings() {
                       { value: TaxType.SALES_TAX, label: 'Sales tax' },
                     ]}
                   />
-                  <Select
+                  <TaxModeField
                     label="Tax on price"
-                    name="defaultTaxMode"
                     value={formData.defaultTaxMode}
-                    onChange={(e) => handleChange('defaultTaxMode', e.target.value)}
-                    options={[
-                      { value: TaxMode.INCLUSIVE, label: 'Inclusive' },
-                      { value: TaxMode.EXCLUSIVE, label: 'Exclusive' },
-                      { value: TaxMode.PASS_THROUGH, label: 'Pass-through' },
-                    ]}
+                    onChange={(mode) => handleChange('defaultTaxMode', mode)}
                   />
                   <Input
                     label="Default tax %"

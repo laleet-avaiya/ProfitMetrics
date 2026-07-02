@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Plus, Receipt, Search, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Receipt, Search, Trash2 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -108,7 +108,8 @@ export function Expenses() {
     navigate(vendor ? `/expenses/new?vendor=${vendor}` : '/expenses/new');
   };
 
-  const openDetail = (expense: Expense) => navigate(`/expenses/${expense.id}`);
+  const openView = (expense: Expense) => navigate(`/expenses/${expense.id}`);
+  const openEdit = (expense: Expense) => navigate(`/expenses/${expense.id}/edit`);
 
   const handleDelete = (expense: Expense) => {
     if (!company) return;
@@ -297,7 +298,15 @@ export function Expenses() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => openDetail(expense)}
+                            onClick={() => openView(expense)}
+                            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label={`View ${expense.description}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(expense)}
                             className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                             aria-label={`Edit ${expense.description}`}
                           >
@@ -359,7 +368,11 @@ export function Expenses() {
                     <p className="text-xs text-gray-500 dark:text-gray-400">Ref: {expense.reference}</p>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(expense)}>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openView(expense)}>
+                      <Eye className="w-4 h-4" />
+                      View
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(expense)}>
                       <Pencil className="w-4 h-4" />
                       Edit
                     </Button>

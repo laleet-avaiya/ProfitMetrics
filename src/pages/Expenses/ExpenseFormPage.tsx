@@ -12,6 +12,7 @@ import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
+import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
 import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
@@ -38,11 +39,6 @@ import { getActiveVendors } from '../../utils/vendorHelpers';
 const categoryOptions = [
   { value: '', label: 'Select category…' },
   ...EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c })),
-];
-
-const taxModeOptions = [
-  { value: TaxMode.INCLUSIVE, label: 'Inclusive in amount' },
-  { value: TaxMode.EXCLUSIVE, label: 'Exclusive (on top)' },
 ];
 
 function parseNumber(value: string): number {
@@ -409,14 +405,13 @@ export function ExpenseFormPage() {
                       }))
                     }
                   />
-                  <Select
+                  <TaxModeField
                     label="Tax on amount"
                     value={form.taxMode}
-                    options={taxModeOptions}
-                    onChange={(e) =>
+                    onChange={(taxMode) =>
                       setForm((f) => ({
                         ...f,
-                        taxMode: e.target.value as ExpenseFormState['taxMode'],
+                        taxMode,
                         taxAmountManual: false,
                       }))
                     }

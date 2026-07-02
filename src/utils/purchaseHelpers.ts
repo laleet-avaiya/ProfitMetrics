@@ -28,6 +28,7 @@ export interface PurchaseLineFormState {
 export interface PurchaseFormState {
   purchaseDate: string;
   vendorId: string;
+  reference: string;
   status: PurchaseOrderStatus;
   notes: string;
   lines: PurchaseLineFormState[];
@@ -51,6 +52,7 @@ export function emptyPurchaseForm(): PurchaseFormState {
   return {
     purchaseDate: utcToLocalDateInput(new Date()),
     vendorId: '',
+    reference: '',
     status: PurchaseOrderStatus.ORDERED,
     notes: '',
     lines: [emptyPurchaseLineForm()],
@@ -151,6 +153,7 @@ export function purchaseToForm(purchase: PurchaseOrder): PurchaseFormState {
   return {
     purchaseDate: utcToLocalDateInput(purchase.purchaseDate),
     vendorId: purchase.vendorId ?? '',
+    reference: purchase.reference ?? '',
     status: purchase.status,
     notes: purchase.notes ?? '',
     lines: purchase.lines.map((l) => ({
@@ -208,6 +211,7 @@ export function buildPurchaseFromForm(
     purchaseDate: localDateInputToUtc(form.purchaseDate),
     vendorId: selectedVendor?.id,
     vendorName: selectedVendor?.name,
+    reference: form.reference.trim() || undefined,
     status,
     paymentStatus: derivePaymentStatus(total, totalPaid),
     lines,

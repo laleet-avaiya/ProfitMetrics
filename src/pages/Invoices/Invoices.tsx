@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -122,8 +122,8 @@ export function Invoices() {
 
   return (
     <SectionPage
-      title="Offline sales"
-      description="Offline customer invoices with products, taxes, and payment tracking."
+      title="Invoices"
+      description="Customer invoices with products, taxes, and payment tracking."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Invoices" value={String(summary.count)} />
@@ -161,7 +161,7 @@ export function Invoices() {
         {loading ? (
           <div className="py-16 text-center"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>
         ) : filtered.length === 0 ? (
-          <EmptyState icon={FileText} title="No invoices yet" description="Create invoices for offline sales to your customers." action={<Button variant="primary" onClick={() => navigate('/invoices/new')}>Create invoice</Button>} />
+          <EmptyState icon={FileText} title="No invoices yet" description="Create invoices for your customers." action={<Button variant="primary" onClick={() => navigate('/invoices/new')}>Create invoice</Button>} />
         ) : (
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
@@ -193,8 +193,15 @@ export function Invoices() {
                     </td>
                     <td className={tableCellClass}>
                       <div className="flex justify-end gap-1">
-                        <button type="button" onClick={() => navigate(`/invoices/${inv.id}/edit`)} className="p-2 rounded-lg hover:bg-gray-100"><Pencil className="w-4 h-4" /></button>
-                        <button type="button" onClick={() => handleDelete(inv)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50"><Trash2 className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => navigate(`/invoices/${inv.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View invoice">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button type="button" onClick={() => navigate(`/invoices/${inv.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit invoice">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button type="button" onClick={() => handleDelete(inv)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete invoice">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

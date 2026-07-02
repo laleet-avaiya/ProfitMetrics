@@ -43,8 +43,10 @@ export function buildVendorLedger(
       id: `po-${po.id}`,
       date: po.purchaseDate,
       type: 'purchase',
-      reference: po.poNumber,
-      description: `Purchase order — ${po.lines.length} line${po.lines.length === 1 ? '' : 's'}`,
+      reference: po.reference ?? po.poNumber,
+      description: po.reference
+        ? `PO ${po.poNumber} — ref ${po.reference}`
+        : `Purchase order — ${po.lines.length} line${po.lines.length === 1 ? '' : 's'}`,
       debit: po.total,
       credit: 0,
     });

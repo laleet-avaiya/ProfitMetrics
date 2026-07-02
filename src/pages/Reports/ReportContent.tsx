@@ -293,7 +293,7 @@ export function ReportContent({
       return (
         <ReportSection
           title="Sales by channel"
-          description="Online marketplaces vs offline sales."
+          description="Online marketplaces vs invoices."
         >
           {byPlatform.length === 0 ? (
             <EmptyReport message="No sales or invoices in this period." />

@@ -22,6 +22,7 @@ import {
   CreditCard as CreditCardIcon,
   PanelLeftClose,
   PanelLeftOpen,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -41,11 +42,12 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-interface NavGroup {
+interface NavSection {
+  title?: string;
   items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
+const navSections: NavSection[] = [
   {
     items: [
       { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -53,27 +55,35 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: 'Sales',
     items: [
-      { path: '/sales', label: 'Online sales', icon: ShoppingCart },
-      { path: '/invoices', label: 'Offline sales', icon: FileText },
+      { path: '/customers', label: 'Customers', icon: Users },
+      { path: '/invoices', label: 'Invoices', icon: FileText },
       { path: '/payments', label: 'Payments', icon: Wallet },
-      { path: '/purchases', label: 'Purchases', icon: ClipboardList },
-      { path: '/expenses', label: 'Expenses', icon: Receipt },
+      { path: '/sales', label: 'Online sales', icon: ShoppingCart },
     ],
   },
   {
+    title: 'Purchase',
     items: [
+      { path: '/purchases', label: 'Purchases', icon: ClipboardList },
+      { path: '/expenses', label: 'Expenses', icon: Receipt },
       { path: '/vendors', label: 'Vendors', icon: Building2 },
-      { path: '/customers', label: 'Customers', icon: Users },
-      { path: '/products', label: 'Products', icon: Package },
     ],
   },
-];
-
-const accountNavItems: NavItem[] = [
-  { path: '/subscription', label: 'Subscription', icon: CreditCard },
-  { path: '/settings', label: 'Settings', icon: Settings },
-  { path: '/about', label: 'About', icon: Info },
+  {
+    title: 'Inventory',
+    items: [{ path: '/products', label: 'Products', icon: Package }],
+  },
+  {
+    title: 'Account',
+    items: [
+      { path: '/configuration', label: 'Configuration', icon: SlidersHorizontal },
+      { path: '/subscription', label: 'Subscription', icon: CreditCard },
+      { path: '/settings', label: 'Settings', icon: Settings },
+      { path: '/about', label: 'About', icon: Info },
+    ],
+  },
 ];
 
 const SIDEBAR_SUBSCRIPTION_DAYS_THRESHOLD = 10;
@@ -229,12 +239,21 @@ export function Layout({ children }: LayoutProps) {
 
         <nav className={`flex-1 min-h-0 overflow-y-auto py-3 ${sidebarCollapsed ? 'lg:px-2 px-2' : 'px-2'}`}>
           <div className="space-y-1">
-            {navGroups.map((group, groupIndex) => (
+            {navSections.map((section, sectionIndex) => (
               <div
-                key={groupIndex}
-                className={groupIndex > 0 ? 'pt-3 mt-3 border-t border-gray-200 dark:border-gray-700' : ''}
+                key={section.title ?? `section-${sectionIndex}`}
+                className={sectionIndex > 0 ? 'pt-3 mt-3 border-t border-gray-200 dark:border-gray-700' : ''}
               >
-                {group.items.map((item) => (
+                {section.title ? (
+                  <p
+                    className={`px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ${
+                      sidebarCollapsed ? 'lg:hidden' : ''
+                    }`}
+                  >
+                    {section.title}
+                  </p>
+                ) : null}
+                {section.items.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
@@ -248,21 +267,6 @@ export function Layout({ children }: LayoutProps) {
                 ))}
               </div>
             ))}
-
-            <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
-              {accountNavItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                  className={navLinkClass(isNavActive(location.pathname, item.path))}
-                  title={sidebarCollapsed ? item.label : undefined}
-                >
-                  <item.icon className="w-4 h-4 shrink-0" />
-                  <span className={sidebarCollapsed ? 'lg:hidden' : ''}>{item.label}</span>
-                </Link>
-              ))}
-            </div>
           </div>
         </nav>
 

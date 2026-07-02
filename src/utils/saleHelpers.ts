@@ -1,6 +1,7 @@
 import type { Product, ProductPlatformListing, Sale, SaleLineEconomics, SaleStatus } from '../types';
-import { PlatformFeeKind, SaleStatus as SaleStatusEnum, TaxMode, TaxType } from '../types';
+import { PaymentMode, PlatformFeeKind, PurchasePaymentStatus, SaleStatus as SaleStatusEnum, TaxMode, TaxType } from '../types';
 import { normalizeSaleStatus } from '../constants/saleStatuses';
+import { normalizeSalePaymentStatus } from '../constants/purchaseStatuses';
 import { resolveListingTax } from './listingTax';
 import {
   computeLineEconomics,
@@ -46,6 +47,8 @@ export interface SaleFormState {
   platformListingId: string;
   quantity: number;
   status: SaleStatus;
+  paymentMode: PaymentMode;
+  paymentStatus: PurchasePaymentStatus;
   returnCharges: number;
   returnTaxPercentage: number;
   returnTaxMode: TaxMode;
@@ -125,6 +128,8 @@ export function emptySaleForm(): SaleFormState {
     platformListingId: '',
     quantity: 1,
     status: SaleStatusEnum.DELIVERED,
+    paymentMode: PaymentMode.BANK_ACCOUNT,
+    paymentStatus: PurchasePaymentStatus.UNPAID,
     returnCharges: 0,
     returnTaxPercentage: 0,
     returnTaxMode: TaxMode.INCLUSIVE,
@@ -221,6 +226,8 @@ export function saleToForm(sale: Sale): SaleFormState {
     platformListingId: sale.platformListingId ?? '',
     quantity: sale.quantity,
     status,
+    paymentMode: sale.paymentMode ?? PaymentMode.BANK_ACCOUNT,
+    paymentStatus: normalizeSalePaymentStatus(sale.paymentStatus),
     returnCharges: sale.returnCharges ?? 0,
     returnTaxPercentage: sale.returnTaxPercentage ?? economics.deliveryTaxPercentage,
     returnTaxMode: sale.returnTaxMode ?? economics.deliveryTaxMode,
@@ -413,6 +420,8 @@ export function buildSaleFromForm(
     platformListingId: form.platformListingId || undefined,
     quantity: qty,
     status: normalizeSaleStatus(form.status),
+    paymentMode: form.paymentMode,
+    paymentStatus: normalizeSalePaymentStatus(form.paymentStatus),
     ...outcomeFields,
     economics: {
       purchasePrice: e.purchasePrice,

@@ -6,6 +6,7 @@ import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
+import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
 import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
@@ -40,10 +41,6 @@ const taxTypeOptions = [
   { value: TaxType.VAT, label: 'VAT' },
   { value: TaxType.GST, label: 'GST' },
   { value: TaxType.SALES_TAX, label: 'Sales tax' },
-];
-const taxModeOptions = [
-  { value: TaxMode.INCLUSIVE, label: 'Inclusive' },
-  { value: TaxMode.EXCLUSIVE, label: 'Exclusive' },
 ];
 
 export function InvoiceFormPage() {
@@ -234,7 +231,7 @@ export function InvoiceFormPage() {
   return (
     <Layout>
       <PageShell>
-        <PageHeader title={isEditing ? `Edit invoice ${invoice?.invoiceNumber ?? ''}` : 'New offline sale invoice'} description="Invoice a customer for an offline sale with line items and tax." />
+        <PageHeader title={isEditing ? `Edit invoice ${invoice?.invoiceNumber ?? ''}` : 'New invoice'} description="Invoice a customer with line items and tax." />
         {activeProducts.length === 0 ? (
           <p className={emptyStateMessageClass}>Add products first. <Link to="/products/new" className="text-indigo-600 hover:underline">Create product</Link></p>
         ) : (
@@ -295,7 +292,10 @@ export function InvoiceFormPage() {
                     {line.taxType !== TaxType.NONE && (
                       <div className="grid grid-cols-2 gap-3">
                         <Input label="Tax %" type="number" value={line.taxPercentage} onChange={(e) => updateLine(line.id, { taxPercentage: e.target.value })} />
-                        <Select label="Tax mode" value={line.taxMode} onChange={(e) => updateLine(line.id, { taxMode: e.target.value as TaxMode })} options={taxModeOptions} />
+                        <TaxModeField
+                          value={line.taxMode}
+                          onChange={(taxMode) => updateLine(line.id, { taxMode })}
+                        />
                       </div>
                     )}
                   </div>

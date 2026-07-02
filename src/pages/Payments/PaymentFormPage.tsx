@@ -4,6 +4,7 @@ import { Wallet } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
+import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
 import { FormSection } from '../../components/FormSection/FormSection';
@@ -12,10 +13,11 @@ import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { PAYMENT_KIND_OPTIONS } from '../../constants/paymentKinds';
-import { PLATFORM_PRESETS } from '../../constants/platforms';
+import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { firestoreService } from '../../services/firestore';
 import type { Customer, Invoice, Payment } from '../../types';
-import { PaymentKind } from '../../types';
+import { PaymentKind, PaymentMode } from '../../types';
 import { getActiveCustomers } from '../../utils/customerHelpers';
 import {
   buildPaymentFromForm,
@@ -31,6 +33,8 @@ export function PaymentFormPage() {
   const navigate = useNavigate();
   const { company } = useAuth();
   const notification = useNotification();
+  const { getPayoutPlatformOptions } = useCompanyMarketplaces();
+  const currency = company?.currency ?? 'AED';
   const isEditing = Boolean(paymentId);
 
   const [payment, setPayment] = useState<Payment | null>(null);
@@ -39,6 +43,11 @@ export function PaymentFormPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<PaymentFormState>(() => emptyPaymentForm());
   const [saving, setSaving] = useState(false);
+
+  const marketplacePlatformOptions = useMemo(
+    () => getPayoutPlatformOptions(form.platform ? [form.platform] : undefined),
+    [form.platform, getPayoutPlatformOptions]
+  );
 
   const activeCustomers = useMemo(() => getActiveCustomers(customers), [customers]);
   const openInvoices = useMemo(
@@ -143,9 +152,25 @@ export function PaymentFormPage() {
           <FormSection icon={Wallet} title="Payment details">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input label="Payment date" type="date" value={form.paymentDate} onChange={(e) => setForm((p) => ({ ...p, paymentDate: e.target.value }))} />
-              <Input label="Amount" type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} required />
+              {form.kind === PaymentKind.INVOICE ? (
+                <PaymentAmountField
+                  value={form.amount}
+                  onChange={(amount) => setForm((p) => ({ ...p, amount }))}
+                  pendingAmount={selectedInvoice?.balanceDue ?? 0}
+                  currency={currency}
+                  required
+                />
+              ) : (
+                <Input label="Amount" type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} required />
+              )}
               <Select label="Payment type" value={form.kind} onChange={(e) => setForm((p) => ({ ...p, kind: e.target.value as PaymentKind }))}
                 options={PAYMENT_KIND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
+              <Select
+                label="Payment mode"
+                value={form.paymentMode}
+                onChange={(e) => setForm((p) => ({ ...p, paymentMode: e.target.value as PaymentMode }))}
+                options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              />
               <Input label="Reference" value={form.reference} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} placeholder="Transfer ref, cheque no." />
             </div>
           </FormSection>
@@ -160,7 +185,7 @@ export function PaymentFormPage() {
           {form.kind === PaymentKind.MARKETPLACE_PAYOUT && (
             <FormSection icon={Wallet} title="Marketplace">
               <Select label="Platform" value={form.platform} onChange={(e) => setForm((p) => ({ ...p, platform: e.target.value }))}
-                options={[{ value: '', label: 'Select platform…' }, ...PLATFORM_PRESETS.map((p) => ({ value: p, label: p }))]} />
+                options={marketplacePlatformOptions} />
             </FormSection>
           )}
 

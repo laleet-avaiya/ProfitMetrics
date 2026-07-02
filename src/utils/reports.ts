@@ -13,7 +13,7 @@ function roundMoney(value: number): number {
 
 export type ReportPreset = '7d' | '30d' | 'month' | 'year' | 'all' | 'custom';
 
-export const OFFLINE_SALES_CHANNEL = 'Offline sales';
+export const OFFLINE_SALES_CHANNEL = 'Invoices';
 
 export function getReportDateRange(
   preset: ReportPreset,

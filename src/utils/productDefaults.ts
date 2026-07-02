@@ -1,4 +1,7 @@
-import { PLATFORM_PRESETS, type PlatformPreset } from '../constants/platforms';
+import {
+  DEFAULT_MARKETPLACES,
+  isConfiguredMarketplace,
+} from '../constants/platforms';
 import type { Company, ProductPlatformListing } from '../types';
 import { PlatformFeeKind, TaxMode, TaxType } from '../types';
 import { normalizeListingTax } from './listingTax';
@@ -7,31 +10,21 @@ export function createListingId(): string {
   return crypto.randomUUID();
 }
 
-export function isPresetPlatform(platform: string): platform is PlatformPreset {
-  return (PLATFORM_PRESETS as readonly string[]).includes(platform);
+/** @deprecated Use isConfiguredMarketplace(platform, marketplaces) */
+export function isPresetPlatform(
+  platform: string,
+  marketplaces: readonly string[] = DEFAULT_MARKETPLACES
+): boolean {
+  return isConfiguredMarketplace(platform, marketplaces);
 }
 
-/** Split stored platform into preset select value + optional custom label. */
-export function platformToFormValues(platform: string): {
-  preset: PlatformPreset | '';
-  customName: string;
-} {
-  if (!platform.trim()) {
-    return { preset: '', customName: '' };
-  }
-  if (isPresetPlatform(platform)) {
-    return { preset: platform, customName: '' };
-  }
-  return { preset: 'Custom', customName: platform };
+/** Map stored platform to select value (legacy names kept as-is). */
+export function platformToFormValues(platform: string): { preset: string } {
+  return { preset: platform.trim() };
 }
 
-export function formValuesToPlatform(preset: PlatformPreset | '', customName: string): string {
-  if (!preset) return '';
-  if (preset === 'Custom') {
-    const trimmed = customName.trim();
-    return trimmed || 'Custom';
-  }
-  return preset;
+export function formValuesToPlatform(preset: string): string {
+  return preset.trim();
 }
 
 export function createEmptyListing(company: Company | null | undefined): ProductPlatformListing {

@@ -9,6 +9,7 @@ import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { paymentKindLabel } from '../../constants/paymentKinds';
+import { paymentModeLabel } from '../../constants/paymentModes';
 import { firestoreService } from '../../services/firestore';
 import { PaymentKind } from '../../types';
 import { formatDateLocal } from '../../utils/date';
@@ -71,6 +72,7 @@ export function PaymentDetailPage() {
           <DetailSection icon={Wallet} iconTone="emerald" title="Payment details">
             <DetailGrid columns={2}>
               <DetailField label="Type" value={paymentKindLabel(payment.kind)} />
+              <DetailField label="Payment mode" value={paymentModeLabel(payment.paymentMode)} />
               <DetailField label="Date" value={formatDateLocal(payment.paymentDate)} />
               <DetailField label="Reference" value={payment.reference} />
               {payment.kind === PaymentKind.MARKETPLACE_PAYOUT ? (

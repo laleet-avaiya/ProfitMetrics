@@ -29,6 +29,7 @@ import {
   getCountryProfile,
   isBusinessCountry,
 } from '../constants/countries';
+import { DEFAULT_MARKETPLACES, normalizeMarketplaceList } from '../constants/platforms';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -60,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       defaultTaxType: converted.defaultTaxType ?? profile.defaultTaxType,
       defaultTaxMode: converted.defaultTaxMode ?? profile.defaultTaxMode,
       defaultTaxPercentage: converted.defaultTaxPercentage ?? profile.defaultTaxPercentage,
+      marketplaces: Array.isArray(converted.marketplaces)
+        ? normalizeMarketplaceList(converted.marketplaces as string[])
+        : undefined,
       subscriptionStart: fromFirestoreTimestamp(converted.subscriptionStart),
       subscriptionEnd: fromFirestoreTimestamp(converted.subscriptionEnd),
       termsAcceptedAt: fromFirestoreTimestamp(converted.termsAcceptedAt),
@@ -112,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         name: details.companyName,
         ...locale,
+        marketplaces: [...DEFAULT_MARKETPLACES],
         subscriptionStart: now,
         subscriptionEnd,
         createdAt: now,
@@ -123,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: details.companyName,
         companyId: userId,
         ...locale,
+        marketplaces: [...DEFAULT_MARKETPLACES],
         subscriptionStart: now,
         subscriptionEnd,
         createdAt: now,

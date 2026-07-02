@@ -7,6 +7,7 @@ import {
   Receipt,
   Sparkles,
   Truck,
+  Wallet,
 } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
@@ -22,7 +23,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Product, Sale } from '../../types';
-import { PlatformFeeKind, TaxType, SaleStatus } from '../../types';
+import { PlatformFeeKind, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
+import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
+import { PURCHASE_PAYMENT_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
 import {
   platformFeeKindOptions,
   taxPercentLabel,
@@ -553,9 +556,39 @@ export function SaleFormPage() {
             </FormSection>
 
             <FormSection
+              icon={Wallet}
+              iconTone="emerald"
+              step={isEditing ? undefined : 2}
+              title="Payment tracking"
+              description="Optional — track how and when marketplace payout was received."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Select
+                  label="Payment mode"
+                  value={form.paymentMode}
+                  options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))
+                  }
+                />
+                <Select
+                  label="Payment status"
+                  value={form.paymentStatus}
+                  options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      paymentStatus: e.target.value as PurchasePaymentStatus,
+                    }))
+                  }
+                />
+              </div>
+            </FormSection>
+
+            <FormSection
               icon={Layers}
               iconTone="violet"
-              step={isEditing ? undefined : 2}
+              step={isEditing ? undefined : 3}
               title="Economics & tax"
               description="Auto-filled from the platform listing — override if this order differed."
             >
@@ -839,7 +872,7 @@ export function SaleFormPage() {
             <FormSection
               icon={Package}
               iconTone="amber"
-              step={isEditing ? undefined : 3}
+              step={isEditing ? undefined : 4}
               title="Fulfillment"
               description="Order status, returns, and cancellations with fee + tax."
             >
@@ -937,7 +970,7 @@ export function SaleFormPage() {
             <FormSection
               icon={Truck}
               iconTone="emerald"
-              step={isEditing ? undefined : 4}
+              step={isEditing ? undefined : 5}
               title="Shipment & notes"
               description="Tracking and any extra context for this order."
             >

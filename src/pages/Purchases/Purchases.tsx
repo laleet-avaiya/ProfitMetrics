@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ClipboardList, Eye, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
 import { Input } from '../../components/Input/Input';
@@ -111,6 +111,7 @@ export function Purchases() {
       if (!q) return true;
       return (
         p.poNumber.toLowerCase().includes(q) ||
+        (p.reference?.toLowerCase().includes(q) ?? false) ||
         (p.vendorName?.toLowerCase().includes(q) ?? false) ||
         p.lines.some((l) => l.productName.toLowerCase().includes(q))
       );
@@ -256,6 +257,7 @@ export function Purchases() {
                 <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   <th className={tableHeadCellClass}>Date</th>
                   <th className={tableHeadCellClass}>PO #</th>
+                  <th className={tableHeadCellClass}>Reference</th>
                   <th className={tableHeadCellClass}>Vendor</th>
                   <th className={tableHeadCellClass}>Status</th>
                   <th className={tableHeadCellClass}>Payment</th>
@@ -278,6 +280,9 @@ export function Purchases() {
                         {purchase.poNumber}
                       </Link>
                     </td>
+                    <td className={`${tableTruncateCellClass} font-mono text-xs text-gray-600 dark:text-gray-400`}>
+                      {purchase.reference ?? '—'}
+                    </td>
                     <td className={`${tableTruncateCellClass} text-gray-600 dark:text-gray-400`}>
                       {purchase.vendorName ?? '—'}
                     </td>
@@ -299,6 +304,14 @@ export function Purchases() {
                     </td>
                     <td className={tableCellClass}>
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/purchases/${purchase.id}`)}
+                          className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          aria-label={`View ${purchase.poNumber}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => navigate(`/purchases/${purchase.id}/edit`)}

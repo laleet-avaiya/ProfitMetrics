@@ -29,7 +29,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   {
     id: ReportId.SALES_BY_PLATFORM,
     title: 'Sales by channel',
-    description: 'Compare online marketplaces vs offline sales by revenue and profit.',
+    description: 'Compare online marketplaces vs invoices by revenue and profit.',
   },
   {
     id: ReportId.EXPENSE_BREAKDOWN,

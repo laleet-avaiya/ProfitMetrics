@@ -6,6 +6,7 @@ import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
+import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
 import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
@@ -35,11 +36,6 @@ const taxTypeOptions = [
   { value: TaxType.VAT, label: 'VAT' },
   { value: TaxType.GST, label: 'GST' },
   { value: TaxType.SALES_TAX, label: 'Sales tax' },
-];
-
-const taxModeOptions = [
-  { value: TaxMode.INCLUSIVE, label: 'Inclusive' },
-  { value: TaxMode.EXCLUSIVE, label: 'Exclusive' },
 ];
 
 export function PurchaseFormPage() {
@@ -266,7 +262,7 @@ export function PurchaseFormPage() {
             <FormSection
               icon={ClipboardList}
               title="Order details"
-              description="PO reference, vendor, and business date."
+              description="PO number, vendor reference, and business date."
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
@@ -275,6 +271,12 @@ export function PurchaseFormPage() {
                   readOnly
                   disabled
                   helperText={isEditing ? 'Auto-assigned and cannot be changed' : 'Assigned automatically on save'}
+                />
+                <Input
+                  label="Reference"
+                  value={form.reference}
+                  onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
+                  placeholder="Optional — vendor quote or invoice #"
                 />
                 <Input
                   label="Purchase date"
@@ -397,13 +399,9 @@ export function PurchaseFormPage() {
                           value={line.taxPercentage}
                           onChange={(e) => updateLine(line.id, { taxPercentage: e.target.value })}
                         />
-                        <Select
-                          label="Tax mode"
+                        <TaxModeField
                           value={line.taxMode}
-                          onChange={(e) =>
-                            updateLine(line.id, { taxMode: e.target.value as TaxMode })
-                          }
-                          options={taxModeOptions}
+                          onChange={(taxMode) => updateLine(line.id, { taxMode })}
                         />
                       </div>
                     ) : null}
