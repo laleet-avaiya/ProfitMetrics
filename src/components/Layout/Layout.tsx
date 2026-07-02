@@ -47,6 +47,8 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   module?: (typeof AppModule)[keyof typeof AppModule];
+  /** Stand out in the sidebar with a soft accent background */
+  highlight?: boolean;
 }
 
 interface NavSection {
@@ -59,7 +61,7 @@ const navSections: NavSection[] = [
     items: [
       { path: '/', label: 'Dashboard', icon: LayoutDashboard, module: AppModule.DASHBOARD },
       { path: '/reports', label: 'Reports', icon: BarChart3, module: AppModule.REPORTS },
-      { path: '/ai-assistant', label: 'AI Assistant', icon: Bot, module: AppModule.AI_ASSISTANT },
+      { path: '/ai-assistant', label: 'AI Assistant', icon: Bot, module: AppModule.AI_ASSISTANT, highlight: true },
     ],
   },
   {
@@ -167,14 +169,25 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
 
   const toggleSidebarCollapsed = () => setSidebarCollapsed((prev) => !prev);
 
-  const navLinkClass = (active: boolean) =>
-    `flex items-center ${
+  const navLinkClass = (active: boolean, highlighted = false) => {
+    const layout = `flex items-center ${
       sidebarCollapsed ? 'lg:justify-center lg:px-2 lg:space-x-0' : 'space-x-3 px-3'
-    } py-2 rounded-md text-sm font-medium transition-colors touch-manipulation active:scale-[0.98] ${
+    } py-2 rounded-md text-sm font-medium transition-colors touch-manipulation active:scale-[0.98]`;
+
+    if (highlighted) {
+      return `${layout} ${
+        active
+          ? 'bg-violet-100 text-violet-800 ring-1 ring-violet-200/80 dark:bg-violet-900/45 dark:text-violet-200 dark:ring-violet-700/60'
+          : 'bg-violet-50 text-violet-700 hover:bg-violet-100/90 dark:bg-violet-950/35 dark:text-violet-300 dark:hover:bg-violet-900/40'
+      }`;
+    }
+
+    return `${layout} ${
       active
         ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
     }`;
+  };
 
   const footerButtonClass = (extra = '') =>
     `w-full flex items-center ${
@@ -265,7 +278,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
                     key={item.path}
                     to={item.path}
                     onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                    className={navLinkClass(isNavActive(location.pathname, item.path))}
+                    className={navLinkClass(isNavActive(location.pathname, item.path), item.highlight)}
                     title={sidebarCollapsed ? item.label : undefined}
                   >
                     <item.icon className="w-4 h-4 shrink-0" />
