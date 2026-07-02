@@ -67,7 +67,7 @@ export function useEntityDetail<T>({
     return () => {
       cancelled = true;
     };
-  }, [authLoading, company, errorMessage, fetch, id, isValid, reloadKey]);
+  }, [authLoading, company, errorMessage, fetch, id, isValid, notification, reloadKey]);
 
   return { entity, loading, notFound: !loading && !entity, reload };
 }

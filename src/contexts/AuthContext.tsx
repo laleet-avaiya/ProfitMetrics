@@ -362,6 +362,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
     return () => unsubscribe();
+    // Intentionally mount-only: onAuthStateChanged is the Firebase auth subscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -129,7 +129,8 @@ async function update<T extends { id: string; updatedAt?: Date }>(
   userId: string
 ): Promise<void> {
   const docRef = doc(db, collectionName, getDocId(companyId, id));
-  const { createdBy: _createdBy, ...safeUpdates } = updates as Partial<T> & { createdBy?: string };
+  const safeUpdates = { ...updates } as Partial<T> & { createdBy?: string };
+  delete safeUpdates.createdBy;
   const prepared = prepareDatesForFirestore({
     ...safeUpdates,
     updatedBy: userId,

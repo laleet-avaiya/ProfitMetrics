@@ -140,7 +140,7 @@ export function SaleFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [company, isEditing, saleId]);
+  }, [company, isEditing, notification, saleId]);
 
   const updateLine = (lineId: string, patch: Partial<(typeof form.lines)[0]>) => {
     setForm((f) => ({
