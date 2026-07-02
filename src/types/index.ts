@@ -1,5 +1,6 @@
 export * from '../models';
 
+import type { EntityAttachment } from '../models/attachment';
 import type { DeliveryMode, PlatformFeeKind, TaxMode, TaxType } from '../models/tax';
 
 export {
@@ -74,6 +75,7 @@ export interface Product {
   deleted?: boolean;
   deletedAt?: Date;
   deletedBy?: string;
+  attachments?: EntityAttachment[];
 }
 
 // ─── Sales (orders) ─────────────────────────────────────────────────────────
@@ -190,6 +192,7 @@ export interface Sale {
   deleted?: boolean;
   deletedAt?: Date;
   deletedBy?: string;
+  attachments?: EntityAttachment[];
 }
 
 // ─── Expenses ───────────────────────────────────────────────────────────────
@@ -261,6 +264,7 @@ export interface Expense {
   deleted?: boolean;
   deletedAt?: Date;
   deletedBy?: string;
+  attachments?: EntityAttachment[];
 }
 
 // ─── Inventory stock (separate from Product catalog) ────────────────────────
@@ -372,6 +376,7 @@ export interface PurchaseOrder {
   deleted?: boolean;
   deletedAt?: Date;
   deletedBy?: string;
+  attachments?: EntityAttachment[];
 }
 
 // ─── Customers (offline sales) ───────────────────────────────────────────────

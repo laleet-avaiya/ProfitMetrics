@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Package,
+  Paperclip,
   Plus,
   Receipt,
   Truck,
@@ -27,11 +28,17 @@ import {
 import { SaleLineEditor } from '../../components/SaleLineEditor/SaleLineEditor';
 import { SaleFormSummaryBar } from '../../components/SaleFormSummaryBar/SaleFormSummaryBar';
 import { FormTabs } from '../../components/ui/FormTabs';
+import {
+  EntityAttachmentsPanel,
+  type PendingFile,
+} from '../../components/EntityAttachments';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Product, Sale } from '../../types';
+import type { EntityAttachment } from '../../models/attachment';
+import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { DeliveryMode, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
 import { DELIVERY_MODE_OPTIONS, deliveryModeLabel } from '../../constants/deliveryModes';
 import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
@@ -63,7 +70,7 @@ import {
   tableWrapClass,
 } from '../../constants/ui';
 
-type SaleFormTab = 'order' | 'items' | 'delivery' | 'extras';
+type SaleFormTab = 'order' | 'items' | 'delivery' | 'extras' | 'documents';
 
 export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
@@ -80,6 +87,8 @@ export function SaleFormPage() {
   const [form, setForm] = useState<SaleFormState>(() => emptySaleForm());
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<SaleFormTab>('order');
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [errors, setErrors] = useState<{
     orderId?: string;
     platform?: string;
@@ -123,6 +132,8 @@ export function SaleFormPage() {
           } else {
             setSale(found);
             setForm(found ? saleToForm(found) : emptySaleForm());
+            setAttachments(found?.attachments ?? []);
+            setPendingFiles([]);
           }
         } else {
           setSale(null);
@@ -338,7 +349,12 @@ export function SaleFormPage() {
           setSaving(false);
           return;
         }
-        await firestoreService.sales.update(company.id, sale.id, payload, user!.uid);
+        await firestoreService.sales.update(
+          company.id,
+          sale.id,
+          { ...payload, attachments },
+          user!.uid
+        );
         try {
           await syncSaleStock(company.id, payload, user!.uid, sale);
         } catch (stockErr) {
@@ -363,6 +379,22 @@ export function SaleFormPage() {
           return;
         }
         const created = await firestoreService.sales.create(company.id, payload, user!.uid);
+        const uploaded = await finalizePendingAttachments(
+          company.orgId,
+          company.id,
+          'sales',
+          created.id,
+          pendingFiles.map((item) => item.file),
+          user!.uid
+        );
+        if (uploaded.length > 0) {
+          await firestoreService.sales.update(
+            company.id,
+            created.id,
+            { attachments: uploaded },
+            user!.uid
+          );
+        }
         try {
           await syncSaleStock(company.id, created, user!.uid);
         } catch (stockErr) {
@@ -403,6 +435,12 @@ export function SaleFormPage() {
     { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
     { id: 'delivery' as const, label: 'Delivery', icon: Truck },
     { id: 'extras' as const, label: 'Payment & notes', icon: Wallet },
+    {
+      id: 'documents' as const,
+      label: 'Documents',
+      icon: Paperclip,
+      badge: attachments.length + pendingFiles.length || undefined,
+    },
   ];
 
   if (loading) {
@@ -783,6 +821,21 @@ export function SaleFormPage() {
                       rows={2}
                     />
                   </div>
+                ) : null}
+
+                {activeTab === 'documents' ? (
+                  <EntityAttachmentsPanel
+                    orgId={company!.orgId}
+                    companyId={company!.id}
+                    collection="sales"
+                    entityId={sale?.id ?? null}
+                    userId={user!.uid}
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    pendingFiles={pendingFiles}
+                    onPendingFilesChange={setPendingFiles}
+                    disabled={saving}
+                  />
                 ) : null}
               </FormPanel>
             </FormPageGrid>

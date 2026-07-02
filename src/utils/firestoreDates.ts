@@ -84,6 +84,7 @@ const DATE_FIELD_NAMES = new Set([
   'invoiceDate',
   'dueDate',
   'ts',
+  'uploadedAt',
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

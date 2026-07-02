@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:storage": "firebase deploy --only storage",
     "deploy:functions": "firebase deploy --only functions",
     "deploy:hosting": "npm run build && firebase deploy --only hosting"
   },

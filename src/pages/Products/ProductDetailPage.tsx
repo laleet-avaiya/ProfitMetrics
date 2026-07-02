@@ -6,6 +6,7 @@ import { DetailField, DetailGrid, detailLinkClass } from '../../components/Detai
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip, type DetailStatItem } from '../../components/DetailPage/DetailStatStrip';
+import { EntityAttachmentsDetailSection } from '../../components/EntityAttachments';
 import { Button } from '../../components/Button/Button';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -25,11 +26,11 @@ import { formatDateLocalSafe } from '../../utils/date';
 export function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { canUpdate } = useModuleAccess(AppModule.PRODUCTS);
   const currency = company?.currency ?? 'AED';
 
-  const { entity: product, loading, notFound } = useEntityDetail({
+  const { entity: product, loading, notFound, reload } = useEntityDetail({
     id: productId,
     fetch: firestoreService.products.get,
     errorMessage: 'Failed to load product',
@@ -43,6 +44,12 @@ export function ProductDetailPage() {
   }, [company, productId]);
 
   const listings = product?.platformListings ?? [];
+
+  const persistAttachments = async (attachments: NonNullable<typeof product>['attachments']) => {
+    if (!company || !product || !user) return;
+    await firestoreService.products.update(company.id, product.id, { attachments }, user.uid);
+    reload();
+  };
 
   const bestListing = listings.reduce<(typeof listings)[0] | null>((best, listing) => {
     const profit = computeLineEconomics(lineEconomicsInputFromListing(listing, 1)).profit;
@@ -314,6 +321,17 @@ export function ProductDetailPage() {
               </div>
             )}
           </DetailSection>
+
+          <EntityAttachmentsDetailSection
+            orgId={company!.orgId}
+            companyId={company!.id}
+            collection="products"
+            entityId={product.id}
+            userId={user!.uid}
+            attachments={product.attachments ?? []}
+            onAttachmentsChange={persistAttachments}
+            canEdit={canUpdate}
+          />
         </>
       )}
     </EntityDetailShell>

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Layers, Package } from 'lucide-react';
+import { Layers, Package, Paperclip } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { PlatformListingEditor } from '../../components/PlatformListingEditor/PlatformListingEditor';
 import { FormTabs } from '../../components/ui/FormTabs';
+import {
+  EntityAttachmentsPanel,
+  type PendingFile,
+} from '../../components/EntityAttachments';
 import {
   FormPageBody,
   FormPageGrid,
@@ -25,6 +29,8 @@ import { useNotification } from '../../hooks/useNotification';
 import { createListingId, normalizeListings } from '../../utils/productDefaults';
 import { firestoreService } from '../../services/firestore';
 import type { Product, ProductPlatformListing } from '../../types';
+import type { EntityAttachment } from '../../models/attachment';
+import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { nowUtc } from '../../utils/firestoreDates';
 import { formatMarketplaceSummary } from '../../constants/platforms';
 
@@ -37,7 +43,7 @@ interface FormState {
   platformListings: ProductPlatformListing[];
 }
 
-type ProductFormTab = 'details' | 'platforms';
+type ProductFormTab = 'details' | 'platforms' | 'documents';
 
 function emptyForm(): FormState {
   return {
@@ -75,6 +81,8 @@ export function ProductFormPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<ProductFormTab>('details');
   const [errors, setErrors] = useState<{ name?: string; listings?: string }>({});
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
   useEffect(() => {
     if (!isEditing || !company || !productId) {
@@ -98,6 +106,8 @@ export function ProductFormPage() {
         }
         setProduct(found);
         setForm(found ? productToForm(found) : emptyForm());
+        setAttachments(found?.attachments ?? []);
+        setPendingFiles([]);
       })
       .catch((err) => {
         console.error('Failed to load product:', err);
@@ -167,6 +177,7 @@ export function ProductFormPage() {
           category: form.category.trim() || undefined,
           status: 'active',
           platformListings: listings,
+          attachments,
           updatedAt: now,
         }, user!.uid);
         notification.success('Product updated');
@@ -185,6 +196,17 @@ export function ProductFormPage() {
           updatedAt: now,
         };
         await firestoreService.products.create(company.id, newProduct, user!.uid);
+        const uploaded = await finalizePendingAttachments(
+          company.orgId,
+          company.id,
+          'products',
+          id,
+          pendingFiles.map((item) => item.file),
+          user!.uid
+        );
+        if (uploaded.length > 0) {
+          await firestoreService.products.update(company.id, id, { attachments: uploaded }, user!.uid);
+        }
         notification.success('Product created');
       }
 
@@ -208,6 +230,12 @@ export function ProductFormPage() {
       label: 'Platforms',
       icon: Layers,
       badge: form.platformListings.length || undefined,
+    },
+    {
+      id: 'documents' as const,
+      label: 'Documents',
+      icon: Paperclip,
+      badge: attachments.length + pendingFiles.length || undefined,
     },
   ];
 
@@ -324,6 +352,21 @@ export function ProductFormPage() {
                   company={company}
                   currency={currency}
                   error={errors.listings}
+                />
+              ) : null}
+
+              {activeTab === 'documents' ? (
+                <EntityAttachmentsPanel
+                  orgId={company!.orgId}
+                  companyId={company!.id}
+                  collection="products"
+                  entityId={product?.id ?? null}
+                  userId={user!.uid}
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  pendingFiles={pendingFiles}
+                  onPendingFilesChange={setPendingFiles}
+                  disabled={saving}
                 />
               ) : null}
             </FormPanel>

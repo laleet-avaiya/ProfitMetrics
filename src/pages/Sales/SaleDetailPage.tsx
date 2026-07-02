@@ -15,6 +15,7 @@ import { DetailField, DetailGrid, detailLinkClass } from '../../components/Detai
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
+import { EntityAttachmentsDetailSection } from '../../components/EntityAttachments';
 import { Button } from '../../components/Button/Button';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { AppModule } from '../../constants/permissions';
@@ -44,11 +45,11 @@ import {
 export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>();
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { canUpdate } = useModuleAccess(AppModule.SALES);
   const currency = company?.currency ?? 'AED';
 
-  const { entity: sale, loading, notFound } = useEntityDetail({
+  const { entity: sale, loading, notFound, reload } = useEntityDetail({
     id: saleId,
     fetch: firestoreService.sales.get,
     errorMessage: 'Failed to load sale',
@@ -59,6 +60,12 @@ export function SaleDetailPage() {
   const lineCount = sale ? getSaleLineCount(sale) : 0;
   const pctLabel = e ? taxPercentLabel(e.taxType) : 'Tax %';
   const profitPositive = (sale?.profit ?? 0) >= 0;
+
+  const persistAttachments = async (attachments: NonNullable<typeof sale>['attachments']) => {
+    if (!company || !sale || !user) return;
+    await firestoreService.sales.update(company.id, sale.id, { attachments }, user.uid);
+    reload();
+  };
 
   return (
     <EntityDetailShell
@@ -333,6 +340,17 @@ export function SaleDetailPage() {
               <DetailField label="Tracking ID" value={sale.trackingId} valueClassName="font-mono text-sm" />
             </DetailSection>
           ) : null}
+
+          <EntityAttachmentsDetailSection
+            orgId={company!.orgId}
+            companyId={company!.id}
+            collection="sales"
+            entityId={sale.id}
+            userId={user!.uid}
+            attachments={sale.attachments ?? []}
+            onAttachmentsChange={persistAttachments}
+            canEdit={canUpdate}
+          />
         </>
       )}
     </EntityDetailShell>

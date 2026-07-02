@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Receipt } from 'lucide-react';
+import { Paperclip, Receipt } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
@@ -22,12 +22,18 @@ import {
   FormSidebarSection,
 } from '../../components/FormPage';
 import { FormTabs } from '../../components/ui/FormTabs';
+import {
+  EntityAttachmentsPanel,
+  type PendingFile,
+} from '../../components/EntityAttachments';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getCountryProfile } from '../../constants/countries';
 import { EXPENSE_CATEGORIES } from '../../constants/expenseCategories';
 import { firestoreService } from '../../services/firestore';
 import type { Expense, Vendor } from '../../types';
+import type { EntityAttachment } from '../../models/attachment';
+import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { TaxType } from '../../types';
 import {
   buildExpenseFromForm,
@@ -52,7 +58,7 @@ function parseNumber(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-type ExpenseFormTab = 'details';
+type ExpenseFormTab = 'details' | 'documents';
 
 export function ExpenseFormPage() {
   const { expenseId } = useParams<{ expenseId: string }>();
@@ -75,6 +81,8 @@ export function ExpenseFormPage() {
     description?: string;
     amount?: string;
   }>({});
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [nextExpenseNumber, setNextExpenseNumber] = useState('');
 
   useEffect(() => {
@@ -98,6 +106,8 @@ export function ExpenseFormPage() {
           } else {
             setExpense(found);
             setForm(found ? expenseToForm(found) : emptyExpenseForm(company));
+            setAttachments(found?.attachments ?? []);
+            setPendingFiles([]);
           }
         } else {
           setExpense(null);
@@ -235,11 +245,32 @@ export function ExpenseFormPage() {
       );
 
       if (isEditing && expense) {
-        await firestoreService.expenses.update(company.id, expense.id, payload, user!.uid);
+        await firestoreService.expenses.update(
+          company.id,
+          expense.id,
+          { ...payload, attachments },
+          user!.uid
+        );
         notification.success('Expense updated');
         navigate(`/expenses/${expense.id}`);
       } else {
         const created = await firestoreService.expenses.create(company.id, payload, user!.uid);
+        const uploaded = await finalizePendingAttachments(
+          company.orgId,
+          company.id,
+          'expenses',
+          created.id,
+          pendingFiles.map((item) => item.file),
+          user!.uid
+        );
+        if (uploaded.length > 0) {
+          await firestoreService.expenses.update(
+            company.id,
+            created.id,
+            { attachments: uploaded },
+            user!.uid
+          );
+        }
         notification.success('Expense added');
         navigate(`/expenses/${created.id}`);
       }
@@ -256,7 +287,15 @@ export function ExpenseFormPage() {
   const isReady =
     !isEditing && Boolean(form.category) && form.description.trim().length > 0 && amount > 0;
 
-  const formTabs = [{ id: 'details' as const, label: 'Details', icon: Receipt }];
+  const formTabs = [
+    { id: 'details' as const, label: 'Details', icon: Receipt },
+    {
+      id: 'documents' as const,
+      label: 'Documents',
+      icon: Paperclip,
+      badge: attachments.length + pendingFiles.length || undefined,
+    },
+  ];
 
   const sidebar = (
     <FormSidebarSection title="Preview">
@@ -495,6 +534,21 @@ export function ExpenseFormPage() {
                 </div>
               </FormFieldGroup>
                 </>
+              ) : null}
+
+              {activeTab === 'documents' ? (
+                <EntityAttachmentsPanel
+                  orgId={company!.orgId}
+                  companyId={company!.id}
+                  collection="expenses"
+                  entityId={expense?.id ?? null}
+                  userId={user!.uid}
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  pendingFiles={pendingFiles}
+                  onPendingFilesChange={setPendingFiles}
+                  disabled={saving}
+                />
               ) : null}
             </FormPanel>
           </FormPageGrid>

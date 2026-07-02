@@ -9,3 +9,4 @@ export * from './companyInvite';
 export * from './companyRoleDefinition';
 export * from './tax';
 export * from './aiChat';
+export * from './attachment';

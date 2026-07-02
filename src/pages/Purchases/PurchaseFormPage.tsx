@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardList,
   Package,
+  Paperclip,
   Plus,
 } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
@@ -26,11 +27,17 @@ import {
 import { PurchaseFormSummaryBar } from '../../components/PurchaseFormSummaryBar/PurchaseFormSummaryBar';
 import { PurchaseLineEditor } from '../../components/PurchaseLineEditor/PurchaseLineEditor';
 import { FormTabs } from '../../components/ui/FormTabs';
+import {
+  EntityAttachmentsPanel,
+  type PendingFile,
+} from '../../components/EntityAttachments';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { PURCHASE_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
 import type { Product, PurchaseOrder, Vendor } from '../../types';
+import type { EntityAttachment } from '../../models/attachment';
+import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { PurchaseOrderStatus, TaxMode, TaxType } from '../../types';
 import {
   buildPurchaseFromForm,
@@ -54,7 +61,7 @@ import {
   tableWrapClass,
 } from '../../constants/ui';
 
-type PurchaseFormTab = 'order' | 'items' | 'notes';
+type PurchaseFormTab = 'order' | 'items' | 'notes' | 'documents';
 
 export function PurchaseFormPage() {
   const { purchaseId } = useParams<{ purchaseId: string }>();
@@ -73,6 +80,8 @@ export function PurchaseFormPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<PurchaseFormTab>('order');
   const [errors, setErrors] = useState<{ vendorId?: string; lines?: string }>({});
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [nextPoNumber, setNextPoNumber] = useState('');
 
   const activeProducts = useMemo(() => getActiveProducts(products), [products]);
@@ -104,6 +113,8 @@ export function PurchaseFormPage() {
           } else {
             setPurchase(found);
             setForm(found ? purchaseToForm(found) : emptyPurchaseForm());
+            setAttachments(found?.attachments ?? []);
+            setPendingFiles([]);
           }
         } else {
           setPurchase(null);
@@ -225,7 +236,12 @@ export function PurchaseFormPage() {
           setSaving(false);
           return;
         }
-        await firestoreService.purchases.update(company.id, purchase.id, payload, user!.uid);
+        await firestoreService.purchases.update(
+          company.id,
+          purchase.id,
+          { ...payload, attachments },
+          user!.uid
+        );
         if (payload.payments.length > 0) {
           await syncPurchaseExpenses(company.id, { ...purchase, ...payload }, user!.uid);
         }
@@ -233,6 +249,22 @@ export function PurchaseFormPage() {
         navigate(`/purchases/${purchase.id}`);
       } else {
         const created = await firestoreService.purchases.create(company.id, payload, user!.uid);
+        const uploaded = await finalizePendingAttachments(
+          company.orgId,
+          company.id,
+          'purchases',
+          created.id,
+          pendingFiles.map((item) => item.file),
+          user!.uid
+        );
+        if (uploaded.length > 0) {
+          await firestoreService.purchases.update(
+            company.id,
+            created.id,
+            { attachments: uploaded },
+            user!.uid
+          );
+        }
         try {
           await syncPurchaseStockReceipts(company.id, null, created, user!.uid);
         } catch (stockErr) {
@@ -271,6 +303,12 @@ export function PurchaseFormPage() {
     { id: 'order' as const, label: 'Order', icon: ClipboardList },
     { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
     { id: 'notes' as const, label: 'Notes', icon: Building2 },
+    {
+      id: 'documents' as const,
+      label: 'Documents',
+      icon: Paperclip,
+      badge: attachments.length + pendingFiles.length || undefined,
+    },
   ];
 
   if (loading) {
@@ -480,6 +518,21 @@ export function PurchaseFormPage() {
                     onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
                     rows={3}
                     placeholder="Delivery instructions, vendor quote ref…"
+                  />
+                ) : null}
+
+                {activeTab === 'documents' ? (
+                  <EntityAttachmentsPanel
+                    orgId={company!.orgId}
+                    companyId={company!.id}
+                    collection="purchases"
+                    entityId={purchase?.id ?? null}
+                    userId={user!.uid}
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    pendingFiles={pendingFiles}
+                    onPendingFilesChange={setPendingFiles}
+                    disabled={saving}
                   />
                 ) : null}
               </FormPanel>

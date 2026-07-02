@@ -8,6 +8,7 @@ import {
   Truck,
   Wallet,
 } from 'lucide-react';
+import { EntityAttachmentsDetailSection } from '../../components/EntityAttachments';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
@@ -92,6 +93,12 @@ export function PurchaseDetailPage() {
   }, [purchase]);
 
   const isCancelled = purchase?.status === PurchaseOrderStatus.CANCELLED;
+
+  const persistAttachments = async (attachments: NonNullable<typeof purchase>['attachments']) => {
+    if (!company || !purchase || !user) return;
+    await firestoreService.purchases.update(company.id, purchase.id, { attachments }, user.uid);
+    reload();
+  };
 
   const buildUpdatedLines = useCallback((): PurchaseOrderLine[] | null => {
     if (!purchase) return null;
@@ -510,6 +517,17 @@ export function PurchaseDetailPage() {
           ) : null}
 
           {purchase.notes ? <DetailNotes>{purchase.notes}</DetailNotes> : null}
+
+          <EntityAttachmentsDetailSection
+            orgId={company!.orgId}
+            companyId={company!.id}
+            collection="purchases"
+            entityId={purchase.id}
+            userId={user!.uid}
+            attachments={purchase.attachments ?? []}
+            onAttachmentsChange={persistAttachments}
+            canEdit={canUpdate && !isCancelled}
+          />
         </>
       )}
     </EntityDetailShell>

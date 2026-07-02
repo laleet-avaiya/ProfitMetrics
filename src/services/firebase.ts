@@ -3,6 +3,7 @@ import { getAnalytics } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 import { FIREBASE_FUNCTIONS_REGION } from '../constants/firebase';
 
 function requireEnv(key: keyof ImportMetaEnv): string {
@@ -35,5 +36,6 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_FIREBASE_MEASUREMENT_I
 const auth = getAuth(app);
 const db = getFirestore(app);
 const functions = getFunctions(app, FIREBASE_FUNCTIONS_REGION);
+const storage = getStorage(app);
 
-export { app, analytics, auth, db, functions };
+export { app, analytics, auth, db, functions, storage };
