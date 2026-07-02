@@ -6,19 +6,24 @@ import {
   type PermissionAction,
 } from '../constants/permissions';
 import { CompanyRole } from '../constants/roles';
+import { OrgRole } from '../models/org';
 
 export function usePermissions() {
-  const { membership, rolePermissions } = useAuth();
+  const { membership, rolePermissions, orgMembership } = useAuth();
   const role = membership?.role;
+  const isOrgAdmin = orgMembership?.role === OrgRole.ADMIN;
 
   return useMemo(
     () => ({
       role,
       isAdmin: role === CompanyRole.ADMIN,
-      can: (module: AppModule, action: PermissionAction) =>
-        hasModulePermission(role, rolePermissions, module, action),
+      isOrgAdmin,
+      can: (module: AppModule, action: PermissionAction) => {
+        if (isOrgAdmin && module === 'subscription') return true;
+        return hasModulePermission(role, rolePermissions, module, action);
+      },
     }),
-    [role, rolePermissions]
+    [role, rolePermissions, isOrgAdmin]
   );
 }
 

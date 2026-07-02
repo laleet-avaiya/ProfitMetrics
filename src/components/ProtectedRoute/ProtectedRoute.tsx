@@ -9,17 +9,21 @@ import { LoadingView } from '../AppLoader/AppLoader';
 interface ProtectedRouteProps {
   children: ReactNode;
   requireLegalConsent?: boolean;
+  requireCompany?: boolean;
   module?: AppModule;
   action?: PermissionAction;
 }
 
+const COMPANY_PICKER_PATHS = ['/companies', '/companies/new'];
+
 export function ProtectedRoute({
   children,
   requireLegalConsent = true,
+  requireCompany = true,
   module,
   action = 'view',
 }: ProtectedRouteProps) {
-  const { user, company, membership, loading } = useAuth();
+  const { user, org, company, membership, loading } = useAuth();
   const { can } = usePermissions();
   const location = useLocation();
 
@@ -31,11 +35,15 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (!company || !membership) {
-    if (location.pathname === '/no-company' || location.pathname === '/create-company') {
+  const isCompanyPickerRoute = COMPANY_PICKER_PATHS.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
+  );
+
+  if (requireCompany && (!company || !membership)) {
+    if (isCompanyPickerRoute) {
       return <>{children}</>;
     }
-    return <Navigate to="/no-company" replace />;
+    return <Navigate to="/companies" replace />;
   }
 
   if (module && !can(module, action)) {
@@ -44,8 +52,8 @@ export function ProtectedRoute({
 
   if (
     requireLegalConsent &&
-    company &&
-    !hasLegalConsent(company) &&
+    org &&
+    !hasLegalConsent(org) &&
     location.pathname !== '/terms/accept'
   ) {
     return <Navigate to="/terms/accept" replace state={{ from: location.pathname }} />;

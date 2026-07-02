@@ -36,8 +36,8 @@ function LegalSection({
 }
 
 export function TermsPage() {
-  const { company } = useAuth();
-  const accepted = hasLegalConsent(company);
+  const { org } = useAuth();
+  const accepted = hasLegalConsent(org);
 
   return (
     <Layout>
@@ -50,15 +50,15 @@ export function TermsPage() {
         <div className="space-y-5">
           {accepted ? (
             <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-200">
-              Accepted version {company?.termsVersion} on{' '}
-              {company?.termsAcceptedAt ? formatDateLocal(company.termsAcceptedAt) : '—'}.
+              Accepted version {org?.termsVersion} on{' '}
+              {org?.termsAcceptedAt ? formatDateLocal(org.termsAcceptedAt) : '—'}.
             </div>
           ) : (
             <div className="rounded-xl border border-indigo-200/80 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-950/20 px-4 py-3 text-sm text-indigo-900 dark:text-indigo-200">
               <p className="flex items-start gap-2">
                 <FileText className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
-                  Your company must accept these documents before using the app.{' '}
+                  Your organization must accept these documents before using the app.{' '}
                   <Link to="/terms/accept" className="font-medium underline hover:no-underline">
                     Accept now
                   </Link>

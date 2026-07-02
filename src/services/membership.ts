@@ -14,6 +14,7 @@ import { db } from './firebase';
 import type { CompanyInvite, CompanyMember } from '../types';
 import { CompanyRole, type CompanyRole as CompanyRoleType } from '../constants/roles';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
+import { orgMembershipService } from './orgMembership';
 
 const COLLECTION_MEMBERS = 'companyMembers';
 const COLLECTION_INVITES = 'companyInvites';
@@ -208,6 +209,21 @@ export const membershipService = {
       doc(db, COLLECTION_INVITES, invite.id),
       prepareDatesForFirestore({ status: 'accepted', updatedAt: nowUtc() })
     );
+
+    const companySnap = await getDoc(doc(db, 'companies', invite.companyId));
+    const orgId = companySnap.exists()
+      ? String((companySnap.data() as Record<string, unknown>).orgId ?? '')
+      : '';
+    if (orgId) {
+      await orgMembershipService.ensureMember(
+        orgId,
+        userId,
+        normalizedEmail,
+        undefined,
+        invite.companyId
+      );
+    }
+
     return { companyId: invite.companyId, member };
   },
 

@@ -6,16 +6,16 @@ import { DEFAULT_AI_MESSAGE_QUOTA } from '../constants/aiAssistant';
 import { formatAiAssistantError } from '../utils/aiAssistantErrors';
 import type { AiChat, AiChatMessage } from '../types';
 
-function getQuotaInfo(company: { aiMessageQuota?: number; aiMessagesUsed?: number } | null) {
-  const quota = company?.aiMessageQuota ?? DEFAULT_AI_MESSAGE_QUOTA;
-  const used = company?.aiMessagesUsed ?? 0;
+function getQuotaInfo(org: { aiMessageQuota?: number; aiMessagesUsed?: number } | null) {
+  const quota = org?.aiMessageQuota ?? DEFAULT_AI_MESSAGE_QUOTA;
+  const used = org?.aiMessagesUsed ?? 0;
   return { quota, used, remaining: Math.max(0, quota - used) };
 }
 
 export type AiSendingPhase = 'idle' | 'thinking' | 'analyzing';
 
 export function useAiAssistant() {
-  const { company, refreshCompany } = useAuth();
+  const { company, org, refreshSession } = useAuth();
   const [chats, setChats] = useState<AiChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
@@ -26,7 +26,7 @@ export function useAiAssistant() {
   const [error, setError] = useState<string | null>(null);
 
   const companyId = company?.id;
-  const quotaInfo = getQuotaInfo(company);
+  const quotaInfo = getQuotaInfo(org);
 
   const loadChats = useCallback(async () => {
     if (!companyId) return;
@@ -165,7 +165,7 @@ export function useAiAssistant() {
           return [updatedChat, ...rest];
         });
 
-        void refreshCompany();
+        void refreshSession();
         void loadChats();
       } catch (err) {
         setMessages((prev) => prev.filter((message) => message.id !== optimisticUserMessage.id));
@@ -181,7 +181,7 @@ export function useAiAssistant() {
       sending,
       quotaInfo.remaining,
       activeChatId,
-      refreshCompany,
+      refreshSession,
       loadChats,
     ]
   );

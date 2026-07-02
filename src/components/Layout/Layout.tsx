@@ -116,20 +116,20 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { signOut, company, membership, loading } = useAuth();
+  const { signOut, company, org, membership, loading } = useAuth();
   const { can } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
   const prevPathname = useRef(location.pathname);
 
   const subscriptionDaysLeft =
-    company?.subscriptionEnd != null ? getSubscriptionDaysRemaining(company.subscriptionEnd) : null;
+    org?.subscriptionEnd != null ? getSubscriptionDaysRemaining(org.subscriptionEnd) : null;
   const subscriptionWarningThresholdDays =
-    company?.subscriptionEnd != null
+    org?.subscriptionEnd != null
       ? getSubscriptionWarningThresholdDays(
-          company.subscriptionStart,
-          company.subscriptionEnd,
-          company.createdAt
+          org.subscriptionStart,
+          org.subscriptionEnd,
+          org.createdAt
         )
       : null;
   const showSubscriptionWarning =
@@ -146,10 +146,10 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
     subscriptionDaysLeft === 1 ? '1 day left' : `${subscriptionDaysLeft} days left`;
 
   useEffect(() => {
-    if (!loading && company?.subscriptionEnd != null && isExpired) {
+    if (!loading && org?.subscriptionEnd != null && isExpired) {
       navigate('/subscription-expired', { replace: true });
     }
-  }, [loading, company?.subscriptionEnd, isExpired, navigate]);
+  }, [loading, org?.subscriptionEnd, isExpired, navigate]);
 
   useEffect(() => {
     const pathChanged = prevPathname.current !== location.pathname;
@@ -300,6 +300,15 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
               Signed in as {roleLabel(membership.role)}
             </div>
           ) : null}
+          <Link
+            to="/companies"
+            onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
+            className={footerButtonClass('text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700')}
+            title={sidebarCollapsed ? 'Switch company' : undefined}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span className={sidebarCollapsed ? 'lg:hidden' : ''}>Switch company</span>
+          </Link>
           {showSidebarSubscriptionDays && (
             <Link
               to="/subscription"

@@ -42,8 +42,8 @@ import { Subscription } from './pages/Subscription/Subscription';
 import { SubscriptionExpired } from './pages/SubscriptionExpired/SubscriptionExpired';
 import { AIAssistantPage } from './pages/AIAssistant/AIAssistantPage';
 import { TeamPage } from './pages/Team/TeamPage';
-import { NoCompanyPage } from './pages/NoCompany/NoCompanyPage';
-import { CreateCompanyPage } from './pages/CreateCompany/CreateCompanyPage';
+import { CompaniesPage } from './pages/Companies/CompaniesPage';
+import { CreateCompanyPage } from './pages/Companies/CreateCompanyPage';
 import { LoadingView } from './components/AppLoader/AppLoader';
 
 function AuthRedirect() {
@@ -56,7 +56,7 @@ function AuthRedirect() {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/companies" replace />;
   }
 
   return null;
@@ -70,8 +70,8 @@ function App() {
         <Route path="/signup" element={<><AuthRedirect /><Signup /></>} />
         <Route path="/forgot-password" element={<><AuthRedirect /><ForgotPassword /></>} />
 
-        <Route path="/no-company" element={<ProtectedRoute requireLegalConsent={false}><NoCompanyPage /></ProtectedRoute>} />
-        <Route path="/create-company" element={<ProtectedRoute requireLegalConsent={false}><CreateCompanyPage /></ProtectedRoute>} />
+        <Route path="/companies" element={<ProtectedRoute requireLegalConsent={false} requireCompany={false}><CompaniesPage /></ProtectedRoute>} />
+        <Route path="/companies/new" element={<ProtectedRoute requireLegalConsent={false} requireCompany={false}><CreateCompanyPage /></ProtectedRoute>} />
 
         <Route path="/" element={<ModuleRoute module={AppModule.DASHBOARD}><Dashboard /></ModuleRoute>} />
         <Route path="/products" element={<ModuleRoute module={AppModule.PRODUCTS}><Products /></ModuleRoute>} />
@@ -112,11 +112,11 @@ function App() {
         <Route path="/reports/:reportId" element={<ModuleRoute module={AppModule.REPORTS}><Reports /></ModuleRoute>} />
         <Route path="/ai-assistant" element={<ModuleRoute module={AppModule.AI_ASSISTANT}><AIAssistantPage /></ModuleRoute>} />
         <Route path="/team" element={<ModuleRoute module={AppModule.TEAM}><TeamPage /></ModuleRoute>} />
-        <Route path="/terms/accept" element={<ProtectedRoute requireLegalConsent={false}><TermsAcceptancePage /></ProtectedRoute>} />
+        <Route path="/terms/accept" element={<ProtectedRoute requireLegalConsent={false} requireCompany={false}><TermsAcceptancePage /></ProtectedRoute>} />
         <Route path="/terms" element={<ProtectedRoute requireLegalConsent={false}><TermsPage /></ProtectedRoute>} />
         <Route path="/configuration" element={<ModuleRoute module={AppModule.CONFIGURATION}><Configuration /></ModuleRoute>} />
         <Route path="/settings" element={<ModuleRoute module={AppModule.SETTINGS}><Settings /></ModuleRoute>} />
-        <Route path="/subscription" element={<ModuleRoute module={AppModule.SUBSCRIPTION}><Subscription /></ModuleRoute>} />
+        <Route path="/subscription" element={<ProtectedRoute requireCompany={false} module={AppModule.SUBSCRIPTION}><Subscription /></ProtectedRoute>} />
         <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
         <Route path="/subscription-expired" element={<ProtectedRoute><SubscriptionExpired /></ProtectedRoute>} />
 

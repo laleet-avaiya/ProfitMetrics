@@ -1,168 +1,19 @@
-import type { CompanyRole } from '../constants/roles';
+export * from '../models';
 
-// ─── Company (tenant) ───────────────────────────────────────────────────────
+import type { DeliveryMode, PlatformFeeKind, TaxMode, TaxType } from '../models/tax';
 
-export interface Company {
-  id: string;
-  /** Firebase Auth uid of the company creator / primary admin */
-  ownerId: string;
-  name: string;
-  /** ISO-style business country: AE (UAE) or IN (India) */
-  country: string;
-  /** IANA timezone for reports (e.g. Asia/Dubai, Asia/Kolkata) */
-  timezone?: string;
-  /** Tax registration — TRN in UAE, GSTIN in India (stored in `trn` field) */
-  trn?: string;
-  address?: string;
-  phone?: string;
-  phone2?: string;
-  email?: string;
-  logo?: string;
-  currency: string;
-  /** Defaults applied to new product platform listings & sales */
-  defaultTaxType: TaxType;
-  defaultTaxMode: TaxMode;
-  defaultTaxPercentage: number;
-  /** Configurable marketplace names for product listings and payout tracking */
-  marketplaces?: string[];
-  subscriptionStart?: Date;
-  subscriptionEnd?: Date;
-  /** Version of T&C / usage policy accepted by the company */
-  termsVersion?: string;
-  /** When T&C were accepted (UTC) */
-  termsAcceptedAt?: Date;
-  /** When the usage policy was accepted (UTC) */
-  usagePolicyAcceptedAt?: Date;
-  /** Auth user id who recorded acceptance */
-  legalAcceptedByUserId?: string;
-  /** UTC instant when the company record was created */
-  createdAt: Date;
-  /** UTC instant when the company record was last updated */
-  updatedAt: Date;
-  /** Monthly AI assistant message allowance */
-  aiMessageQuota?: number;
-  /** AI assistant messages consumed in the current quota period */
-  aiMessagesUsed?: number;
-}
+export {
+  DeliveryMode,
+  DeliveryMode as DeliveryModeEnum,
+  PlatformFeeKind,
+  PlatformFeeKind as PlatformFeeKindEnum,
+  TaxMode,
+  TaxMode as TaxModeEnum,
+  TaxType,
+  TaxType as TaxTypeEnum,
+} from '../models/tax';
 
-// ─── Team & access control ────────────────────────────────────────────────────
-
-import type { ModulePermissionMap } from '../constants/permissions';
-
-export interface CompanyRoleDefinition {
-  id: string;
-  companyId: string;
-  role: CompanyRole;
-  permissions: ModulePermissionMap;
-  updatedAt: Date;
-}
-
-export interface CompanyMember {
-  id: string;
-  companyId: string;
-  userId: string;
-  email: string;
-  displayName?: string;
-  role: CompanyRole;
-  status: 'active' | 'disabled';
-  invitedBy?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface CompanyInvite {
-  id: string;
-  companyId: string;
-  email: string;
-  role: CompanyRole;
-  invitedBy: string;
-  status: 'pending' | 'accepted' | 'revoked';
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface UserProfile {
-  id: string;
-  email: string;
-  displayName?: string;
-  activeCompanyId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// ─── AI Assistant ─────────────────────────────────────────────────────────────
-
-export type AiChatMessageRole = 'user' | 'assistant';
-
-export interface AiChatMessage {
-  id: string;
-  role: AiChatMessageRole;
-  content: string;
-  createdAt: Date;
-}
-
-export interface AiChat {
-  id: string;
-  companyId: string;
-  title: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// ─── Tax ────────────────────────────────────────────────────────────────────
-
-export const TaxType = {
-  NONE: 'none',
-  VAT: 'vat',
-  GST: 'gst',
-  SALES_TAX: 'sales_tax',
-} as const;
-
-export type TaxType = (typeof TaxType)[keyof typeof TaxType];
-
-/** How tax applies to the selling price on a listing or order. */
-export const TaxMode = {
-  /** Tax is included in selling price (common in UAE/UK B2C). */
-  INCLUSIVE: 'inclusive',
-  /** Tax is added on top of selling price. */
-  EXCLUSIVE: 'exclusive',
-  /** Tax is tracked separately; does not change revenue math. */
-  PASS_THROUGH: 'pass_through',
-} as const;
-
-export type TaxMode = (typeof TaxMode)[keyof typeof TaxMode];
-
-/** How a platform fee is entered on a listing or sale line. */
-export const PlatformFeeKind = {
-  FIXED: 'fixed',
-  PERCENT: 'percent',
-} as const;
-
-export type PlatformFeeKind = (typeof PlatformFeeKind)[keyof typeof PlatformFeeKind];
-
-/** How delivery cost is applied on a sale order. */
-export const DeliveryMode = {
-  /** Each line uses its own per-unit delivery fee × quantity. */
-  INDIVIDUAL: 'individual',
-  /** One combined delivery charge for the whole order. */
-  GROUP: 'group',
-} as const;
-
-export type DeliveryMode = (typeof DeliveryMode)[keyof typeof DeliveryMode];
-
-/** Per-component tax settings shared by listings and sale snapshots. */
-export interface LineTaxSettings {
-  purchaseTaxPercentage: number;
-  purchaseTaxMode: TaxMode;
-  sellingTaxPercentage: number;
-  sellingTaxMode: TaxMode;
-  deliveryTaxPercentage: number;
-  deliveryTaxMode: TaxMode;
-  platformFeeTaxPercentage: number;
-  platformFeeTaxMode: TaxMode;
-}
-
-// ─── Product & platform listings ──────────────────────────────────────────────
+// ─── Business entities ───────────────────────────────────────────────────────
 
 export interface ProductPlatformListing {
   id: string;

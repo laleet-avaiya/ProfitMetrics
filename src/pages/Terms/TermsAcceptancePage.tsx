@@ -15,7 +15,7 @@ import { BRAND_LOGO_FULL, BRAND_NAME } from '../../constants/brand';
 
 export function TermsAcceptancePage() {
   const navigate = useNavigate();
-  const { user, company, updateCompany, signOut } = useAuth();
+  const { user, org, updateOrg, signOut } = useAuth();
   const notification = useNotification();
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -26,7 +26,7 @@ export function TermsAcceptancePage() {
     setSaving(true);
     try {
       const now = nowUtc();
-      await updateCompany({
+      await updateOrg({
         termsVersion: CURRENT_LEGAL_VERSION,
         termsAcceptedAt: now,
         usagePolicyAcceptedAt: now,
@@ -67,8 +67,8 @@ export function TermsAcceptancePage() {
             </h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
               Before using Profit Metrics
-              {company?.name ? (
-                <> for <strong className="text-gray-900 dark:text-white">{company.name}</strong></>
+              {org?.name ? (
+                <> for <strong className="text-gray-900 dark:text-white">{org.name}</strong></>
               ) : null}
               , please review and accept our Terms & Conditions and Usage Policy (version{' '}
               {CURRENT_LEGAL_VERSION}, updated {LEGAL_LAST_UPDATED}).
@@ -120,8 +120,8 @@ export function TermsAcceptancePage() {
             <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
               I have read and agree to the{' '}
               <strong className="text-gray-900 dark:text-white">Terms & Conditions</strong> and{' '}
-              <strong className="text-gray-900 dark:text-white">Usage Policy</strong> on behalf of my
-              company. I understand acceptance is recorded with the current version ({CURRENT_LEGAL_VERSION}).
+              <strong className="text-gray-900 dark:text-white">Usage Policy</strong> on behalf of your
+              organization. I understand acceptance is recorded with the current version ({CURRENT_LEGAL_VERSION}).
             </span>
           </label>
 

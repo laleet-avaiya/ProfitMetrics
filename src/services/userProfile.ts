@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import type { UserProfile } from '../types';
+import type { UserProfile } from '../models/userProfile';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
 
 const COLLECTION = 'users';
@@ -13,30 +13,49 @@ export const userProfileService = {
     return {
       id: snap.id,
       email: String(data.email ?? ''),
-      displayName: data.displayName ? String(data.displayName) : undefined,
-      activeCompanyId: String(data.activeCompanyId ?? ''),
+      displayName: String(data.displayName ?? ''),
+      activeOrgId: data.activeOrgId ? String(data.activeOrgId) : undefined,
+      activeCompanyId: data.activeCompanyId ? String(data.activeCompanyId) : undefined,
       createdAt: data.createdAt instanceof Date ? data.createdAt : nowUtc(),
       updatedAt: data.updatedAt instanceof Date ? data.updatedAt : nowUtc(),
     };
   },
 
-  async create(userId: string, email: string, activeCompanyId: string): Promise<UserProfile> {
+  async create(userId: string, email: string, displayName: string, activeOrgId: string): Promise<UserProfile> {
     const now = nowUtc();
     const profile: UserProfile = {
       id: userId,
       email: email.toLowerCase(),
-      activeCompanyId,
+      displayName: displayName.trim(),
+      activeOrgId,
       createdAt: now,
       updatedAt: now,
     };
-    await setDoc(doc(db, COLLECTION, userId), prepareDatesForFirestore(profile as unknown as Record<string, unknown>));
+    await setDoc(
+      doc(db, COLLECTION, userId),
+      prepareDatesForFirestore(profile as unknown as Record<string, unknown>)
+    );
     return profile;
+  },
+
+  async setActiveOrg(userId: string, activeOrgId: string): Promise<void> {
+    await updateDoc(
+      doc(db, COLLECTION, userId),
+      prepareDatesForFirestore({ activeOrgId, updatedAt: nowUtc() })
+    );
   },
 
   async setActiveCompany(userId: string, activeCompanyId: string): Promise<void> {
     await updateDoc(
       doc(db, COLLECTION, userId),
       prepareDatesForFirestore({ activeCompanyId, updatedAt: nowUtc() })
+    );
+  },
+
+  async clearActiveCompany(userId: string): Promise<void> {
+    await updateDoc(
+      doc(db, COLLECTION, userId),
+      prepareDatesForFirestore({ activeCompanyId: null, updatedAt: nowUtc() })
     );
   },
 };

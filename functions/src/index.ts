@@ -10,6 +10,7 @@ initializeApp();
 
 const COLLECTION_AI_CHATS = 'aiChats';
 const COLLECTION_COMPANIES = 'companies';
+const COLLECTION_ORGS = 'orgs';
 const COLLECTION_MEMBERS = 'companyMembers';
 const COLLECTION_USERS = 'users';
 const RECENT_MESSAGE_LIMIT = 8;
@@ -128,12 +129,24 @@ export const processAiMessage = onCall(
     }
 
     const companyData = companySnap.data() ?? {};
+    const orgId = String(companyData.orgId ?? '');
+    if (!orgId) {
+      throw new HttpsError('failed-precondition', 'Company is not linked to an organization.');
+    }
+
+    const orgRef = db.collection(COLLECTION_ORGS).doc(orgId);
+    const orgSnap = await orgRef.get();
+    if (!orgSnap.exists) {
+      throw new HttpsError('not-found', 'Organization not found.');
+    }
+
+    const orgData = orgSnap.data() ?? {};
     const aiMessageQuota =
-      typeof companyData.aiMessageQuota === 'number'
-        ? companyData.aiMessageQuota
+      typeof orgData.aiMessageQuota === 'number'
+        ? orgData.aiMessageQuota
         : DEFAULT_AI_MESSAGE_QUOTA;
     const aiMessagesUsed =
-      typeof companyData.aiMessagesUsed === 'number' ? companyData.aiMessagesUsed : 0;
+      typeof orgData.aiMessagesUsed === 'number' ? orgData.aiMessagesUsed : 0;
 
     if (aiMessagesUsed >= aiMessageQuota) {
       throw new HttpsError(
@@ -231,7 +244,7 @@ export const processAiMessage = onCall(
       title,
       updatedAt: Timestamp.now(),
     });
-    batch.update(companyRef, {
+    batch.update(orgRef, {
       aiMessagesUsed: FieldValue.increment(1),
       updatedAt: Timestamp.now(),
     });

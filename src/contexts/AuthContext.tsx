@@ -10,146 +10,69 @@ import {
   updatePassword,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { appendAuditLog, auditCompanyChangedKeys } from '../services/auditLog';
 import { membershipService } from '../services/membership';
 import { rolePermissionsService } from '../services/rolePermissions';
 import { userProfileService } from '../services/userProfile';
-import {
-  convertTimestamps,
-  fromFirestoreTimestamp,
-  nowUtc,
-  prepareDatesForFirestore,
-} from '../utils/firestoreDates';
+import { orgService } from '../services/org';
+import { orgMembershipService } from '../services/orgMembership';
+import { companyService } from '../services/companyService';
+import { nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
 import { AuthContext } from './AuthContextInstance';
-import type { AuthContextType, SignUpCompanyDetails } from './AuthContext.types';
-import type { Company, CompanyMember } from '../types';
+import type { AuthContextType, CreateCompanyDetails, SignUpDetails } from './AuthContext.types';
+import type { Company, CompanyMember, Organization, OrgMember, UserProfile } from '../types';
 import type { ModulePermissionMap } from '../constants/permissions';
-import {
-  BusinessCountry,
-  countryDefaultsForCompany,
-  getCountryProfile,
-  isBusinessCountry,
-} from '../constants/countries';
-import { DEFAULT_MARKETPLACES, normalizeMarketplaceList } from '../constants/platforms';
-import { DEFAULT_AI_MESSAGE_QUOTA } from '../constants/aiAssistant';
+import { OrgRole } from '../models/org';
 
 const COMPANY_COLLECTION = 'companies';
+const ORG_COLLECTION = 'orgs';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [orgMembership, setOrgMembership] = useState<OrgMember | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [membership, setMembership] = useState<CompanyMember | null>(null);
   const [rolePermissions, setRolePermissions] = useState<ModulePermissionMap | null>(null);
+  const [userCompanies, setUserCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
 
-  function getDefaultSubscription(): { start: Date; end: Date } {
-    const start = nowUtc();
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return { start, end };
-  }
-
-  function mapCompanyDoc(id: string, data: Record<string, unknown>): Company {
-    const converted = convertTimestamps<Record<string, unknown>>(data);
-    const country = isBusinessCountry(String(converted.country ?? ''))
-      ? (converted.country as BusinessCountry)
-      : BusinessCountry.UAE;
-    const profile = getCountryProfile(country);
-
-    return {
-      id,
-      ownerId: String(converted.ownerId ?? ''),
-      name: String(converted.name ?? ''),
-      country,
-      currency: (converted.currency as string) ?? profile.currency,
-      timezone: (converted.timezone as string) ?? profile.timezone,
-      defaultTaxType: (converted.defaultTaxType as Company['defaultTaxType']) ?? profile.defaultTaxType,
-      defaultTaxMode: (converted.defaultTaxMode as Company['defaultTaxMode']) ?? profile.defaultTaxMode,
-      defaultTaxPercentage: Number(converted.defaultTaxPercentage ?? profile.defaultTaxPercentage),
-      marketplaces: Array.isArray(converted.marketplaces)
-        ? normalizeMarketplaceList(converted.marketplaces as string[])
-        : undefined,
-      trn: converted.trn as string | undefined,
-      address: converted.address as string | undefined,
-      phone: converted.phone as string | undefined,
-      phone2: converted.phone2 as string | undefined,
-      email: converted.email as string | undefined,
-      logo: converted.logo as string | undefined,
-      subscriptionStart: fromFirestoreTimestamp(converted.subscriptionStart),
-      subscriptionEnd: fromFirestoreTimestamp(converted.subscriptionEnd),
-      termsAcceptedAt: fromFirestoreTimestamp(converted.termsAcceptedAt),
-      usagePolicyAcceptedAt: fromFirestoreTimestamp(converted.usagePolicyAcceptedAt),
-      termsVersion: converted.termsVersion as string | undefined,
-      legalAcceptedByUserId: converted.legalAcceptedByUserId as string | undefined,
-      aiMessageQuota:
-        typeof converted.aiMessageQuota === 'number'
-          ? converted.aiMessageQuota
-          : DEFAULT_AI_MESSAGE_QUOTA,
-      aiMessagesUsed:
-        typeof converted.aiMessagesUsed === 'number' ? converted.aiMessagesUsed : 0,
-      createdAt: fromFirestoreTimestamp(converted.createdAt) ?? nowUtc(),
-      updatedAt: fromFirestoreTimestamp(converted.updatedAt) ?? nowUtc(),
-    };
-  }
-
-  const loadCompany = async (companyId: string): Promise<Company | null> => {
-    try {
-      const companyRef = doc(db, COMPANY_COLLECTION, companyId);
-      const companyDoc = await getDoc(companyRef);
-      if (!companyDoc.exists()) return null;
-
-      const data = companyDoc.data();
-      let subStart = data.subscriptionStart?.toDate?.();
-      let subEnd = data.subscriptionEnd?.toDate?.();
-      if (subStart == null || subEnd == null) {
-        const def = getDefaultSubscription();
-        subStart = subStart ?? def.start;
-        subEnd = subEnd ?? def.end;
-        await updateDoc(
-          companyRef,
-          prepareDatesForFirestore({
-            subscriptionStart: subStart,
-            subscriptionEnd: subEnd,
-            updatedAt: nowUtc(),
-          })
-        );
-      }
-      const country = isBusinessCountry(data.country) ? data.country : BusinessCountry.UAE;
-      const mapped = mapCompanyDoc(companyDoc.id, { ...data, country } as Record<string, unknown>);
-      setCompany(mapped);
-      return mapped;
-    } catch (error) {
-      console.error('Error loading company:', error);
-      return null;
-    }
+  const loadOrgContext = async (orgId: string, userId: string): Promise<void> => {
+    const [loadedOrg, loadedOrgMember] = await Promise.all([
+      orgService.get(orgId),
+      orgMembershipService.get(orgId, userId),
+    ]);
+    setOrg(loadedOrg);
+    setOrgMembership(loadedOrgMember?.status === 'active' ? loadedOrgMember : null);
   };
 
-  const loadMembership = async (companyId: string, userId: string): Promise<CompanyMember | null> => {
-    try {
-      const member = await membershipService.getMember(companyId, userId);
-      setMembership(member?.status === 'active' ? member : null);
-      return member;
-    } catch (error) {
-      console.error('Error loading membership:', error);
+  const loadCompanyContext = async (companyId: string, userId: string): Promise<void> => {
+    const loadedCompany = await companyService.get(companyId);
+    if (!loadedCompany) {
+      setCompany(null);
       setMembership(null);
-      return null;
-    }
-  };
-
-  const loadRolePermissions = async (
-    companyId: string,
-    role: CompanyMember['role'] | undefined
-  ): Promise<ModulePermissionMap | null> => {
-    try {
-      const permissions = await rolePermissionsService.getForMember(companyId, role);
-      setRolePermissions(permissions);
-      return permissions;
-    } catch (error) {
-      console.error('Error loading role permissions:', error);
       setRolePermissions(null);
-      return null;
+      return;
+    }
+
+    const member = await membershipService.getMember(companyId, userId);
+    if (!member || member.status !== 'active') {
+      setCompany(null);
+      setMembership(null);
+      setRolePermissions(null);
+      return;
+    }
+
+    const permissions = await rolePermissionsService.getForMember(companyId, member.role);
+    setCompany(loadedCompany);
+    setMembership(member);
+    setRolePermissions(permissions);
+
+    if (!org || org.id !== loadedCompany.orgId) {
+      await loadOrgContext(loadedCompany.orgId, userId);
     }
   };
 
@@ -157,98 +80,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const email = firebaseUser.email ?? '';
     await membershipService.acceptPendingInvites(firebaseUser.uid, email);
 
-    const memberships = await membershipService.listMembershipsForUser(firebaseUser.uid);
-    if (memberships.length === 0) {
+    let userProfile = await userProfileService.get(firebaseUser.uid);
+    const companies = await companyService.listForUser(firebaseUser.uid);
+    setUserCompanies(companies);
+
+    const orgMemberships = await orgMembershipService.listForUser(firebaseUser.uid);
+
+    if (!userProfile && orgMemberships.length === 0 && companies.length === 0) {
+      setProfile(null);
+      setOrg(null);
+      setOrgMembership(null);
       setCompany(null);
       setMembership(null);
       setRolePermissions(null);
       return;
     }
 
-    let profile = await userProfileService.get(firebaseUser.uid);
-    const activeCompanyId =
-      profile?.activeCompanyId &&
-      memberships.some((member) => member.companyId === profile?.activeCompanyId)
-        ? profile.activeCompanyId
-        : memberships[0].companyId;
+    if (!userProfile) {
+      const fallbackOrgId = companies[0]?.orgId ?? orgMemberships[0]?.orgId;
+      if (!fallbackOrgId) return;
+      userProfile = await userProfileService.create(
+        firebaseUser.uid,
+        email,
+        email.split('@')[0] ?? 'User',
+        fallbackOrgId
+      );
+    }
+    setProfile(userProfile);
 
-    if (!profile) {
-      profile = await userProfileService.create(firebaseUser.uid, email, activeCompanyId);
-    } else if (profile.activeCompanyId !== activeCompanyId) {
-      await userProfileService.setActiveCompany(firebaseUser.uid, activeCompanyId);
+    const activeOrgId =
+      userProfile.activeOrgId && (orgMemberships.some((m) => m.orgId === userProfile.activeOrgId) || companies.some((c) => c.orgId === userProfile.activeOrgId))
+        ? userProfile.activeOrgId
+        : orgMemberships[0]?.orgId ?? companies[0]?.orgId;
+
+    if (activeOrgId) {
+      if (userProfile.activeOrgId !== activeOrgId) {
+        await userProfileService.setActiveOrg(firebaseUser.uid, activeOrgId);
+      }
+      await loadOrgContext(activeOrgId, firebaseUser.uid);
     }
 
-    await loadCompany(activeCompanyId);
-    const member = await loadMembership(activeCompanyId, firebaseUser.uid);
-    await loadRolePermissions(activeCompanyId, member?.role);
+    const activeCompanyId =
+      userProfile.activeCompanyId &&
+      companies.some((c) => c.id === userProfile.activeCompanyId)
+        ? userProfile.activeCompanyId
+        : undefined;
+
+    if (activeCompanyId) {
+      await loadCompanyContext(activeCompanyId, firebaseUser.uid);
+    } else {
+      setCompany(null);
+      setMembership(null);
+      setRolePermissions(null);
+    }
   };
 
-  const createCompany = async (
-    userId: string,
-    email: string,
-    details: SignUpCompanyDetails
-  ): Promise<void> => {
-    const companyId = crypto.randomUUID();
-    const now = nowUtc();
-    const subscriptionEnd = new Date(now);
-    subscriptionEnd.setDate(subscriptionEnd.getDate() + 7);
-    const locale = countryDefaultsForCompany(details.country);
-    const profile = getCountryProfile(details.country);
-
-    const companyData: Company = {
-      id: companyId,
-      ownerId: userId,
-      name: details.companyName,
-      ...locale,
-      marketplaces: [...DEFAULT_MARKETPLACES],
-      subscriptionStart: now,
-      subscriptionEnd,
-      aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
-      aiMessagesUsed: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await setDoc(
-      doc(db, COMPANY_COLLECTION, companyId),
-      prepareDatesForFirestore(companyData as unknown as Record<string, unknown>)
-    );
-    await membershipService.createAdminMember(companyId, userId, email);
-    await rolePermissionsService.seedDefaults(companyId);
-    await userProfileService.create(userId, email, companyId);
-
-    appendAuditLog(companyId, userId, {
-      action: 'company.created',
-      entityType: 'company',
-      entityId: companyId,
-      summary: `Company ${details.companyName} created (${profile.label})`,
-    });
-
-    setCompany(companyData);
-    const member = await membershipService.getMember(companyId, userId);
-    setMembership(member);
-  };
-
-  const signUp = async (
-    email: string,
-    password: string,
-    details?: SignUpCompanyDetails
-  ): Promise<void> => {
+  const signUp = async (email: string, password: string, details: SignUpDetails): Promise<void> => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const { uid } = userCredential.user;
+    const normalizedEmail = email.trim().toLowerCase();
+    const displayName = details.displayName.trim();
 
-    const accepted = await membershipService.acceptPendingInvites(uid, email);
+    const accepted = await membershipService.acceptPendingInvites(uid, normalizedEmail);
     if (accepted) {
-      await userProfileService.create(uid, email, accepted.companyId);
+      const invitedCompany = await companyService.get(accepted.companyId);
+      if (invitedCompany) {
+        await orgMembershipService.ensureMember(
+          invitedCompany.orgId,
+          uid,
+          normalizedEmail,
+          displayName,
+          accepted.companyId
+        );
+        const existingProfile = await userProfileService.get(uid);
+        if (!existingProfile) {
+          await userProfileService.create(uid, normalizedEmail, displayName, invitedCompany.orgId);
+        } else {
+          await userProfileService.setActiveOrg(uid, invitedCompany.orgId);
+        }
+        await userProfileService.setActiveCompany(uid, accepted.companyId);
+      }
       await loadSession(userCredential.user);
       return;
     }
 
-    if (!details?.companyName?.trim()) {
-      throw new Error('Company name is required unless you were invited to an existing team.');
-    }
+    const createdOrg = await orgService.createForOwner(uid, displayName);
+    const createdOrgMember = await orgMembershipService.createAdmin(
+      createdOrg.id,
+      uid,
+      normalizedEmail,
+      displayName
+    );
+    const createdProfile = await userProfileService.create(
+      uid,
+      normalizedEmail,
+      displayName,
+      createdOrg.id
+    );
 
-    await createCompany(uid, email, details);
+    setProfile(createdProfile);
+    setOrg(createdOrg);
+    setOrgMembership(createdOrgMember);
+    setUserCompanies([]);
+    setCompany(null);
+    setMembership(null);
+    setRolePermissions(null);
   };
 
   const signIn = async (email: string, password: string): Promise<void> => {
@@ -269,15 +205,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
     await firebaseSignOut(auth);
+    setProfile(null);
+    setOrg(null);
+    setOrgMembership(null);
     setCompany(null);
     setMembership(null);
     setRolePermissions(null);
+    setUserCompanies([]);
+  };
+
+  const selectCompany = async (companyId: string): Promise<void> => {
+    if (!user) throw new Error('Not signed in');
+    await userProfileService.setActiveCompany(user.uid, companyId);
+    await loadCompanyContext(companyId, user.uid);
+    setProfile((prev) => (prev ? { ...prev, activeCompanyId: companyId } : prev));
+  };
+
+  const createCompany = async (details: CreateCompanyDetails): Promise<Company> => {
+    if (!user?.email || !org) {
+      throw new Error('Organization not found');
+    }
+    if (orgMembership?.role !== OrgRole.ADMIN) {
+      throw new Error('Only organization admins can create companies');
+    }
+
+    const created = await companyService.create(org.id, user.uid, user.email, details);
+    await userProfileService.setActiveCompany(user.uid, created.id);
+    const companies = await companyService.listForUser(user.uid);
+    setUserCompanies(companies);
+    await loadCompanyContext(created.id, user.uid);
+    setProfile((prev) => (prev ? { ...prev, activeCompanyId: created.id } : prev));
+    return created;
   };
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
-    if (!user?.email) {
-      throw new Error('Email account required to change password');
-    }
+    if (!user?.email) throw new Error('Email account required to change password');
     try {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
@@ -290,7 +252,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (error: unknown) {
-      console.error('Error changing password:', error);
       if (error && typeof error === 'object' && 'code' in error) {
         const code = (error as { code?: string }).code;
         if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -305,27 +266,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateCompany = async (updates: Partial<Company>): Promise<void> => {
-    if (!user || !company) {
-      throw new Error('User or company not found');
-    }
+    if (!user || !company) throw new Error('Company not found');
 
     const cleanUpdates = Object.fromEntries(
       Object.entries(updates).filter(([, value]) => value !== undefined)
     ) as Partial<Company>;
 
-    const updatePayload = prepareDatesForFirestore({
-      ...cleanUpdates,
-      updatedAt: nowUtc(),
-    });
+    await updateDoc(
+      doc(db, COMPANY_COLLECTION, company.id),
+      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc() })
+    );
 
-    await updateDoc(doc(db, COMPANY_COLLECTION, company.id), updatePayload);
-
-    setCompany({
-      ...company,
-      ...cleanUpdates,
-      updatedAt: nowUtc(),
-    } as Company);
-
+    setCompany({ ...company, ...cleanUpdates, updatedAt: nowUtc() } as Company);
     appendAuditLog(company.id, user.uid, {
       action: 'company.updated',
       entityType: 'company',
@@ -335,63 +287,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const updateOrg = async (updates: Partial<Organization>): Promise<void> => {
+    if (!user || !org) throw new Error('Organization not found');
+    if (orgMembership?.role !== OrgRole.ADMIN) {
+      throw new Error('Only organization admins can update organization settings');
+    }
+
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, value]) => value !== undefined)
+    ) as Partial<Organization>;
+
+    await updateDoc(
+      doc(db, ORG_COLLECTION, org.id),
+      prepareDatesForFirestore({ ...cleanUpdates, updatedAt: nowUtc() })
+    );
+    setOrg({ ...org, ...cleanUpdates, updatedAt: nowUtc() } as Organization);
+  };
+
+  const refreshCompanies = async (): Promise<void> => {
+    if (!user) return;
+    const companies = await companyService.listForUser(user.uid);
+    setUserCompanies(companies);
+  };
+
   const refreshRolePermissions = async (): Promise<void> => {
     if (!company || !membership) return;
-    await loadRolePermissions(company.id, membership.role);
+    const permissions = await rolePermissionsService.getForMember(company.id, membership.role);
+    setRolePermissions(permissions);
   };
 
-  const refreshCompany = async (): Promise<void> => {
-    if (!user || !company) return;
-    await loadCompany(company.id);
-    const member = await loadMembership(company.id, user.uid);
-    await loadRolePermissions(company.id, member?.role);
-  };
-
-  const setupCompany = async (details: SignUpCompanyDetails): Promise<void> => {
-    if (!user?.email) {
-      throw new Error('You must be signed in to create a company');
-    }
-
-    const memberships = await membershipService.listMembershipsForUser(user.uid);
-    if (memberships.length > 0) {
-      throw new Error('You already belong to a company');
-    }
-
-    await createCompany(user.uid, user.email, details);
+  const refreshSession = async (): Promise<void> => {
+    if (!user) return;
+    await loadSession(user);
   };
 
   const value: AuthContextType = {
     user,
+    profile,
+    org,
+    orgMembership,
     company,
     membership,
     rolePermissions,
+    userCompanies,
     loading,
     signUp,
     signIn,
     sendPasswordReset,
     signOut,
+    selectCompany,
+    createCompany,
     updateCompany,
+    updateOrg,
     changePassword,
-    refreshCompany,
+    refreshSession,
     refreshRolePermissions,
-    setupCompany,
+    refreshCompanies,
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-
       if (firebaseUser) {
         await loadSession(firebaseUser);
       } else {
+        setProfile(null);
+        setOrg(null);
+        setOrgMembership(null);
         setCompany(null);
         setMembership(null);
         setRolePermissions(null);
+        setUserCompanies([]);
       }
-
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 

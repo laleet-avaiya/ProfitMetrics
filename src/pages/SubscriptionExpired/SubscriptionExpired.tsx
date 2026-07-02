@@ -3,7 +3,7 @@ import { SupportContactLinks } from '../../components/SupportContact/SupportCont
 import { CreditCard, LogOut } from 'lucide-react';
 
 export function SubscriptionExpired() {
-  const { signOut, company } = useAuth();
+  const { signOut, org } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
@@ -15,12 +15,12 @@ export function SubscriptionExpired() {
           Subscription expired
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
-          {company?.name ? (
-            <>Your subscription for <strong>{company.name}</strong> has ended.</>
+          {org?.name ? (
+            <>Your subscription for <strong>{org.name}</strong> has ended.</>
           ) : (
-            'Your subscription has ended.'
+            'Your organization subscription has ended.'
           )}{' '}
-          Please contact your company or support to renew and continue using the app.
+          Please contact your organization admin or support to renew and continue using the app.
         </p>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm text-left mb-8">

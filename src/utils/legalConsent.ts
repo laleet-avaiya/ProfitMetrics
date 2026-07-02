@@ -1,7 +1,7 @@
 import { CURRENT_LEGAL_VERSION } from '../constants/legalTerms';
-import type { Company } from '../types';
+import type { Organization } from '../models/org';
 
-export function hasLegalConsent(company: Company | null | undefined): boolean {
-  if (!company?.termsAcceptedAt || !company.termsVersion) return false;
-  return company.termsVersion === CURRENT_LEGAL_VERSION;
+export function hasLegalConsent(org: Organization | null | undefined): boolean {
+  if (!org?.termsAcceptedAt || !org.termsVersion) return false;
+  return org.termsVersion === CURRENT_LEGAL_VERSION;
 }

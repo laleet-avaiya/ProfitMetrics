@@ -7,25 +7,34 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/date';
 import { formatMoney } from '../../utils/profit';
 import { getSubscriptionDaysRemaining } from '../../utils/subscription';
+import { DEFAULT_AI_MESSAGE_QUOTA } from '../../constants/aiAssistant';
 
 export function Subscription() {
-  const { company } = useAuth();
-  const start = company?.subscriptionStart;
-  const end = company?.subscriptionEnd;
+  const { org, company } = useAuth();
+  const start = org?.subscriptionStart;
+  const end = org?.subscriptionEnd;
   const daysLeft = end != null ? getSubscriptionDaysRemaining(end) : null;
   const isExpired = daysLeft !== null && daysLeft <= 0;
   const pricing = getSubscriptionPricing(company?.country);
   const plan = pricing.plan;
+  const aiQuota = org?.aiMessageQuota ?? DEFAULT_AI_MESSAGE_QUOTA;
+  const aiUsed = org?.aiMessagesUsed ?? 0;
 
   return (
     <Layout>
       <PageShell>
         <PageHeader
           title="Subscription"
-          description="Your plan status, pricing, and renewal options"
+          description="Your organization plan status, pricing, and renewal options"
         />
 
         <div className="space-y-6">
+          {org?.name ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Organization: <strong className="text-gray-900 dark:text-white">{org.name}</strong>
+            </p>
+          ) : null}
+
           {start != null && end != null && (
             <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 shadow-sm">
               <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
@@ -55,9 +64,21 @@ export function Subscription() {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-xs text-gray-500 dark:text-gray-400">Company quota</dt>
+                  <dd className="text-gray-900 dark:text-white font-medium">
+                    {org?.companyQuota ?? 1} compan{org?.companyQuota === 1 ? 'y' : 'ies'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500 dark:text-gray-400">AI assistant quota</dt>
+                  <dd className="text-gray-900 dark:text-white font-medium">
+                    {aiUsed} of {aiQuota} messages used this period
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-xs text-gray-500 dark:text-gray-400">Trial</dt>
                   <dd className="text-gray-900 dark:text-white font-medium">
-                    {pricing.trialDays}-day free trial for new companies
+                    {pricing.trialDays}-day free trial for new organizations
                   </dd>
                 </div>
               </dl>
@@ -104,7 +125,7 @@ export function Subscription() {
             </h2>
             <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-4">
               Online checkout is coming soon. To subscribe after trial or renew after expiry, contact support
-              with your company name to pay the annual fee.
+              with your organization name to pay the annual fee.
             </p>
             <SupportContactLinks />
           </section>
