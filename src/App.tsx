@@ -10,6 +10,7 @@ import { ProductDetailPage } from './pages/Products/ProductDetailPage';
 import { Products } from './pages/Products/Products';
 import { SaleFormPage } from './pages/Sales/SaleFormPage';
 import { SaleDetailPage } from './pages/Sales/SaleDetailPage';
+import { SalePrintPage, InvoicePrintPage } from './pages/Sales/SalePrintPage';
 import { Sales } from './pages/Sales/Sales';
 import { ExpenseFormPage } from './pages/Expenses/ExpenseFormPage';
 import { ExpenseDetailPage } from './pages/Expenses/ExpenseDetailPage';
@@ -20,9 +21,9 @@ import { Vendors } from './pages/Vendors/Vendors';
 import { Customers } from './pages/Customers/Customers';
 import { CustomerFormPage } from './pages/Customers/CustomerFormPage';
 import { CustomerDetailPage } from './pages/Customers/CustomerDetailPage';
-import { Invoices } from './pages/Invoices/Invoices';
 import { InvoiceFormPage } from './pages/Invoices/InvoiceFormPage';
 import { InvoiceDetailPage } from './pages/Invoices/InvoiceDetailPage';
+import { InvoicesRedirect } from './pages/Sales/InvoicesRedirect';
 import { Payments } from './pages/Payments/Payments';
 import { PaymentFormPage } from './pages/Payments/PaymentFormPage';
 import { PaymentDetailPage } from './pages/Payments/PaymentDetailPage';
@@ -100,10 +101,12 @@ function App() {
         <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
         <Route path="/sales/new" element={<ProtectedRoute><SaleFormPage /></ProtectedRoute>} />
         <Route path="/sales/:saleId/edit" element={<ProtectedRoute><SaleFormPage /></ProtectedRoute>} />
+        <Route path="/sales/:saleId/print" element={<ProtectedRoute><SalePrintPage /></ProtectedRoute>} />
         <Route path="/sales/:saleId" element={<ProtectedRoute><SaleDetailPage /></ProtectedRoute>} />
-        <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute><InvoicesRedirect /></ProtectedRoute>} />
         <Route path="/invoices/new" element={<ProtectedRoute><InvoiceFormPage /></ProtectedRoute>} />
         <Route path="/invoices/:invoiceId/edit" element={<ProtectedRoute><InvoiceFormPage /></ProtectedRoute>} />
+        <Route path="/invoices/:invoiceId/print" element={<ProtectedRoute><InvoicePrintPage /></ProtectedRoute>} />
         <Route path="/invoices/:invoiceId" element={<ProtectedRoute><InvoiceDetailPage /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
         <Route path="/payments/new" element={<ProtectedRoute><PaymentFormPage /></ProtectedRoute>} />

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  FileText,
   LayoutDashboard,
   Package,
   ShoppingCart,
@@ -58,9 +57,8 @@ const navSections: NavSection[] = [
     title: 'Sales',
     items: [
       { path: '/customers', label: 'Customers', icon: Users },
-      { path: '/invoices', label: 'Invoices', icon: FileText },
+      { path: '/sales', label: 'Sales', icon: ShoppingCart },
       { path: '/payments', label: 'Payments', icon: Wallet },
-      { path: '/sales', label: 'Online sales', icon: ShoppingCart },
     ],
   },
   {
@@ -90,6 +88,13 @@ const SIDEBAR_SUBSCRIPTION_DAYS_THRESHOLD = 10;
 
 function isNavActive(pathname: string, path: string): boolean {
   if (path === '/') return pathname === '/';
+  if (path === '/sales') {
+    return (
+      pathname === '/sales' ||
+      pathname.startsWith('/sales/') ||
+      pathname.startsWith('/invoices')
+    );
+  }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 

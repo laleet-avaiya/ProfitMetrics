@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { FileText, Package, Pencil, UserCircle, Wallet } from 'lucide-react';
+import { FileText, Package, Pencil, Printer, UserCircle, Wallet } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
@@ -88,8 +88,8 @@ export function InvoiceDetailPage() {
       notFound={notFound}
       notFoundTitle="Invoice not found"
       notFoundDescription="This invoice may have been deleted."
-      backTo="/invoices"
-      backLabel="Back to invoices"
+      backTo="/sales"
+      backLabel="Back to sales"
       title={invoice ? `Invoice ${invoice.invoiceNumber}` : 'Invoice'}
       description={invoice?.customerName ?? undefined}
       meta={
@@ -103,10 +103,16 @@ export function InvoiceDetailPage() {
       }
       actions={
         invoice && !isVoid ? (
-          <Button variant="outline" onClick={() => navigate(`/invoices/${invoice.id}/edit`)}>
-            <Pencil className="w-4 h-4" />
-            Edit
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => navigate(`/invoices/${invoice.id}/print`)}>
+              <Printer className="w-4 h-4" />
+              Print invoice
+            </Button>
+            <Button variant="outline" onClick={() => navigate(`/invoices/${invoice.id}/edit`)}>
+              <Pencil className="w-4 h-4" />
+              Edit
+            </Button>
+          </div>
         ) : null
       }
     >

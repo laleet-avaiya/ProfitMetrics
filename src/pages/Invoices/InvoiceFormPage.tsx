@@ -316,7 +316,7 @@ export function InvoiceFormPage() {
             <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Notes" />
 
             <FormStickyActions>
-              <Button type="button" variant="outline" onClick={() => navigate(isEditing && invoice ? `/invoices/${invoice.id}` : '/invoices')} disabled={saving}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => navigate(isEditing && invoice ? `/invoices/${invoice.id}` : '/sales?channel=offline')} disabled={saving}>Cancel</Button>
               <Button type="submit" variant="primary" loading={saving}>{isEditing ? 'Save invoice' : 'Create invoice'}</Button>
             </FormStickyActions>
           </form>

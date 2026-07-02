@@ -37,26 +37,34 @@ export function FormSection({
     <section
       className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm ${className}`.trim()}
     >
-      <div className="flex items-start gap-3 px-4 py-3.5 border-b border-gray-100 dark:border-gray-700/80 bg-gradient-to-r from-gray-50/90 to-white dark:from-gray-900/50 dark:to-gray-800">
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconToneClasses[iconTone]}`}
-        >
-          <Icon className="w-4 h-4" aria-hidden />
+      <div className="flex flex-col gap-3 px-3 py-3 sm:px-4 sm:py-3.5 border-b border-gray-100 dark:border-gray-700/80 bg-gradient-to-r from-gray-50/90 to-white dark:from-gray-900/50 dark:to-gray-800 sm:flex-row sm:items-start">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div
+            className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${iconToneClasses[iconTone]}`}
+          >
+            <Icon className="w-4 h-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            {step != null ? (
+              <p className="hidden sm:block text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-0.5">
+                Step {step}
+              </p>
+            ) : null}
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h2>
+            {description ? (
+              <p className="hidden sm:block text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                {description}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          {step != null ? (
-            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-0.5">
-              Step {step}
-            </p>
-          ) : null}
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h2>
-          {description ? (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">{description}</p>
-          ) : null}
-        </div>
-        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+        {headerAction ? (
+          <div className="w-full sm:w-auto sm:shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
+            {headerAction}
+          </div>
+        ) : null}
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="p-3 sm:p-4 lg:p-5">{children}</div>
     </section>
   );
 }

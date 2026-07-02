@@ -20,13 +20,14 @@ import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
 import { SaleLineEditor } from '../../components/SaleLineEditor/SaleLineEditor';
+import { SaleFormSummaryBar } from '../../components/SaleFormSummaryBar/SaleFormSummaryBar';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Product, Sale } from '../../types';
 import { DeliveryMode, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
-import { DELIVERY_MODE_OPTIONS } from '../../constants/deliveryModes';
+import { DELIVERY_MODE_OPTIONS, deliveryModeLabel } from '../../constants/deliveryModes';
 import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
 import { PURCHASE_PAYMENT_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
 import { taxPercentLabel } from '../../utils/listingTax';
@@ -36,6 +37,7 @@ import {
   emptySaleForm,
   emptySaleLineForm,
   getActiveProducts,
+  getListingsForPlatform,
   saleToForm,
   suggestGroupDeliveryCost,
   type SaleFormState,
@@ -280,7 +282,14 @@ export function SaleFormPage() {
     for (const line of form.lines) {
       const err: { productId?: string; platformListingId?: string } = {};
       if (!line.productId) err.productId = 'Select a product';
-      if (!line.platformListingId) err.platformListingId = 'Select a listing';
+      const product = formProducts.find((p) => p.id === line.productId);
+      const listings = product && form.platform ? getListingsForPlatform(product, form.platform) : [];
+      if (line.productId && listings.length > 1 && !line.platformListingId) {
+        err.platformListingId = 'Select a listing';
+      }
+      if (line.productId && listings.length === 0) {
+        err.platformListingId = `No ${form.platform} listing for this product`;
+      }
       if (Object.keys(err).length > 0) lineErrors[line.id] = err;
     }
 
@@ -358,8 +367,127 @@ export function SaleFormPage() {
 
   const cancelTo = isEditing && sale ? `/sales/${sale.id}` : '/sales';
   const noProducts = formProducts.length === 0;
-  const validLines = form.lines.every((l) => l.productId && l.platformListingId);
+  const validLines = form.lines.every((line) => {
+    if (!line.productId) return false;
+    const product = formProducts.find((p) => p.id === line.productId);
+    const listings = product && form.platform ? getListingsForPlatform(product, form.platform) : [];
+    if (listings.length === 0) return false;
+    if (listings.length > 1 && !line.platformListingId) return false;
+    return true;
+  });
   const isReady = !isEditing && form.orderId.trim() && form.platform.trim() && validLines;
+
+  const optionalFields = (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Select
+          label="Payment mode"
+          value={form.paymentMode}
+          options={PAYMENT_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, paymentMode: e.target.value as PaymentMode }))
+          }
+        />
+        <Select
+          label="Payment status"
+          value={form.paymentStatus}
+          options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
+          onChange={(e) =>
+            setForm((f) => ({
+              ...f,
+              paymentStatus: e.target.value as PurchasePaymentStatus,
+            }))
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Select
+          label="Status"
+          value={form.status}
+          options={SALE_STATUS_OPTIONS}
+          onChange={(e) => requestStatusChange(e.target.value as SaleStatus)}
+        />
+        {isReturned ? (
+          <Input
+            label="Return date"
+            type="date"
+            value={form.returnedAt}
+            onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
+          />
+        ) : null}
+        {isCancelled ? (
+          <Input
+            label="Cancellation date"
+            type="date"
+            value={form.cancelledAt}
+            onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
+          />
+        ) : null}
+      </div>
+
+      {isReturned ? (
+        <OutcomeChargeFields
+          title="Return charges"
+          description="Reverse shipping, restocking, and return logistics."
+          amountLabel="Return charges"
+          amount={form.returnCharges}
+          onAmountChange={(value) => setForm((f) => ({ ...f, returnCharges: value }))}
+          taxPercentage={form.returnTaxPercentage}
+          onTaxPercentageChange={(value) =>
+            setForm((f) => ({ ...f, returnTaxPercentage: value }))
+          }
+          taxMode={form.returnTaxMode}
+          onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
+          tracksTax={tracksTax}
+          pctLabel={pctLabel}
+          currency={currency}
+          previewBase={preview.returnOutcome.base}
+          previewTax={preview.returnOutcome.tax}
+          perUnit={false}
+        />
+      ) : null}
+
+      {isCancelled ? (
+        <OutcomeChargeFields
+          title="Cancellation charges"
+          description="Marketplace or carrier fees when the order is cancelled."
+          amountLabel="Cancellation charges"
+          amount={form.cancellationCharges}
+          onAmountChange={(value) => setForm((f) => ({ ...f, cancellationCharges: value }))}
+          taxPercentage={form.cancellationTaxPercentage}
+          onTaxPercentageChange={(value) =>
+            setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
+          }
+          taxMode={form.cancellationTaxMode}
+          onTaxModeChange={(mode) => setForm((f) => ({ ...f, cancellationTaxMode: mode }))}
+          tracksTax={tracksTax}
+          pctLabel={pctLabel}
+          currency={currency}
+          previewBase={preview.cancellationOutcome.base}
+          previewTax={preview.cancellationOutcome.tax}
+          perUnit={false}
+        />
+      ) : null}
+
+      <Input
+        label="Tracking ID"
+        value={form.trackingId}
+        onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
+        placeholder="e.g. AWB123456789"
+      />
+      <Textarea
+        label="Order notes"
+        optional
+        value={form.notes}
+        onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+        rows={3}
+      />
+    </>
+  );
 
   if (loading) {
     return (
@@ -396,8 +524,8 @@ export function SaleFormPage() {
           title={isEditing ? 'Edit sale' : 'Log sale'}
           description={
             isEditing
-              ? `Update order ${sale?.orderId ?? ''} — add multiple items like an Amazon order.`
-              : 'Log a marketplace order with one or more products and individual or group delivery.'
+              ? `Order ${sale?.orderId ?? ''}`
+              : 'Multi-item marketplace order'
           }
           actions={
             !noProducts ? (
@@ -440,26 +568,31 @@ export function SaleFormPage() {
             </Button>
           </div>
         ) : (
-          <form id="sale-form" onSubmit={handleSubmit} className="w-full space-y-5 pb-2">
+          <form id="sale-form" onSubmit={handleSubmit} className="w-full space-y-3 sm:space-y-4 lg:space-y-5 pb-24 lg:pb-2">
+            <SaleFormSummaryBar
+              preview={preview}
+              currency={currency}
+              itemCount={form.lines.length}
+              deliveryLabel={deliveryModeLabel(form.deliveryMode).toLowerCase()}
+            />
+
             <FormSection
               icon={Receipt}
               iconTone="indigo"
               step={isEditing ? undefined : 1}
               title="Order details"
-              description="Marketplace order ID, date, and channel."
+              description="Order ID, date, and marketplace."
             >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                <div className="lg:col-span-4">
-                  <Input
-                    label="Order ID"
-                    value={form.orderId}
-                    onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
-                    error={errors.orderId}
-                    required
-                    placeholder="Marketplace order number"
-                  />
-                </div>
-                <div className="lg:col-span-3">
+              <div className="space-y-3">
+                <Input
+                  label="Order ID"
+                  value={form.orderId}
+                  onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
+                  error={errors.orderId}
+                  required
+                  placeholder="e.g. Amazon order #"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="Order date"
                     type="date"
@@ -467,8 +600,6 @@ export function SaleFormPage() {
                     onChange={(e) => setForm((f) => ({ ...f, orderDate: e.target.value }))}
                     required
                   />
-                </div>
-                <div className="lg:col-span-5">
                   <Select
                     label="Marketplace"
                     value={form.platform}
@@ -488,8 +619,8 @@ export function SaleFormPage() {
               icon={Package}
               iconTone="violet"
               step={isEditing ? undefined : 2}
-              title="Order items"
-              description="Add every product in this marketplace order."
+              title="Products"
+              description="One row per SKU in the order."
               headerAction={
                 <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!form.platform}>
                   <Plus className="w-4 h-4" />
@@ -522,33 +653,41 @@ export function SaleFormPage() {
               iconTone="emerald"
               step={isEditing ? undefined : 3}
               title="Delivery"
-              description="Individual per-item fees from product listings, or one combined shipment fee."
+              description="Per-item fees or one combined shipment charge."
             >
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
                   {DELIVERY_MODE_OPTIONS.map((option) => (
                     <button
                       key={option.value}
                       type="button"
                       onClick={() => handleDeliveryModeChange(option.value)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      className={`px-3 py-3 rounded-lg text-left border transition-colors ${
                         form.deliveryMode === option.value
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700'
                       }`}
                     >
-                      {option.label}
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span
+                        className={`block text-[11px] mt-0.5 leading-snug ${
+                          form.deliveryMode === option.value
+                            ? 'text-emerald-100'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {option.value === DeliveryMode.INDIVIDUAL
+                          ? 'Each item uses its own fee'
+                          : 'One fee for whole order'}
+                      </span>
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {DELIVERY_MODE_OPTIONS.find((o) => o.value === form.deliveryMode)?.description}
-                </p>
 
                 {isGroupDelivery ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl">
+                  <div className="space-y-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/20 p-3">
                     <Input
-                      label="Order delivery fee"
+                      label="Combined delivery fee"
                       type="number"
                       min="0"
                       step="0.01"
@@ -559,27 +698,28 @@ export function SaleFormPage() {
                           orderShippingCost: parseFloat(e.target.value) || 0,
                         }))
                       }
-                      helperText="One combined shipping charge for the whole order"
                     />
-                    <Input
-                      label={pctLabel}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      disabled={!tracksTax}
-                      value={form.orderDeliveryTaxPercentage || ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          orderDeliveryTaxPercentage: parseFloat(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                    <AmountIncludesTaxField
-                      value={form.orderDeliveryTaxMode}
-                      disabled={!tracksTax}
-                      onChange={(mode) => setForm((f) => ({ ...f, orderDeliveryTaxMode: mode }))}
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label={pctLabel}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={!tracksTax}
+                        value={form.orderDeliveryTaxPercentage || ''}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            orderDeliveryTaxPercentage: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                      <AmountIncludesTaxField
+                        value={form.orderDeliveryTaxMode}
+                        disabled={!tracksTax}
+                        onChange={(mode) => setForm((f) => ({ ...f, orderDeliveryTaxMode: mode }))}
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -589,8 +729,9 @@ export function SaleFormPage() {
               icon={Layers}
               iconTone="violet"
               step={isEditing ? undefined : 4}
-              title="Order profit preview"
-              description="Combined economics for all items and delivery."
+              title="Profit breakdown"
+              description="Full order economics."
+              className="hidden lg:block"
             >
               <div className={economicsSplitLayoutClass}>
                 <div className="xl:col-span-7">
@@ -614,9 +755,27 @@ export function SaleFormPage() {
             <FormSection
               icon={Wallet}
               iconTone="emerald"
+              title="Payment & fulfillment"
+              description="Optional tracking fields."
+              className="lg:hidden"
+            >
+              <details className="group">
+                <summary className="flex items-center justify-between gap-2 py-1 cursor-pointer list-none text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Tap to expand payment, status, tracking & notes
+                </summary>
+                <div className="mt-3 space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  {optionalFields}
+                </div>
+              </details>
+            </FormSection>
+
+            <FormSection
+              icon={Wallet}
+              iconTone="emerald"
               step={isEditing ? undefined : 5}
               title="Payment tracking"
-              description="Optional — track how and when marketplace payout was received."
+              description="Optional — track marketplace payout."
+              className="hidden lg:block"
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <Select
@@ -649,7 +808,8 @@ export function SaleFormPage() {
               iconTone="amber"
               step={isEditing ? undefined : 6}
               title="Fulfillment"
-              description="Order status, returns, and cancellations with fee + tax."
+              description="Order status, returns, and cancellations."
+              className="hidden lg:block"
             >
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -659,25 +819,24 @@ export function SaleFormPage() {
                     options={SALE_STATUS_OPTIONS}
                     onChange={(e) => requestStatusChange(e.target.value as SaleStatus)}
                   />
-                  {isReturned && (
+                  {isReturned ? (
                     <Input
                       label="Return date"
                       type="date"
                       value={form.returnedAt}
                       onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
                     />
-                  )}
-                  {isCancelled && (
+                  ) : null}
+                  {isCancelled ? (
                     <Input
                       label="Cancellation date"
                       type="date"
                       value={form.cancelledAt}
                       onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
                     />
-                  )}
+                  ) : null}
                 </div>
-
-                {isReturned && (
+                {isReturned ? (
                   <OutcomeChargeFields
                     title="Return charges"
                     description="Reverse shipping, restocking, and return logistics."
@@ -697,9 +856,8 @@ export function SaleFormPage() {
                     previewTax={preview.returnOutcome.tax}
                     perUnit={false}
                   />
-                )}
-
-                {isCancelled && (
+                ) : null}
+                {isCancelled ? (
                   <OutcomeChargeFields
                     title="Cancellation charges"
                     description="Marketplace or carrier fees when the order is cancelled."
@@ -723,7 +881,7 @@ export function SaleFormPage() {
                     previewTax={preview.cancellationOutcome.tax}
                     perUnit={false}
                   />
-                )}
+                ) : null}
               </div>
             </FormSection>
 
@@ -732,17 +890,16 @@ export function SaleFormPage() {
               iconTone="emerald"
               step={isEditing ? undefined : 7}
               title="Shipment & notes"
-              description="Tracking and any extra context for this order."
+              description="Tracking and internal notes."
+              className="hidden lg:block"
             >
-              <div className="space-y-5">
-                <div className="max-w-md">
-                  <Input
-                    label="Tracking ID"
-                    value={form.trackingId}
-                    onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
-                    placeholder="e.g. AWB123456789"
-                  />
-                </div>
+              <div className="space-y-4 max-w-md">
+                <Input
+                  label="Tracking ID"
+                  value={form.trackingId}
+                  onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
+                  placeholder="e.g. AWB123456789"
+                />
                 <Textarea
                   label="Order notes"
                   optional

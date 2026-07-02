@@ -1,10 +1,9 @@
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
 import { AmountIncludesTaxField } from '../AmountIncludesTaxField/AmountIncludesTaxField';
 import { Input } from '../Input/Input';
 import { Select } from '../Select/Select';
 import { SectionHeading, SectionLinePreview } from '../SectionLinePreview/SectionLinePreview';
-import { economicsFieldsColumnClass } from '../../constants/ui';
 import type { Product } from '../../types';
 import { DeliveryMode, PlatformFeeKind, TaxType } from '../../types';
 import { platformFeeKindOptions, taxPercentLabel } from '../../utils/listingTax';
@@ -16,8 +15,7 @@ import {
   type SaleFormState,
   type SaleLineFormState,
 } from '../../utils/saleHelpers';
-import { computeLineEconomics } from '../../utils/profit';
-import { formatMoney } from '../../utils/profit';
+import { computeLineEconomics, formatMoney } from '../../utils/profit';
 
 const taxTypeOptions = [
   { value: TaxType.NONE, label: 'None' },
@@ -58,20 +56,26 @@ export function SaleLineEditor({
   onEconomicsChange,
   onRemove,
 }: SaleLineEditorProps) {
-  const [expanded, setExpanded] = useState(index === 0);
-
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === line.productId) ?? null,
     [products, line.productId]
   );
 
-  const listingOptions = useMemo(() => {
+  const platformListings = useMemo(() => {
     if (!selectedProduct || !platform) return [];
-    return getListingsForPlatform(selectedProduct, platform).map((l) => ({
-      value: l.id,
-      label: l.platformSku ? `${l.platform} (${l.platformSku})` : l.platform,
-    }));
+    return getListingsForPlatform(selectedProduct, platform);
   }, [selectedProduct, platform]);
+
+  const listingOptions = useMemo(
+    () =>
+      platformListings.map((l) => ({
+        value: l.id,
+        label: l.platformSku ? l.platformSku : l.platform,
+      })),
+    [platformListings]
+  );
+
+  const showListingSelect = platformListings.length > 1;
 
   const linePreview = useMemo(() => {
     const e = line.economics;
@@ -99,21 +103,6 @@ export function SaleLineEditor({
       taxAmountOverride: taxOverride,
     });
   }, [line, deliveryMode]);
-
-  const orderQty = Math.max(1, line.quantity);
-  const perUnitLine = useMemo(() => {
-    const scale = (value: number) => Math.round((value / orderQty) * 100) / 100;
-    return {
-      cogs: scale(linePreview.cogs),
-      grossRevenue: scale(linePreview.grossRevenue),
-      platformFees: scale(linePreview.platformFees),
-      shippingTotal: scale(linePreview.shippingTotal),
-      purchaseTaxAmount: scale(linePreview.purchaseTaxAmount),
-      taxAmount: scale(linePreview.taxAmount),
-      platformFeeTaxAmount: scale(linePreview.platformFeeTaxAmount),
-      deliveryTaxAmount: scale(linePreview.deliveryTaxAmount),
-    };
-  }, [linePreview, orderQty]);
 
   const tracksTax = line.economics.taxType !== TaxType.NONE;
   const pctLabel = taxPercentLabel(line.economics.taxType);
@@ -147,35 +136,36 @@ export function SaleLineEditor({
     });
   };
 
-  const productLabel =
-    selectedProduct?.sku ? `${selectedProduct.name} (${selectedProduct.sku})` : selectedProduct?.name;
+  const productLabel = selectedProduct
+    ? selectedProduct.sku
+      ? `${selectedProduct.name} (${selectedProduct.sku})`
+      : selectedProduct.name
+    : null;
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 bg-gray-50/80 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Item {index + 1}
-        </span>
-        <span className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1 min-w-0">
-          {productLabel ?? 'Select product'}
-        </span>
-        <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
-          {formatMoney(linePreview.grossRevenue, currency)} ·{' '}
-          {formatMoney(linePreview.profit, currency)} profit
-        </span>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-          aria-label={expanded ? 'Collapse item' : 'Expand item'}
-        >
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
+      <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700/80 bg-gray-50/70 dark:bg-gray-900/30">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+            Item {index + 1}
+          </p>
+          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+            {productLabel ?? 'Choose a product'}
+          </p>
+          {line.productId ? (
+            <p className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400 mt-0.5">
+              {formatMoney(linePreview.grossRevenue, currency)} revenue ·{' '}
+              <span className={linePreview.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                {formatMoney(linePreview.profit, currency)} profit
+              </span>
+            </p>
+          ) : null}
+        </div>
         {canRemove ? (
           <button
             type="button"
             onClick={onRemove}
-            className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+            className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0"
             aria-label="Remove item"
           >
             <Trash2 className="w-4 h-4" />
@@ -183,59 +173,83 @@ export function SaleLineEditor({
         ) : null}
       </div>
 
-      {expanded ? (
-        <div className="p-3 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="lg:col-span-5">
-              <Select
-                label="Product"
-                value={line.productId}
-                options={[
-                  { value: '', label: platform ? 'Select product…' : 'Choose platform first' },
-                  ...products.map((p) => ({
-                    value: p.id,
-                    label: p.sku ? `${p.name} (${p.sku})` : p.name,
-                  })),
-                ]}
-                onChange={(e) => handleProductChange(e.target.value)}
-                error={errors?.productId}
-                disabled={!platform}
-                required
-              />
-            </div>
-            <div className="lg:col-span-4">
-              <Select
-                label="Listing"
-                value={line.platformListingId}
-                options={[
-                  {
-                    value: '',
-                    label: selectedProduct ? 'Select listing…' : 'Choose product first',
-                  },
-                  ...listingOptions,
-                ]}
-                onChange={(e) => handleListingChange(e.target.value)}
-                error={errors?.platformListingId}
-                disabled={!selectedProduct || !platform}
-                required
-              />
-            </div>
-            <div className="lg:col-span-3">
-              <Input
-                label="Qty"
-                type="number"
-                min="1"
-                step="1"
-                value={line.quantity || ''}
-                onChange={(e) =>
-                  onChange({ quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })
-                }
-                required
-              />
-            </div>
-          </div>
+      <div className="p-3 space-y-3">
+        {!platform ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+            Select a marketplace above before adding products.
+          </p>
+        ) : null}
 
-          <div className={economicsFieldsColumnClass}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_5.5rem]">
+          <Select
+            label="Product"
+            value={line.productId}
+            options={[
+              { value: '', label: 'Select product…' },
+              ...products.map((p) => ({
+                value: p.id,
+                label: p.sku ? `${p.name} (${p.sku})` : p.name,
+              })),
+            ]}
+            onChange={(e) => handleProductChange(e.target.value)}
+            error={errors?.productId}
+            disabled={!platform}
+            required
+          />
+          <Input
+            label="Qty"
+            type="number"
+            min="1"
+            step="1"
+            value={line.quantity || ''}
+            onChange={(e) =>
+              onChange({ quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })
+            }
+            required
+          />
+        </div>
+
+        {showListingSelect ? (
+          <Select
+            label="Listing"
+            value={line.platformListingId}
+            options={[{ value: '', label: 'Select listing…' }, ...listingOptions]}
+            onChange={(e) => handleListingChange(e.target.value)}
+            error={errors?.platformListingId}
+            disabled={!selectedProduct}
+            required
+          />
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Purchase"
+            type="number"
+            min="0"
+            step="0.01"
+            value={line.economics.purchasePrice || ''}
+            onChange={(e) =>
+              onEconomicsChange({ purchasePrice: parseNumber(e.target.value) })
+            }
+          />
+          <Input
+            label="Selling"
+            type="number"
+            min="0"
+            step="0.01"
+            value={line.economics.sellingPrice || ''}
+            onChange={(e) =>
+              onEconomicsChange({ sellingPrice: parseNumber(e.target.value) })
+            }
+          />
+        </div>
+
+        <details className="group rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/40 dark:bg-gray-900/20">
+          <summary className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer list-none text-xs font-medium text-gray-700 dark:text-gray-300">
+            <span>Tax, platform fees & delivery</span>
+            <ChevronDown className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180 shrink-0" />
+          </summary>
+          <div className="px-3 pb-3 pt-1 space-y-3 border-t border-gray-200/80 dark:border-gray-700/80">
             <Select
               label="Tax type"
               value={line.economics.taxType}
@@ -247,213 +261,164 @@ export function SaleLineEditor({
               }
             />
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-              <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                <SectionHeading title="Purchase" description="Input tax (ITC) on product cost." />
+            <div className="space-y-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/60 dark:bg-gray-800/40 p-3">
+              <SectionHeading title="Purchase tax" />
+              <div className="grid grid-cols-2 gap-2">
                 <Input
-                  label="Purchase price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={line.economics.purchasePrice || ''}
-                  onChange={(e) =>
-                    onEconomicsChange({ purchasePrice: parseNumber(e.target.value) })
-                  }
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label={pctLabel}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    disabled={!tracksTax}
-                    value={line.economics.purchaseTaxPercentage || ''}
-                    onChange={(e) =>
-                      onEconomicsChange({ purchaseTaxPercentage: parseNumber(e.target.value) })
-                    }
-                  />
-                  <AmountIncludesTaxField
-                    value={line.economics.purchaseTaxMode}
-                    disabled={!tracksTax}
-                    onChange={(mode) => onEconomicsChange({ purchaseTaxMode: mode })}
-                  />
-                </div>
-                <SectionLinePreview
-                  amountLabel="Cost per unit"
-                  amount={perUnitLine.cogs}
-                  taxDirection="credit"
-                  taxAmount={perUnitLine.purchaseTaxAmount}
-                  currency={currency}
-                  tracksTax={tracksTax}
-                />
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                <SectionHeading title="Selling" description="Output tax on selling price." />
-                <Input
-                  label="Selling price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={line.economics.sellingPrice || ''}
-                  onChange={(e) =>
-                    onEconomicsChange({ sellingPrice: parseNumber(e.target.value) })
-                  }
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label={pctLabel}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    disabled={!tracksTax}
-                    value={line.economics.sellingTaxPercentage || ''}
-                    onChange={(e) =>
-                      onEconomicsChange({ sellingTaxPercentage: parseNumber(e.target.value) })
-                    }
-                  />
-                  <AmountIncludesTaxField
-                    value={line.economics.sellingTaxMode}
-                    disabled={!tracksTax}
-                    onChange={(mode) =>
-                      onEconomicsChange({ sellingTaxMode: mode, taxMode: mode })
-                    }
-                  />
-                </div>
-                <Input
-                  label="Output tax (per unit)"
+                  label={pctLabel}
                   type="number"
                   min="0"
                   step="0.01"
                   disabled={!tracksTax}
-                  value={displayedTaxPerUnit || ''}
+                  value={line.economics.purchaseTaxPercentage || ''}
                   onChange={(e) =>
-                    onEconomicsChange({
-                      taxAmountPerUnit: parseNumber(e.target.value),
-                      taxAmountManual: true,
-                    })
+                    onEconomicsChange({ purchaseTaxPercentage: parseNumber(e.target.value) })
                   }
                 />
-                <SectionLinePreview
-                  amountLabel="Revenue per unit"
-                  amount={perUnitLine.grossRevenue}
-                  taxDirection="debit"
-                  taxAmount={perUnitLine.taxAmount}
-                  currency={currency}
-                  tracksTax={tracksTax}
+                <AmountIncludesTaxField
+                  value={line.economics.purchaseTaxMode}
+                  disabled={!tracksTax}
+                  onChange={(mode) => onEconomicsChange({ purchaseTaxMode: mode })}
                 />
               </div>
+            </div>
 
-              <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                <SectionHeading title="Platform fees" description="Marketplace commission." />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Select
-                    label="Fee type"
-                    value={feeKind}
-                    options={platformFeeKindOptions}
-                    onChange={(e) => {
-                      const kind = e.target.value as PlatformFeeKind;
-                      onEconomicsChange({
-                        platformFeeKind: kind,
-                        platformFee:
-                          kind === PlatformFeeKind.FIXED ? line.economics.platformFee : undefined,
-                        platformFeePercent:
-                          kind === PlatformFeeKind.PERCENT
-                            ? line.economics.platformFeePercent
-                            : undefined,
-                      });
-                    }}
-                  />
-                  {feeKind === PlatformFeeKind.FIXED ? (
-                    <Input
-                      label="Platform fee (amount)"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.economics.platformFee ?? ''}
-                      onChange={(e) =>
-                        onEconomicsChange({
-                          platformFee: e.target.value ? parseNumber(e.target.value) : undefined,
-                          platformFeePercent: undefined,
-                        })
-                      }
-                    />
-                  ) : (
-                    <Input
-                      label="Platform fee (%)"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={line.economics.platformFeePercent ?? ''}
-                      onChange={(e) =>
-                        onEconomicsChange({
-                          platformFeePercent: e.target.value
-                            ? parseNumber(e.target.value)
-                            : undefined,
-                          platformFee: undefined,
-                        })
-                      }
-                    />
-                  )}
-                </div>
-                <SectionLinePreview
-                  amountLabel="Platform fee per unit"
-                  amount={perUnitLine.platformFees}
-                  taxDirection="credit"
-                  taxAmount={perUnitLine.platformFeeTaxAmount}
-                  currency={currency}
-                  tracksTax={tracksTax}
+            <div className="space-y-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/60 dark:bg-gray-800/40 p-3">
+              <SectionHeading title="Selling tax" />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label={pctLabel}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  disabled={!tracksTax}
+                  value={line.economics.sellingTaxPercentage || ''}
+                  onChange={(e) =>
+                    onEconomicsChange({ sellingTaxPercentage: parseNumber(e.target.value) })
+                  }
+                />
+                <AmountIncludesTaxField
+                  value={line.economics.sellingTaxMode}
+                  disabled={!tracksTax}
+                  onChange={(mode) =>
+                    onEconomicsChange({ sellingTaxMode: mode, taxMode: mode })
+                  }
                 />
               </div>
+              <Input
+                label="Output tax / unit"
+                type="number"
+                min="0"
+                step="0.01"
+                disabled={!tracksTax}
+                value={displayedTaxPerUnit || ''}
+                onChange={(e) =>
+                  onEconomicsChange({
+                    taxAmountPerUnit: parseNumber(e.target.value),
+                    taxAmountManual: true,
+                  })
+                }
+              />
+            </div>
 
-              {deliveryMode === DeliveryMode.INDIVIDUAL ? (
-                <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                  <SectionHeading
-                    title="Delivery"
-                    description="Per-unit delivery fee for this item."
-                  />
+            <div className="space-y-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/60 dark:bg-gray-800/40 p-3">
+              <SectionHeading title="Platform fee" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Select
+                  label="Fee type"
+                  value={feeKind}
+                  options={platformFeeKindOptions}
+                  onChange={(e) => {
+                    const kind = e.target.value as PlatformFeeKind;
+                    onEconomicsChange({
+                      platformFeeKind: kind,
+                      platformFee:
+                        kind === PlatformFeeKind.FIXED ? line.economics.platformFee : undefined,
+                      platformFeePercent:
+                        kind === PlatformFeeKind.PERCENT
+                          ? line.economics.platformFeePercent
+                          : undefined,
+                    });
+                  }}
+                />
+                {feeKind === PlatformFeeKind.FIXED ? (
                   <Input
-                    label="Delivery fee (per unit)"
+                    label="Fee amount"
                     type="number"
                     min="0"
                     step="0.01"
-                    value={line.economics.shippingCost || ''}
+                    value={line.economics.platformFee ?? ''}
                     onChange={(e) =>
-                      onEconomicsChange({ shippingCost: parseNumber(e.target.value) })
+                      onEconomicsChange({
+                        platformFee: e.target.value ? parseNumber(e.target.value) : undefined,
+                        platformFeePercent: undefined,
+                      })
                     }
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      label={pctLabel}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      disabled={!tracksTax}
-                      value={line.economics.deliveryTaxPercentage || ''}
-                      onChange={(e) =>
-                        onEconomicsChange({ deliveryTaxPercentage: parseNumber(e.target.value) })
-                      }
-                    />
-                    <AmountIncludesTaxField
-                      value={line.economics.deliveryTaxMode}
-                      disabled={!tracksTax}
-                      onChange={(mode) => onEconomicsChange({ deliveryTaxMode: mode })}
-                    />
-                  </div>
-                  <SectionLinePreview
-                    amountLabel="Delivery cost per unit"
-                    amount={perUnitLine.shippingTotal}
-                    taxDirection="credit"
-                    taxAmount={perUnitLine.deliveryTaxAmount}
-                    currency={currency}
-                    tracksTax={tracksTax}
+                ) : (
+                  <Input
+                    label="Fee %"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={line.economics.platformFeePercent ?? ''}
+                    onChange={(e) =>
+                      onEconomicsChange({
+                        platformFeePercent: e.target.value
+                          ? parseNumber(e.target.value)
+                          : undefined,
+                        platformFee: undefined,
+                      })
+                    }
+                  />
+                )}
+              </div>
+              <SectionLinePreview
+                amountLabel="Platform fee / unit"
+                amount={linePreview.platformFees / Math.max(1, line.quantity)}
+                taxDirection="credit"
+                taxAmount={linePreview.platformFeeTaxAmount / Math.max(1, line.quantity)}
+                currency={currency}
+                tracksTax={tracksTax}
+              />
+            </div>
+
+            {deliveryMode === DeliveryMode.INDIVIDUAL ? (
+              <div className="space-y-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/60 dark:bg-gray-800/40 p-3">
+                <SectionHeading title="Item delivery" description="Per-unit shipping for this line." />
+                <Input
+                  label="Delivery / unit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.economics.shippingCost || ''}
+                  onChange={(e) =>
+                    onEconomicsChange({ shippingCost: parseNumber(e.target.value) })
+                  }
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label={pctLabel}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={!tracksTax}
+                    value={line.economics.deliveryTaxPercentage || ''}
+                    onChange={(e) =>
+                      onEconomicsChange({ deliveryTaxPercentage: parseNumber(e.target.value) })
+                    }
+                  />
+                  <AmountIncludesTaxField
+                    value={line.economics.deliveryTaxMode}
+                    disabled={!tracksTax}
+                    onChange={(mode) => onEconomicsChange({ deliveryTaxMode: mode })}
                   />
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        </details>
+      </div>
     </div>
   );
 }

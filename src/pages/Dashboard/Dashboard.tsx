@@ -9,7 +9,6 @@ import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { Input } from '../../components/Input/Input';
 import { Button } from '../../components/Button/Button';
 import { useAuth } from '../../hooks/useAuth';
-import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
@@ -83,16 +82,10 @@ const quickLinks = [
     description: 'SKUs & stock',
   },
   {
-    label: 'Online sales',
+    label: 'Sales',
     path: '/sales',
     icon: ShoppingCart,
-    description: 'Marketplace orders',
-  },
-  {
-    label: 'Invoices',
-    path: '/invoices',
-    icon: FileText,
-    description: 'Customer invoices',
+    description: 'Marketplace & offline',
   },
   {
     label: 'Purchases',
@@ -142,7 +135,6 @@ const RECENT_LIMIT = 5;
 
 export function Dashboard() {
   const { company } = useAuth();
-  const { summary: marketplaceSummary } = useCompanyMarketplaces();
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
@@ -348,16 +340,16 @@ export function Dashboard() {
           description={`${BRAND_NAME} · ${company?.name ?? 'Your company'}`}
           actions={
             <>
-              <Link to="/sales">
+              <Link to="/sales/new">
                 <Button variant="primary" size="sm">
                   <Plus className="w-4 h-4" />
-                  Log sale
+                  Marketplace sale
                 </Button>
               </Link>
               <Link to="/invoices/new">
                 <Button variant="outline" size="sm">
                   <Plus className="w-4 h-4" />
-                  New invoice
+                  Offline sale
                 </Button>
               </Link>
               <Link to="/payments/new">
@@ -624,13 +616,13 @@ export function Dashboard() {
               <Link to="/sales/new">
                 <Button variant="primary" size="sm">
                   <ShoppingCart className="w-4 h-4" />
-                  Log online sale
+                  Marketplace sale
                 </Button>
               </Link>
               <Link to="/invoices/new">
                 <Button variant="outline" size="sm">
                   <FileText className="w-4 h-4" />
-                  Create invoice
+                  Offline sale
                 </Button>
               </Link>
               <Link to="/products/new">
@@ -792,7 +784,7 @@ export function Dashboard() {
             <Card>
               <CardHeader
                 title="Sales by channel"
-                description="Online sales vs invoices"
+                description="Marketplace vs offline sales"
                 action={
                   topPlatforms.length > 0 ? (
                     <Link
@@ -820,7 +812,7 @@ export function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
             <Card>
               <CardHeader
-                title="Recent online sales"
+                title="Recent marketplace sales"
                 description={`Latest in ${dateRange.label.toLowerCase()}`}
                 action={
                   <Link
@@ -861,11 +853,11 @@ export function Dashboard() {
 
             <Card>
               <CardHeader
-                title="Recent invoices"
-                description={`Invoices · ${dateRange.label.toLowerCase()}`}
+                title="Recent offline sales"
+                description={`Customer invoices · ${dateRange.label.toLowerCase()}`}
                 action={
                   <Link
-                    to="/invoices"
+                    to="/sales?channel=offline"
                     className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
                     View all
@@ -989,8 +981,8 @@ export function Dashboard() {
                   Get started with {BRAND_NAME}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Add products, log online sales on {marketplaceSummary}, create invoices, record
-                  purchases to build stock, and track expenses. Your dashboard fills in as you go.
+                  Add products, log marketplace and offline sales, record purchases to build stock,
+                  and track expenses. Your dashboard fills in as you go.
                 </p>
               </div>
             </div>
@@ -998,10 +990,7 @@ export function Dashboard() {
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2">
-          {quickLinks.map((item) => {
-            const description =
-              item.path === '/sales' ? `${marketplaceSummary} orders` : item.description;
-            return (
+          {quickLinks.map((item) => (
             <Link
               key={item.path}
               to={item.path}
@@ -1015,11 +1004,10 @@ export function Dashboard() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.label}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{item.description}</p>
               </div>
             </Link>
-            );
-          })}
+          ))}
         </div>
       </PageShell>
     </Layout>

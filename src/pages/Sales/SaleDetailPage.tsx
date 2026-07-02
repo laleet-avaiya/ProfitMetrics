@@ -3,6 +3,7 @@ import {
   Calendar,
   Layers,
   Pencil,
+  Printer,
   Receipt,
   ShoppingCart,
   TrendingDown,
@@ -88,14 +89,24 @@ export function SaleDetailPage() {
       }
       actions={
         sale ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(`/sales/${sale.id}/edit`)}
-          >
-            <Pencil className="w-4 h-4" />
-            Edit sale
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(`/sales/${sale.id}/print`)}
+            >
+              <Printer className="w-4 h-4" />
+              Print invoice
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(`/sales/${sale.id}/edit`)}
+            >
+              <Pencil className="w-4 h-4" />
+              Edit sale
+            </Button>
+          </div>
         ) : null
       }
     >
