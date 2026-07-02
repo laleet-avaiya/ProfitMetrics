@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, ArchiveRestore, Eye, Pencil, Plus, Search, Trash2, UserCircle, Wallet } from 'lucide-react';
+import { Archive, ArchiveRestore, Eye, Pencil, Plus, Trash2, UserCircle, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import {
-  filterRowClass,
   tableCellClass,
   tableHeadCellClass,
   tableTruncateCellClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -134,30 +132,29 @@ export function Customers() {
       </div>
 
       <Card className="space-y-3">
-        <div className={toolbarClass}>
-          <div className={filterRowClass}>
-            <div className="flex-1 min-w-[200px] max-w-md">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, email, phone"
-                leftIcon={<Search className="w-4 h-4" />}
-              />
-            </div>
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search name, email, phone"
+          searchAriaLabel="Search customers"
+          actions={
+            <Button variant="primary" onClick={() => navigate('/customers/new')} className="flex-1 sm:flex-none">
+              <Plus className="w-4 h-4" />
+              Add customer
+            </Button>
+          }
+          filters={
             <FilterSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              aria-label="Status"
             >
               <option value="active">Active</option>
               <option value="archived">Archived</option>
               <option value="all">All</option>
             </FilterSelect>
-          </div>
-          <Button variant="primary" onClick={() => navigate('/customers/new')}>
-            <Plus className="w-4 h-4" />
-            Add customer
-          </Button>
-        </div>
+          }
+        />
 
         {loading ? (
           <LoadingView message="Loading customers…" size="lg" className="py-16" />

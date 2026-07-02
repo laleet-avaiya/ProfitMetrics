@@ -8,23 +8,20 @@ import {
   Pencil,
   Plus,
   Receipt,
-  Search,
   Trash2,
   Wallet,
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import {
-  filterRowClass,
   tableCellClass,
   tableHeadCellClass,
   tableTruncateCellClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -177,32 +174,29 @@ export function Vendors() {
       </div>
 
       <Card className="space-y-3">
-        <div className={toolbarClass}>
-          <div className={filterRowClass}>
-            <div className="flex-1 min-w-[200px] max-w-md">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, contact, email, phone"
-                leftIcon={<Search className="w-4 h-4" />}
-                aria-label="Search vendors"
-              />
-            </div>
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search name, contact, email, phone"
+          searchAriaLabel="Search vendors"
+          actions={
+            <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
+              <Plus className="w-4 h-4" />
+              Add vendor
+            </Button>
+          }
+          filters={
             <FilterSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              aria-label="Filter by status"
+              aria-label="Status"
             >
               <option value="active">Active</option>
               <option value="archived">Archived</option>
               <option value="all">All</option>
             </FilterSelect>
-          </div>
-          <Button variant="primary" onClick={openCreate}>
-            <Plus className="w-4 h-4" />
-            Add vendor
-          </Button>
-        </div>
+          }
+        />
 
         {loading ? (
           <LoadingView message="Loading vendors…" size="lg" className="py-16" />

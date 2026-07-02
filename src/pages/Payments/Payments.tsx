@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, Pencil, Plus, Search, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { Eye, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import {
-  filterRowClass,
   tableCellClass,
   tableHeadCellClass,
   tableTruncateCellClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
@@ -126,33 +124,40 @@ export function Payments() {
         />
       </div>
       <Card className="space-y-3">
-        <div className={toolbarClass}>
-          <div className={filterRowClass}>
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reference, customer, platform" leftIcon={<Search className="w-4 h-4" />} />
-            <FilterSelect value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)}>
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="all">All time</option>
-            </FilterSelect>
-            <FilterSelect value={kindFilter} onChange={(e) => setKindFilter(e.target.value as KindFilter)} wide>
-              <option value="all">All types</option>
-              {PAYMENT_KIND_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </FilterSelect>
-            <FilterSelect value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} wide>
-              <option value="all">All marketplaces</option>
-              {platformFilterOptions.map((platform) => (
-                <option key={platform} value={platform}>{platform}</option>
-              ))}
-            </FilterSelect>
-          </div>
-          <Button variant="primary" onClick={() => navigate('/payments/new')}>
-            <Plus className="w-4 h-4" />
-            Record payment
-          </Button>
-        </div>
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search reference, customer, platform"
+          searchAriaLabel="Search payments"
+          actions={
+            <Button variant="primary" onClick={() => navigate('/payments/new')} className="flex-1 sm:flex-none">
+              <Plus className="w-4 h-4" />
+              Record payment
+            </Button>
+          }
+          filters={
+            <>
+              <FilterSelect value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)} aria-label="Date range">
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="all">All time</option>
+              </FilterSelect>
+              <FilterSelect value={kindFilter} onChange={(e) => setKindFilter(e.target.value as KindFilter)} wide aria-label="Payment type">
+                <option value="all">All types</option>
+                {PAYMENT_KIND_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </FilterSelect>
+              <FilterSelect value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} wide aria-label="Marketplace">
+                <option value="all">All marketplaces</option>
+                {platformFilterOptions.map((platform) => (
+                  <option key={platform} value={platform}>{platform}</option>
+                ))}
+              </FilterSelect>
+            </>
+          }
+        />
         {loading ? (
           <LoadingView message="Loading payments…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (

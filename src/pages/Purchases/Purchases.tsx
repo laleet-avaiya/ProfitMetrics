@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, ClipboardList, Eye, Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
+import { Building2, ClipboardList, Eye, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import {
-  filterRowClass,
   tableCellClass,
   tableHeadCellClass,
   tableTruncateCellClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -178,59 +176,58 @@ export function Purchases() {
       </div>
 
       <Card className="space-y-3">
-        <div className={toolbarClass}>
-          <div className={filterRowClass}>
-            <div className="flex-1 min-w-[200px] max-w-md">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search PO, vendor, product"
-                leftIcon={<Search className="w-4 h-4" />}
-                aria-label="Search purchases"
-              />
-            </div>
-            <FilterSelect
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-              aria-label="Filter by date"
-            >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="all">All time</option>
-            </FilterSelect>
-            <FilterSelect
-              value={vendorFilter}
-              onChange={(e) => setVendorFilter(e.target.value)}
-              wide
-              aria-label="Filter by vendor"
-            >
-              <option value="">All vendors</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              wide
-              aria-label="Filter by status"
-            >
-              <option value="all">All statuses</option>
-              {PURCHASE_STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </FilterSelect>
-          </div>
-          <Button variant="primary" onClick={() => navigate('/purchases/new')}>
-            <Plus className="w-4 h-4" />
-            New purchase order
-          </Button>
-        </div>
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search PO, vendor, product"
+          searchAriaLabel="Search purchases"
+          actions={
+            <Button variant="primary" onClick={() => navigate('/purchases/new')} className="flex-1 sm:flex-none">
+              <Plus className="w-4 h-4" />
+              New purchase order
+            </Button>
+          }
+          filters={
+            <>
+              <FilterSelect
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                aria-label="Date range"
+              >
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="all">All time</option>
+              </FilterSelect>
+              <FilterSelect
+                value={vendorFilter}
+                onChange={(e) => setVendorFilter(e.target.value)}
+                wide
+                aria-label="Vendor"
+              >
+                <option value="">All vendors</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </FilterSelect>
+              <FilterSelect
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                wide
+                aria-label="Status"
+              >
+                <option value="all">All statuses</option>
+                {PURCHASE_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </FilterSelect>
+            </>
+          }
+        />
 
         {loading ? (
           <LoadingView message="Loading purchases…" size="lg" className="py-16" />

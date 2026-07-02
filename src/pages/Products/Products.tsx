@@ -6,24 +6,21 @@ import {
   Package,
   Pencil,
   Plus,
-  Search,
   Target,
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import {
-  filterRowClass,
   tableCellClass,
   tableClass,
   tableHeadCellClass,
   tableHeadRowClass,
   tableTruncateCellClass,
   tableWrapClass,
-  toolbarClass,
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
@@ -140,23 +137,18 @@ export function Products() {
       </div>
 
       <Card className="space-y-3">
-          <div className={toolbarClass}>
-            <div className={filterRowClass}>
-              <div className="flex-1 min-w-[200px] max-w-md">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, SKU, or category"
-                  leftIcon={<Search className="w-4 h-4" />}
-                  aria-label="Search products"
-                />
-              </div>
-            </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus className="w-4 h-4" />
-              Add product
-            </Button>
-          </div>
+          <ListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by name, SKU, or category"
+            searchAriaLabel="Search products"
+            actions={
+              <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
+                <Plus className="w-4 h-4" />
+                Add product
+              </Button>
+            }
+          />
 
           {loading ? (
             <LoadingView message="Loading products…" size="lg" className="py-12" />

@@ -6,7 +6,6 @@ import {
   Pencil,
   Plus,
   Printer,
-  Search,
   ShoppingCart,
   Store,
   Trash2,
@@ -14,8 +13,8 @@ import {
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
 import { Button } from '../../components/Button/Button';
-import { Input } from '../../components/Input/Input';
 import { Card, StatCard } from '../../components/ui/Card';
+import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
@@ -257,18 +256,13 @@ export function Sales() {
       </div>
 
       <Card className="space-y-3">
-        <div className="space-y-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex-1 min-w-0">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search orders, invoices, customers…"
-                leftIcon={<Search className="w-4 h-4" />}
-                aria-label="Search sales"
-              />
-            </div>
-            <div className="flex gap-2 shrink-0">
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search orders, invoices, customers…"
+          searchAriaLabel="Search sales"
+          actions={
+            <>
               <Button
                 variant="violet"
                 onClick={() => navigate('/invoices/new')}
@@ -285,59 +279,60 @@ export function Sales() {
                 <Plus className="w-4 h-4" />
                 Marketplace sale
               </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 dark:border-gray-700/80 pt-2">
-            <FilterSelect
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-              aria-label="Date range"
-            >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="all">All time</option>
-            </FilterSelect>
-            {showCustomerFilter ? (
-              <>
-                <FilterSelect
-                  value={customerFilter}
-                  onChange={(e) => {
-                    const params = new URLSearchParams(searchParams);
-                    if (e.target.value) params.set('customer', e.target.value);
-                    else params.delete('customer');
-                    setSearchParams(params, { replace: true });
-                  }}
-                  wide
-                  aria-label="Customer"
-                >
-                  <option value="">All customers</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </FilterSelect>
-                {channel === SalesChannelFilter.OFFLINE ? (
+            </>
+          }
+          filters={
+            <>
+              <FilterSelect
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                aria-label="Date range"
+              >
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="all">All time</option>
+              </FilterSelect>
+              {showCustomerFilter ? (
+                <>
                   <FilterSelect
-                    value={invoiceStatusFilter}
-                    onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceStatusFilter)}
+                    value={customerFilter}
+                    onChange={(e) => {
+                      const params = new URLSearchParams(searchParams);
+                      if (e.target.value) params.set('customer', e.target.value);
+                      else params.delete('customer');
+                      setSearchParams(params, { replace: true });
+                    }}
                     wide
-                    aria-label="Invoice status"
+                    aria-label="Customer"
                   >
-                    <option value="all">All statuses</option>
-                    {INVOICE_STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
+                    <option value="">All customers</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
                   </FilterSelect>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-        </div>
+                  {channel === SalesChannelFilter.OFFLINE ? (
+                    <FilterSelect
+                      value={invoiceStatusFilter}
+                      onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceStatusFilter)}
+                      wide
+                      aria-label="Invoice status"
+                    >
+                      <option value="all">All statuses</option>
+                      {INVOICE_STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </FilterSelect>
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          }
+        />
 
         {loading ? (
           <LoadingView message="Loading sales…" size="lg" className="py-16" />
