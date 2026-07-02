@@ -1,5 +1,5 @@
-import type { PlatformFeeKind, ProductPlatformListing, SaleLineEconomics, TaxMode } from '../types';
-import { PlatformFeeKind as PlatformFeeKindEnum, TaxMode as TaxModeEnum } from '../types';
+import type { DeliveryMode, PlatformFeeKind, ProductPlatformListing, SaleLineEconomics, TaxMode } from '../types';
+import { DeliveryMode as DeliveryModeEnum, PlatformFeeKind as PlatformFeeKindEnum, TaxMode as TaxModeEnum } from '../types';
 import type { LineTaxSettings } from '../types';
 import { resolveListingTax } from './listingTax';
 
@@ -226,6 +226,130 @@ export function lineEconomicsInputFromListing(
     platformFeeTaxPercentage: resolved.platformFeeTaxPercentage,
     platformFeeTaxMode: resolved.platformFeeTaxMode,
   };
+}
+
+export interface OrderEconomicsInput {
+  lines: LineEconomicsInput[];
+  deliveryMode: DeliveryMode;
+  orderShippingCost?: number;
+  orderDeliveryTaxPercentage?: number;
+  orderDeliveryTaxMode?: TaxMode;
+}
+
+function emptyLineResult(): LineEconomicsResult {
+  return {
+    quantity: 0,
+    grossRevenue: 0,
+    cogs: 0,
+    shippingTotal: 0,
+    platformFees: 0,
+    platformFeesBase: 0,
+    taxAmount: 0,
+    purchaseTaxAmount: 0,
+    deliveryTaxAmount: 0,
+    platformFeeTaxAmount: 0,
+    inputTaxAmount: 0,
+    totalCosts: 0,
+    netRevenue: 0,
+    profit: 0,
+    profitMarginPercent: 0,
+    profitWithoutItc: 0,
+    profitMarginWithoutItcPercent: 0,
+  };
+}
+
+function sumLineResults(results: LineEconomicsResult[]): LineEconomicsResult {
+  if (results.length === 0) return emptyLineResult();
+
+  const totalQty = results.reduce((sum, r) => sum + r.quantity, 0);
+  const grossRevenue = roundMoney(results.reduce((sum, r) => sum + r.grossRevenue, 0));
+  const cogs = roundMoney(results.reduce((sum, r) => sum + r.cogs, 0));
+  const shippingTotal = roundMoney(results.reduce((sum, r) => sum + r.shippingTotal, 0));
+  const platformFees = roundMoney(results.reduce((sum, r) => sum + r.platformFees, 0));
+  const platformFeesBase = roundMoney(results.reduce((sum, r) => sum + r.platformFeesBase, 0));
+  const taxAmount = roundMoney(results.reduce((sum, r) => sum + r.taxAmount, 0));
+  const purchaseTaxAmount = roundMoney(results.reduce((sum, r) => sum + r.purchaseTaxAmount, 0));
+  const deliveryTaxAmount = roundMoney(results.reduce((sum, r) => sum + r.deliveryTaxAmount, 0));
+  const platformFeeTaxAmount = roundMoney(
+    results.reduce((sum, r) => sum + r.platformFeeTaxAmount, 0)
+  );
+  const inputTaxAmount = roundMoney(results.reduce((sum, r) => sum + r.inputTaxAmount, 0));
+  const totalCosts = roundMoney(results.reduce((sum, r) => sum + r.totalCosts, 0));
+  const netRevenue = roundMoney(results.reduce((sum, r) => sum + r.netRevenue, 0));
+  const profit = roundMoney(netRevenue - totalCosts);
+  const profitWithoutItc = roundMoney(profit - inputTaxAmount);
+  const profitMarginPercent =
+    netRevenue > 0 ? roundMoney((profit / netRevenue) * 100) : 0;
+  const profitMarginWithoutItcPercent =
+    netRevenue > 0 ? roundMoney((profitWithoutItc / netRevenue) * 100) : 0;
+
+  return {
+    quantity: totalQty,
+    grossRevenue,
+    cogs,
+    shippingTotal,
+    platformFees,
+    platformFeesBase,
+    taxAmount,
+    purchaseTaxAmount,
+    deliveryTaxAmount,
+    platformFeeTaxAmount,
+    inputTaxAmount,
+    totalCosts,
+    netRevenue,
+    profit,
+    profitMarginPercent,
+    profitWithoutItc,
+    profitMarginWithoutItcPercent,
+  };
+}
+
+/** Aggregate multi-line order economics with individual or group delivery. */
+export function computeOrderEconomics(input: OrderEconomicsInput): LineEconomicsResult {
+  const isGroup = input.deliveryMode === DeliveryModeEnum.GROUP;
+
+  const lineResults = input.lines.map((line) =>
+    computeLineEconomics({
+      ...line,
+      shippingCost: isGroup ? 0 : line.shippingCost,
+    })
+  );
+
+  let aggregated = sumLineResults(lineResults);
+
+  if (isGroup && (input.orderShippingCost ?? 0) > 0 && input.lines.length > 0) {
+    const taxType = input.lines[0]?.taxType ?? 'none';
+    const tracksTax = taxType !== 'none';
+    const orderAmount = Math.max(0, input.orderShippingCost ?? 0);
+    const taxPct = input.orderDeliveryTaxPercentage ?? input.lines[0]?.deliveryTaxPercentage ?? 0;
+    const taxMode =
+      input.orderDeliveryTaxMode ?? input.lines[0]?.deliveryTaxMode ?? TaxModeEnum.INCLUSIVE;
+
+    const deliveryTaxAmount = tracksTax ? computeTaxAmount(orderAmount, taxPct, taxMode) : 0;
+    const shippingBase = tracksTax ? computeTaxBase(orderAmount, taxPct, taxMode) : orderAmount;
+    const shippingTotal = roundMoney(shippingBase);
+    const nextTotalCosts = roundMoney(aggregated.totalCosts + shippingTotal);
+
+    aggregated = {
+      ...aggregated,
+      shippingTotal: roundMoney(aggregated.shippingTotal + shippingTotal),
+      deliveryTaxAmount: roundMoney(aggregated.deliveryTaxAmount + deliveryTaxAmount),
+      inputTaxAmount: roundMoney(aggregated.inputTaxAmount + deliveryTaxAmount),
+      totalCosts: nextTotalCosts,
+      profit: roundMoney(aggregated.netRevenue - nextTotalCosts),
+    };
+    aggregated.profitWithoutItc = roundMoney(aggregated.profit - aggregated.inputTaxAmount);
+    aggregated.profitMarginPercent =
+      aggregated.netRevenue > 0
+        ? roundMoney((aggregated.profit / aggregated.netRevenue) * 100)
+        : 0;
+    aggregated.profitMarginWithoutItcPercent =
+      aggregated.netRevenue > 0
+        ? roundMoney((aggregated.profitWithoutItc / aggregated.netRevenue) * 100)
+        : 0;
+  }
+
+  return aggregated;
 }
 
 export function formatMoney(amount: number, currency = 'AED'): string {

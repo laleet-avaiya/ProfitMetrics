@@ -1,14 +1,33 @@
-import type { Product, ProductPlatformListing, Sale, SaleLineEconomics, SaleStatus } from '../types';
-import { PaymentMode, PlatformFeeKind, PurchasePaymentStatus, SaleStatus as SaleStatusEnum, TaxMode, TaxType } from '../types';
+import type {
+  DeliveryMode,
+  Product,
+  ProductPlatformListing,
+  Sale,
+  SaleLine,
+  SaleLineEconomics,
+  SaleStatus,
+} from '../types';
+import {
+  DeliveryMode as DeliveryModeEnum,
+  PaymentMode,
+  PlatformFeeKind,
+  PurchasePaymentStatus,
+  SaleStatus as SaleStatusEnum,
+  TaxMode,
+  TaxType,
+} from '../types';
+import { normalizeDeliveryMode } from '../constants/deliveryModes';
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { normalizeSalePaymentStatus } from '../constants/purchaseStatuses';
 import { resolveListingTax } from './listingTax';
 import {
   computeLineEconomics,
+  computeOrderEconomics,
   computeTaxAmount,
   computeTaxBase,
   type LineEconomicsResult,
 } from './profit';
+import { getSaleLines } from './saleLines';
 import { createListingId } from './productDefaults';
 import { localDateInputToUtc, nowUtc, utcToLocalDateInput } from './firestoreDates';
 
@@ -34,18 +53,28 @@ export interface SaleFormEconomics {
   deliveryTaxMode: TaxMode;
   platformFeeTaxPercentage: number;
   platformFeeTaxMode: TaxMode;
-  /** Per-unit output tax when manually overridden */
   taxAmountPerUnit?: number;
   taxAmountManual: boolean;
+}
+
+export interface SaleLineFormState {
+  id: string;
+  productId: string;
+  platformListingId: string;
+  quantity: number;
+  economics: SaleFormEconomics;
 }
 
 export interface SaleFormState {
   orderId: string;
   orderDate: string;
   trackingId: string;
-  productId: string;
-  platformListingId: string;
-  quantity: number;
+  platform: string;
+  deliveryMode: DeliveryMode;
+  orderShippingCost: number;
+  orderDeliveryTaxPercentage: number;
+  orderDeliveryTaxMode: TaxMode;
+  lines: SaleLineFormState[];
   status: SaleStatus;
   paymentMode: PaymentMode;
   paymentStatus: PurchasePaymentStatus;
@@ -57,7 +86,6 @@ export interface SaleFormState {
   cancellationTaxPercentage: number;
   cancellationTaxMode: TaxMode;
   cancelledAt: string;
-  economics: SaleFormEconomics;
   notes: string;
 }
 
@@ -94,6 +122,16 @@ function defaultEconomics(): SaleFormEconomics {
   };
 }
 
+export function emptySaleLineForm(): SaleLineFormState {
+  return {
+    id: createListingId(),
+    productId: '',
+    platformListingId: '',
+    quantity: 1,
+    economics: defaultEconomics(),
+  };
+}
+
 function emptyOutcomeChargeBreakdown(): OutcomeChargeBreakdown {
   return { grossAmount: 0, base: 0, tax: 0, total: 0 };
 }
@@ -124,9 +162,12 @@ export function emptySaleForm(): SaleFormState {
     orderId: '',
     orderDate: utcToLocalDateInput(new Date()),
     trackingId: '',
-    productId: '',
-    platformListingId: '',
-    quantity: 1,
+    platform: '',
+    deliveryMode: DeliveryModeEnum.INDIVIDUAL,
+    orderShippingCost: 0,
+    orderDeliveryTaxPercentage: 0,
+    orderDeliveryTaxMode: TaxMode.INCLUSIVE,
+    lines: [emptySaleLineForm()],
     status: SaleStatusEnum.DELIVERED,
     paymentMode: PaymentMode.BANK_ACCOUNT,
     paymentStatus: PurchasePaymentStatus.UNPAID,
@@ -138,7 +179,6 @@ export function emptySaleForm(): SaleFormState {
     cancellationTaxPercentage: 0,
     cancellationTaxMode: TaxMode.INCLUSIVE,
     cancelledAt: '',
-    economics: defaultEconomics(),
     notes: '',
   };
 }
@@ -213,82 +253,115 @@ function economicsFromSaleRecord(economics: SaleLineEconomics, qty: number): Sal
   };
 }
 
+function lineFormFromSaleLine(line: SaleLine): SaleLineFormState {
+  const qty = Math.max(1, line.quantity);
+  return {
+    id: line.id,
+    productId: line.productId,
+    platformListingId: line.platformListingId ?? '',
+    quantity: line.quantity,
+    economics: economicsFromSaleRecord(line.economics, qty),
+  };
+}
+
 export function saleToForm(sale: Sale): SaleFormState {
-  const qty = Math.max(1, sale.quantity);
+  const lines = getSaleLines(sale);
   const status = normalizeSaleStatus(sale.status);
-  const economics = economicsFromSaleRecord(sale.economics, qty);
+  const firstLine = lines[0];
+  const firstEconomics = firstLine?.economics ?? sale.economics;
 
   return {
     orderId: sale.orderId,
     orderDate: utcToLocalDateInput(sale.orderDate),
     trackingId: sale.trackingId ?? '',
-    productId: sale.productId,
-    platformListingId: sale.platformListingId ?? '',
-    quantity: sale.quantity,
+    platform: sale.platform,
+    deliveryMode: normalizeDeliveryMode(sale.deliveryMode),
+    orderShippingCost: sale.orderShippingCost ?? 0,
+    orderDeliveryTaxPercentage:
+      sale.orderDeliveryTaxPercentage ?? firstEconomics.deliveryTaxPercentage ?? 0,
+    orderDeliveryTaxMode:
+      sale.orderDeliveryTaxMode ?? firstEconomics.deliveryTaxMode ?? TaxMode.INCLUSIVE,
+    lines: lines.map(lineFormFromSaleLine),
     status,
     paymentMode: sale.paymentMode ?? PaymentMode.BANK_ACCOUNT,
     paymentStatus: normalizeSalePaymentStatus(sale.paymentStatus),
     returnCharges: sale.returnCharges ?? 0,
-    returnTaxPercentage: sale.returnTaxPercentage ?? economics.deliveryTaxPercentage,
-    returnTaxMode: sale.returnTaxMode ?? economics.deliveryTaxMode,
+    returnTaxPercentage: sale.returnTaxPercentage ?? firstEconomics.deliveryTaxPercentage ?? 0,
+    returnTaxMode: sale.returnTaxMode ?? firstEconomics.deliveryTaxMode ?? TaxMode.INCLUSIVE,
     returnedAt: sale.returnedAt ? utcToLocalDateInput(sale.returnedAt) : '',
     cancellationCharges: sale.cancellationCharges ?? 0,
     cancellationTaxPercentage:
-      sale.cancellationTaxPercentage ?? economics.deliveryTaxPercentage,
-    cancellationTaxMode: sale.cancellationTaxMode ?? economics.deliveryTaxMode,
+      sale.cancellationTaxPercentage ?? firstEconomics.deliveryTaxPercentage ?? 0,
+    cancellationTaxMode:
+      sale.cancellationTaxMode ?? firstEconomics.deliveryTaxMode ?? TaxMode.INCLUSIVE,
     cancelledAt: sale.cancelledAt ? utcToLocalDateInput(sale.cancelledAt) : '',
-    economics,
     notes: sale.notes ?? '',
   };
 }
 
-/** Auto-select only when the product has a single platform listing. */
-export function getInitialListingForProduct(product: Product): ProductPlatformListing | null {
+export function getInitialListingForProduct(
+  product: Product,
+  platform?: string
+): ProductPlatformListing | null {
   const listings = product.platformListings ?? [];
+  if (platform) {
+    const match = listings.filter((l) => l.platform === platform);
+    return match.length === 1 ? match[0] : null;
+  }
   return listings.length === 1 ? listings[0] : null;
+}
+
+export function getListingsForPlatform(product: Product, platform: string): ProductPlatformListing[] {
+  return (product.platformListings ?? []).filter((l) => l.platform === platform);
 }
 
 export function getActiveProducts(products: Product[]): Product[] {
   return products.filter((p) => !p.deleted && p.status === 'active');
 }
 
-function economicsToLineInput(form: SaleFormState) {
-  const qty = Math.max(1, form.quantity);
+function economicsToLineInput(line: SaleLineFormState) {
+  const qty = Math.max(1, line.quantity);
+  const e = line.economics;
   const taxOverride =
-    form.economics.taxAmountManual && form.economics.taxAmountPerUnit != null
-      ? form.economics.taxAmountPerUnit
-      : undefined;
+    e.taxAmountManual && e.taxAmountPerUnit != null ? e.taxAmountPerUnit : undefined;
 
   return {
     quantity: qty,
-    purchasePrice: form.economics.purchasePrice,
-    sellingPrice: form.economics.sellingPrice,
-    shippingCost: form.economics.shippingCost,
-    platformFee: form.economics.platformFee,
-    platformFeePercent: form.economics.platformFeePercent,
-    platformFeeKind: form.economics.platformFeeKind,
-    taxType: form.economics.taxType,
-    taxPercentage: form.economics.sellingTaxPercentage,
-    taxMode: form.economics.sellingTaxMode,
-    purchaseTaxPercentage: form.economics.purchaseTaxPercentage,
-    purchaseTaxMode: form.economics.purchaseTaxMode,
-    sellingTaxPercentage: form.economics.sellingTaxPercentage,
-    sellingTaxMode: form.economics.sellingTaxMode,
-    deliveryTaxPercentage: form.economics.deliveryTaxPercentage,
-    deliveryTaxMode: form.economics.deliveryTaxMode,
-    platformFeeTaxPercentage: form.economics.platformFeeTaxPercentage,
-    platformFeeTaxMode: form.economics.platformFeeTaxMode,
+    purchasePrice: e.purchasePrice,
+    sellingPrice: e.sellingPrice,
+    shippingCost: e.shippingCost,
+    platformFee: e.platformFee,
+    platformFeePercent: e.platformFeePercent,
+    platformFeeKind: e.platformFeeKind,
+    taxType: e.taxType,
+    taxPercentage: e.sellingTaxPercentage,
+    taxMode: e.sellingTaxMode,
+    purchaseTaxPercentage: e.purchaseTaxPercentage,
+    purchaseTaxMode: e.purchaseTaxMode,
+    sellingTaxPercentage: e.sellingTaxPercentage,
+    sellingTaxMode: e.sellingTaxMode,
+    deliveryTaxPercentage: e.deliveryTaxPercentage,
+    deliveryTaxMode: e.deliveryTaxMode,
+    platformFeeTaxPercentage: e.platformFeeTaxPercentage,
+    platformFeeTaxMode: e.platformFeeTaxMode,
     taxAmountOverride: taxOverride,
   };
 }
 
-function baseLinePreview(form: SaleFormState): LineEconomicsResult {
-  return computeLineEconomics(economicsToLineInput(form));
+function baseOrderPreview(form: SaleFormState): LineEconomicsResult {
+  return computeOrderEconomics({
+    lines: form.lines.map(economicsToLineInput),
+    deliveryMode: form.deliveryMode,
+    orderShippingCost: form.orderShippingCost,
+    orderDeliveryTaxPercentage: form.orderDeliveryTaxPercentage,
+    orderDeliveryTaxMode: form.orderDeliveryTaxMode,
+  });
 }
 
 export function computeSalePreview(form: SaleFormState): SalePreviewResult {
-  const base = baseLinePreview(form);
-  const tracksTax = form.economics.taxType !== TaxType.NONE;
+  const base = baseOrderPreview(form);
+  const firstLine = form.lines[0];
+  const tracksTax = (firstLine?.economics.taxType ?? TaxType.NONE) !== TaxType.NONE;
   const status = normalizeSaleStatus(form.status);
 
   const returnOutcome =
@@ -394,19 +467,109 @@ function outcomeFieldsForSave(
   return {};
 }
 
+function buildLineEconomics(
+  line: SaleLineFormState,
+  linePreview: LineEconomicsResult
+): SaleLineEconomics {
+  const e = line.economics;
+  return {
+    purchasePrice: e.purchasePrice,
+    sellingPrice: e.sellingPrice,
+    shippingCost: e.shippingCost,
+    platformFee: e.platformFee,
+    platformFeePercent: e.platformFeePercent,
+    platformFeeKind: e.platformFeeKind,
+    taxType: e.taxType,
+    taxPercentage: e.sellingTaxPercentage,
+    taxMode: e.sellingTaxMode,
+    taxAmount: linePreview.taxAmount,
+    purchaseTaxPercentage: e.purchaseTaxPercentage,
+    purchaseTaxMode: e.purchaseTaxMode,
+    sellingTaxPercentage: e.sellingTaxPercentage,
+    sellingTaxMode: e.sellingTaxMode,
+    deliveryTaxPercentage: e.deliveryTaxPercentage,
+    deliveryTaxMode: e.deliveryTaxMode,
+    platformFeeTaxPercentage: e.platformFeeTaxPercentage,
+    platformFeeTaxMode: e.platformFeeTaxMode,
+    purchaseTaxAmount: linePreview.purchaseTaxAmount,
+    deliveryTaxAmount: linePreview.deliveryTaxAmount,
+    platformFeeTaxAmount: linePreview.platformFeeTaxAmount,
+    inputTaxAmount: linePreview.inputTaxAmount,
+  };
+}
+
+function buildOrderEconomicsSnapshot(
+  form: SaleFormState,
+  preview: SalePreviewResult
+): SaleLineEconomics {
+  const first = form.lines[0]?.economics ?? defaultEconomics();
+  return {
+    purchasePrice: first.purchasePrice,
+    sellingPrice: first.sellingPrice,
+    shippingCost:
+      form.deliveryMode === DeliveryModeEnum.GROUP ? 0 : first.shippingCost,
+    platformFee: first.platformFee,
+    platformFeePercent: first.platformFeePercent,
+    platformFeeKind: first.platformFeeKind,
+    taxType: first.taxType,
+    taxPercentage: first.sellingTaxPercentage,
+    taxMode: first.sellingTaxMode,
+    taxAmount: preview.taxAmount,
+    purchaseTaxPercentage: first.purchaseTaxPercentage,
+    purchaseTaxMode: first.purchaseTaxMode,
+    sellingTaxPercentage: first.sellingTaxPercentage,
+    sellingTaxMode: first.sellingTaxMode,
+    deliveryTaxPercentage:
+      form.deliveryMode === DeliveryModeEnum.GROUP
+        ? form.orderDeliveryTaxPercentage
+        : first.deliveryTaxPercentage,
+    deliveryTaxMode:
+      form.deliveryMode === DeliveryModeEnum.GROUP
+        ? form.orderDeliveryTaxMode
+        : first.deliveryTaxMode,
+    platformFeeTaxPercentage: first.platformFeeTaxPercentage,
+    platformFeeTaxMode: first.platformFeeTaxMode,
+    purchaseTaxAmount: preview.purchaseTaxAmount,
+    deliveryTaxAmount: preview.deliveryTaxAmount,
+    platformFeeTaxAmount: preview.platformFeeTaxAmount,
+    inputTaxAmount: preview.inputTaxAmount,
+  };
+}
+
 export function buildSaleFromForm(
   form: SaleFormState,
   companyId: string,
-  productName: string,
-  platform: string,
+  productNames: Map<string, string>,
   existing?: Sale
 ): Sale {
   const preview = computeSalePreview(form);
-  const qty = Math.max(1, form.quantity);
-  const linePreview = baseLinePreview(form);
   const outcomeFields = outcomeFieldsForSave(form, preview);
   const now = nowUtc();
-  const e = form.economics;
+  const isGroup = form.deliveryMode === DeliveryModeEnum.GROUP;
+
+  const lineInputs = form.lines.map(economicsToLineInput);
+  const linePreviews = lineInputs.map((input) =>
+    computeLineEconomics({
+      ...input,
+      shippingCost: isGroup ? 0 : input.shippingCost,
+    })
+  );
+
+  const saleLines: SaleLine[] = form.lines.map((line, index) => ({
+    id: line.id,
+    productId: line.productId,
+    productName: productNames.get(line.productId) ?? 'Unknown product',
+    platformListingId: line.platformListingId || undefined,
+    quantity: Math.max(1, line.quantity),
+    economics: buildLineEconomics(line, linePreviews[index]),
+  }));
+
+  const firstLine = saleLines[0];
+  const totalQty = saleLines.reduce((sum, line) => sum + line.quantity, 0);
+  const displayName =
+    saleLines.length === 1
+      ? firstLine.productName
+      : `${firstLine.productName} + ${saleLines.length - 1} more`;
 
   return {
     id: existing?.id ?? createListingId(),
@@ -414,39 +577,21 @@ export function buildSaleFromForm(
     orderId: form.orderId.trim(),
     orderDate: localDateInputToUtc(form.orderDate),
     trackingId: form.trackingId.trim() || undefined,
-    productId: form.productId,
-    productName,
-    platform,
-    platformListingId: form.platformListingId || undefined,
-    quantity: qty,
+    lines: saleLines,
+    deliveryMode: form.deliveryMode,
+    orderShippingCost: isGroup ? form.orderShippingCost : undefined,
+    orderDeliveryTaxPercentage: isGroup ? form.orderDeliveryTaxPercentage : undefined,
+    orderDeliveryTaxMode: isGroup ? form.orderDeliveryTaxMode : undefined,
+    productId: firstLine.productId,
+    productName: displayName,
+    platform: form.platform.trim(),
+    platformListingId: firstLine.platformListingId,
+    quantity: totalQty,
     status: normalizeSaleStatus(form.status),
     paymentMode: form.paymentMode,
     paymentStatus: normalizeSalePaymentStatus(form.paymentStatus),
     ...outcomeFields,
-    economics: {
-      purchasePrice: e.purchasePrice,
-      sellingPrice: e.sellingPrice,
-      shippingCost: e.shippingCost,
-      platformFee: e.platformFee,
-      platformFeePercent: e.platformFeePercent,
-      platformFeeKind: e.platformFeeKind,
-      taxType: e.taxType,
-      taxPercentage: e.sellingTaxPercentage,
-      taxMode: e.sellingTaxMode,
-      taxAmount: linePreview.taxAmount,
-      purchaseTaxPercentage: e.purchaseTaxPercentage,
-      purchaseTaxMode: e.purchaseTaxMode,
-      sellingTaxPercentage: e.sellingTaxPercentage,
-      sellingTaxMode: e.sellingTaxMode,
-      deliveryTaxPercentage: e.deliveryTaxPercentage,
-      deliveryTaxMode: e.deliveryTaxMode,
-      platformFeeTaxPercentage: e.platformFeeTaxPercentage,
-      platformFeeTaxMode: e.platformFeeTaxMode,
-      purchaseTaxAmount: linePreview.purchaseTaxAmount,
-      deliveryTaxAmount: linePreview.deliveryTaxAmount,
-      platformFeeTaxAmount: linePreview.platformFeeTaxAmount,
-      inputTaxAmount: preview.inputTaxAmount,
-    },
+    economics: buildOrderEconomicsSnapshot(form, preview),
     grossRevenue: preview.grossRevenue,
     totalCosts: preview.totalCosts,
     platformFees: preview.platformFees,
@@ -456,4 +601,15 @@ export function buildSaleFromForm(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
+}
+
+/** Sum suggested group delivery from line listing defaults. */
+export function suggestGroupDeliveryCost(lines: SaleLineFormState[]): number {
+  return roundMoney(
+    lines.reduce(
+      (sum, line) =>
+        sum + Math.max(0, line.economics.shippingCost) * Math.max(1, line.quantity),
+      0
+    )
+  );
 }

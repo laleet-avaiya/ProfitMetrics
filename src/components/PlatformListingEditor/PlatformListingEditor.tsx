@@ -470,11 +470,11 @@ export function PlatformListingEditor({
                         <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-3">
                           <SectionHeading
                             title="Delivery"
-                            description="Shipping / delivery cost and input tax on it."
+                            description="Per-unit delivery fee used when logging sales with individual delivery."
                           />
                           <div className="space-y-3">
                             <Input
-                              label="Delivery fee"
+                              label="Delivery fee (per unit)"
                               type="number"
                               min="0"
                               step="0.01"
@@ -482,6 +482,7 @@ export function PlatformListingEditor({
                               onChange={(e) =>
                                 updateListing(listing.id, { shippingCost: parseNumber(e.target.value) })
                               }
+                              helperText="Applied per item in multi-item orders unless you choose group delivery on the sale."
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <Input

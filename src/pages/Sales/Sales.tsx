@@ -32,6 +32,12 @@ import { formatMoney, formatPercent } from '../../utils/profit';
 import { deleteSaleLinkedExpenses } from '../../utils/saleExpenses';
 import { restoreSaleStock } from '../../utils/saleStock';
 import { getActiveProducts } from '../../utils/saleHelpers';
+import {
+  getSaleDisplayProductName,
+  getSaleLineCount,
+  getSaleLines,
+  getSaleTotalQuantity,
+} from '../../utils/saleLines';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { SALE_STATUS_OPTIONS, normalizeSaleStatus } from '../../constants/saleStatuses';
 import { SaleStatus } from '../../types';
@@ -132,6 +138,7 @@ export function Sales() {
         s.orderId.toLowerCase().includes(q) ||
         (s.trackingId?.toLowerCase().includes(q) ?? false) ||
         s.productName.toLowerCase().includes(q) ||
+        getSaleLines(s).some((line) => line.productName.toLowerCase().includes(q)) ||
         s.platform.toLowerCase().includes(q) ||
         (s.notes?.toLowerCase().includes(q) ?? false)
       );
@@ -213,7 +220,7 @@ export function Sales() {
     if (!company) return;
     notification.confirm({
       title: 'Delete sale?',
-      message: `Remove order ${sale.orderId} (${sale.productName})? This cannot be undone.`,
+      message: `Remove order ${sale.orderId} (${getSaleDisplayProductName(sale)})? This cannot be undone.`,
       confirmLabel: 'Delete',
       variant: 'danger',
       onConfirm: async () => {
@@ -238,7 +245,7 @@ export function Sales() {
   return (
     <SectionPage
       title="Online sales"
-      description={`Log daily marketplace orders (${marketplaceSummary}). Select a product and platform — costs auto-fill from your listing.`}
+      description={`Log marketplace orders with multiple items (${marketplaceSummary}). Delivery can be per item or one combined fee.`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
@@ -452,7 +459,12 @@ export function Sales() {
                         {sale.trackingId ?? '—'}
                       </td>
                       <td className={`${tableTruncateCellClass} text-gray-700 dark:text-gray-300`}>
-                        {sale.productName}
+                        {getSaleDisplayProductName(sale)}
+                        {getSaleLineCount(sale) > 1 ? (
+                          <span className="ml-1 text-xs text-gray-400">
+                            ({getSaleLineCount(sale)} items)
+                          </span>
+                        ) : null}
                       </td>
                       <td className={tableCellClass}>
                         <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -470,7 +482,11 @@ export function Sales() {
                         </span>
                       </td>
                       <td className={tableCellClass}>{paymentModeLabel(sale.paymentMode)}</td>
-                      <td className={`${tableCellClass} tabular-nums`}>{sale.quantity}</td>
+                      <td className={`${tableCellClass} tabular-nums`}>
+                        {getSaleLineCount(sale) > 1
+                          ? `${getSaleLineCount(sale)} / ${getSaleTotalQuantity(sale)}`
+                          : getSaleTotalQuantity(sale)}
+                      </td>
                       <td className={`${tableCellClass} text-right tabular-nums`}>
                         {formatMoney(sale.grossRevenue, currency)}
                       </td>
@@ -613,7 +629,11 @@ export function Sales() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-gray-600 dark:text-gray-400">
-                    <span>Qty {sale.quantity}</span>
+                    <span>
+                      {getSaleLineCount(sale) > 1
+                        ? `${getSaleLineCount(sale)} items · ${getSaleTotalQuantity(sale)} units`
+                        : `Qty ${getSaleTotalQuantity(sale)}`}
+                    </span>
                     <span>
                       Payment{' '}
                       {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}

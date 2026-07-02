@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Layers,
   Package,
+  Plus,
   Receipt,
   Sparkles,
   Truck,
@@ -15,30 +16,28 @@ import { Input } from '../../components/Input/Input';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
 import { AmountIncludesTaxField } from '../../components/AmountIncludesTaxField/AmountIncludesTaxField';
-import { SectionHeading, SectionLinePreview } from '../../components/SectionLinePreview/SectionLinePreview';
 import { FormSection } from '../../components/FormSection/FormSection';
 import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
 import { Button } from '../../components/Button/Button';
+import { SaleLineEditor } from '../../components/SaleLineEditor/SaleLineEditor';
 import { useAuth } from '../../hooks/useAuth';
+import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
 import type { Product, Sale } from '../../types';
-import { PlatformFeeKind, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
+import { DeliveryMode, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
+import { DELIVERY_MODE_OPTIONS } from '../../constants/deliveryModes';
 import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
 import { PURCHASE_PAYMENT_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
+import { taxPercentLabel } from '../../utils/listingTax';
 import {
-  platformFeeKindOptions,
-  taxPercentLabel,
-} from '../../utils/listingTax';
-import {
-  autoTaxPerUnit,
   buildSaleFromForm,
   computeSalePreview,
-  economicsFromListing,
   emptySaleForm,
+  emptySaleLineForm,
   getActiveProducts,
-  getInitialListingForProduct,
   saleToForm,
+  suggestGroupDeliveryCost,
   type SaleFormState,
 } from '../../utils/saleHelpers';
 import { LineEconomicsPreview } from '../../components/LineEconomicsPreview/LineEconomicsPreview';
@@ -46,25 +45,19 @@ import { OutcomeChargeFields } from '../../components/OutcomeChargeFields/Outcom
 import { utcToLocalDateInput } from '../../utils/firestoreDates';
 import { syncSaleExpenses } from '../../utils/saleExpenses';
 import { syncSaleStock, checkSaleStock } from '../../utils/saleStock';
+import { getSaleLines } from '../../utils/saleLines';
 import { SALE_STATUS_OPTIONS, saleStatusLabel } from '../../constants/saleStatuses';
-import { emptyStateMessageClass, economicsFieldsColumnClass, economicsPreviewColumnClass, economicsSplitLayoutClass } from '../../constants/ui';
-
-const taxTypeOptions = [
-  { value: TaxType.NONE, label: 'None' },
-  { value: TaxType.VAT, label: 'VAT' },
-  { value: TaxType.GST, label: 'GST' },
-  { value: TaxType.SALES_TAX, label: 'Sales tax' },
-];
-
-function parseNumber(value: string): number {
-  const n = parseFloat(value);
-  return Number.isFinite(n) ? n : 0;
-}
+import {
+  emptyStateMessageClass,
+  economicsPreviewColumnClass,
+  economicsSplitLayoutClass,
+} from '../../constants/ui';
 
 export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
   const navigate = useNavigate();
   const { company } = useAuth();
+  const { productPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
   const isEditing = Boolean(saleId);
   const currency = company?.currency ?? 'AED';
@@ -76,62 +69,25 @@ export function SaleFormPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{
     orderId?: string;
-    productId?: string;
-    platformListingId?: string;
+    platform?: string;
+    lines?: Record<string, { productId?: string; platformListingId?: string }>;
   }>({});
 
   const formProducts = useMemo(() => {
     const active = getActiveProducts(products);
     if (!sale) return active;
-    const saleProduct = products.find((p) => p.id === sale.productId);
-    if (saleProduct && !active.some((p) => p.id === saleProduct.id)) {
-      return [...active, saleProduct];
-    }
-    return active;
+    const saleProductIds = new Set(getSaleLines(sale).map((l) => l.productId));
+    const extras = products.filter((p) => saleProductIds.has(p.id) && !active.some((a) => a.id === p.id));
+    return [...active, ...extras];
   }, [products, sale]);
 
-  const selectedProduct = useMemo(
-    () => formProducts.find((p) => p.id === form.productId) ?? null,
-    [formProducts, form.productId]
-  );
-
-  const listingOptions = useMemo(() => {
-    if (!selectedProduct) return [];
-    return selectedProduct.platformListings.map((l) => ({
-      value: l.id,
-      label: l.platform,
-    }));
-  }, [selectedProduct]);
-
-  const selectedListing = useMemo(() => {
-    if (!selectedProduct || !form.platformListingId) return null;
-    return (
-      selectedProduct.platformListings.find((l) => l.id === form.platformListingId) ?? null
-    );
-  }, [selectedProduct, form.platformListingId]);
-
   const preview = useMemo(() => computeSalePreview(form), [form]);
-  const orderQty = Math.max(1, form.quantity);
-  const perUnitLine = useMemo(() => {
-    const scale = (value: number) => Math.round((value / orderQty) * 100) / 100;
-    return {
-      cogs: scale(preview.cogs),
-      grossRevenue: scale(preview.grossRevenue),
-      platformFees: scale(preview.platformFees),
-      shippingTotal: scale(preview.shippingTotal),
-      purchaseTaxAmount: scale(preview.purchaseTaxAmount),
-      taxAmount: scale(preview.taxAmount),
-      platformFeeTaxAmount: scale(preview.platformFeeTaxAmount),
-      deliveryTaxAmount: scale(preview.deliveryTaxAmount),
-    };
-  }, [preview, orderQty]);
-
-  const displayedTaxPerUnit = form.economics.taxAmountManual
-    ? (form.economics.taxAmountPerUnit ?? 0)
-    : autoTaxPerUnit(form.economics);
-
+  const firstLineEconomics = form.lines[0]?.economics;
+  const tracksTax = (firstLineEconomics?.taxType ?? TaxType.NONE) !== TaxType.NONE;
+  const pctLabel = taxPercentLabel(firstLineEconomics?.taxType ?? TaxType.NONE);
   const isReturned = form.status === SaleStatus.RETURNED;
   const isCancelled = form.status === SaleStatus.CANCELLED;
+  const isGroupDelivery = form.deliveryMode === DeliveryMode.GROUP;
 
   useEffect(() => {
     if (!company) return;
@@ -143,8 +99,7 @@ export function SaleFormPage() {
       try {
         const productList = await firestoreService.products.getAll(company.id);
         if (cancelled) return;
-        const allProducts = productList.filter((p) => !p.deleted);
-        setProducts(allProducts);
+        setProducts(productList.filter((p) => !p.deleted));
 
         if (isEditing && saleId) {
           const found = await firestoreService.sales.get(company.id, saleId);
@@ -174,77 +129,96 @@ export function SaleFormPage() {
     };
   }, [company, isEditing, saleId]);
 
-  const applyListing = (listingId: string, product: Product) => {
-    const listing = product.platformListings.find((l) => l.id === listingId);
-    if (!listing) return;
+  const updateLine = (lineId: string, patch: Partial<(typeof form.lines)[0]>) => {
     setForm((f) => ({
       ...f,
-      platformListingId: listing.id,
-      economics: economicsFromListing(listing),
+      lines: f.lines.map((line) => (line.id === lineId ? { ...line, ...patch } : line)),
     }));
   };
 
-  const handleProductChange = (productId: string) => {
-    const product = formProducts.find((p) => p.id === productId);
-    if (!product) {
-      setForm((f) => ({ ...f, productId, platformListingId: '' }));
-      return;
-    }
-    const initialListing = getInitialListingForProduct(product);
+  const updateLineEconomics = (
+    lineId: string,
+    patch: Partial<(typeof form.lines)[0]['economics']>
+  ) => {
     setForm((f) => ({
       ...f,
-      productId,
-      platformListingId: initialListing?.id ?? '',
-      economics: initialListing ? economicsFromListing(initialListing) : f.economics,
+      lines: f.lines.map((line) => {
+        if (line.id !== lineId) return line;
+        const next = { ...line.economics, ...patch };
+        if (patch.sellingTaxPercentage != null) next.taxPercentage = patch.sellingTaxPercentage;
+        if (patch.sellingTaxMode != null) next.taxMode = patch.sellingTaxMode;
+        const sellingTaxChanged =
+          patch.sellingTaxPercentage != null ||
+          patch.sellingTaxMode != null ||
+          patch.sellingPrice != null ||
+          patch.taxType != null;
+        return {
+          ...line,
+          economics: {
+            ...next,
+            taxAmountManual:
+              patch.taxAmountManual ??
+              (patch.taxAmountPerUnit != null
+                ? true
+                : sellingTaxChanged
+                  ? false
+                  : line.economics.taxAmountManual),
+          },
+        };
+      }),
     }));
   };
 
-  const updateEconomics = (patch: Partial<SaleFormState['economics']>) => {
+  const addLine = () => {
+    setForm((f) => ({ ...f, lines: [...f.lines, emptySaleLineForm()] }));
+  };
+
+  const removeLine = (lineId: string) => {
     setForm((f) => {
-      const next = { ...f.economics, ...patch };
-      if (patch.sellingTaxPercentage != null) {
-        next.taxPercentage = patch.sellingTaxPercentage;
-      }
-      if (patch.sellingTaxMode != null) {
-        next.taxMode = patch.sellingTaxMode;
-      }
-      const sellingTaxChanged =
-        patch.sellingTaxPercentage != null ||
-        patch.sellingTaxMode != null ||
-        patch.sellingPrice != null ||
-        patch.taxType != null;
-      return {
-        ...f,
-        economics: {
-          ...next,
-          taxAmountManual:
-            patch.taxAmountManual ??
-            (patch.taxAmountPerUnit != null
-              ? true
-              : sellingTaxChanged
-                ? false
-                : f.economics.taxAmountManual),
-        },
-      };
+      if (f.lines.length <= 1) return f;
+      return { ...f, lines: f.lines.filter((line) => line.id !== lineId) };
     });
   };
 
-  const tracksTax = form.economics.taxType !== TaxType.NONE;
-  const pctLabel = taxPercentLabel(form.economics.taxType);
-  const feeKind = form.economics.platformFeeKind ?? PlatformFeeKind.FIXED;
+  const handlePlatformChange = (platform: string) => {
+    setForm((f) => ({
+      ...f,
+      platform,
+      lines: f.lines.map((line) => ({
+        ...line,
+        productId: '',
+        platformListingId: '',
+      })),
+    }));
+  };
+
+  const handleDeliveryModeChange = (mode: DeliveryMode) => {
+    setForm((f) => {
+      const next = { ...f, deliveryMode: mode };
+      if (mode === DeliveryMode.GROUP) {
+        next.orderShippingCost = suggestGroupDeliveryCost(f.lines);
+        const first = f.lines[0]?.economics;
+        if (first) {
+          next.orderDeliveryTaxPercentage = first.deliveryTaxPercentage;
+          next.orderDeliveryTaxMode = first.deliveryTaxMode;
+        }
+      }
+      return next;
+    });
+  };
 
   const applyStatusChange = (status: SaleStatus) => {
     setForm((f) => {
       const next = { ...f, status };
-      const econ = f.economics;
+      const econ = f.lines[0]?.economics;
 
       if (status === SaleStatus.RETURNED) {
         if (!f.returnedAt.trim()) {
           next.returnedAt = f.orderDate || utcToLocalDateInput(new Date());
         }
-        if (f.returnTaxPercentage === 0 && econ.deliveryTaxPercentage > 0) {
-          next.returnTaxPercentage = econ.deliveryTaxPercentage;
-          next.returnTaxMode = econ.deliveryTaxMode;
+        if (f.returnTaxPercentage === 0 && (econ?.deliveryTaxPercentage ?? 0) > 0) {
+          next.returnTaxPercentage = econ!.deliveryTaxPercentage;
+          next.returnTaxMode = econ!.deliveryTaxMode;
         }
         next.cancellationCharges = 0;
         next.cancelledAt = '';
@@ -252,9 +226,9 @@ export function SaleFormPage() {
         if (!f.cancelledAt.trim()) {
           next.cancelledAt = f.orderDate || utcToLocalDateInput(new Date());
         }
-        if (f.cancellationTaxPercentage === 0 && econ.deliveryTaxPercentage > 0) {
-          next.cancellationTaxPercentage = econ.deliveryTaxPercentage;
-          next.cancellationTaxMode = econ.deliveryTaxMode;
+        if (f.cancellationTaxPercentage === 0 && (econ?.deliveryTaxPercentage ?? 0) > 0) {
+          next.cancellationTaxPercentage = econ!.deliveryTaxPercentage;
+          next.cancellationTaxMode = econ!.deliveryTaxMode;
         }
         next.returnCharges = 0;
         next.returnedAt = '';
@@ -298,33 +272,38 @@ export function SaleFormPage() {
 
   const validate = (): boolean => {
     const next: typeof errors = {};
+    const lineErrors: Record<string, { productId?: string; platformListingId?: string }> = {};
+
     if (!form.orderId.trim()) next.orderId = 'Order ID is required';
-    if (!form.productId) next.productId = 'Select a product';
-    if (!form.platformListingId) next.platformListingId = 'Select a platform listing';
+    if (!form.platform.trim()) next.platform = 'Select a marketplace';
+
+    for (const line of form.lines) {
+      const err: { productId?: string; platformListingId?: string } = {};
+      if (!line.productId) err.productId = 'Select a product';
+      if (!line.platformListingId) err.platformListingId = 'Select a listing';
+      if (Object.keys(err).length > 0) lineErrors[line.id] = err;
+    }
+
+    if (Object.keys(lineErrors).length > 0) next.lines = lineErrors;
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company || !selectedProduct || !selectedListing) return;
+    if (!company) return;
     if (!validate()) return;
 
     setSaving(true);
     try {
-      const payload = buildSaleFromForm(
-        form,
-        company.id,
-        selectedProduct.name,
-        selectedListing.platform,
-        sale ?? undefined
-      );
+      const productNames = new Map(formProducts.map((p) => [p.id, p.name]));
+      const payload = buildSaleFromForm(form, company.id, productNames, sale ?? undefined);
 
       if (isEditing && sale) {
         const stockCheck = await checkSaleStock(company.id, payload, sale);
         if (!stockCheck.ok) {
           notification.error(
-            `Insufficient stock. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
+            `Insufficient stock for ${stockCheck.productName ?? 'product'}. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
           );
           setSaving(false);
           return;
@@ -348,7 +327,7 @@ export function SaleFormPage() {
         const stockCheck = await checkSaleStock(company.id, payload);
         if (!stockCheck.ok) {
           notification.error(
-            `Insufficient stock. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
+            `Insufficient stock for ${stockCheck.productName ?? 'product'}. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
           );
           setSaving(false);
           return;
@@ -379,6 +358,8 @@ export function SaleFormPage() {
 
   const cancelTo = isEditing && sale ? `/sales/${sale.id}` : '/sales';
   const noProducts = formProducts.length === 0;
+  const validLines = form.lines.every((l) => l.productId && l.platformListingId);
+  const isReady = !isEditing && form.orderId.trim() && form.platform.trim() && validLines;
 
   if (loading) {
     return (
@@ -408,14 +389,6 @@ export function SaleFormPage() {
     );
   }
 
-  const isReady =
-    !isEditing &&
-    form.orderId.trim() &&
-    form.productId &&
-    form.platformListingId &&
-    selectedProduct &&
-    selectedListing;
-
   return (
     <Layout>
       <PageShell>
@@ -423,18 +396,13 @@ export function SaleFormPage() {
           title={isEditing ? 'Edit sale' : 'Log sale'}
           description={
             isEditing
-              ? `Update order ${sale?.orderId ?? ''} economics and delivery details.`
-              : 'Pick product and platform — costs auto-fill from your listing.'
+              ? `Update order ${sale?.orderId ?? ''} — add multiple items like an Amazon order.`
+              : 'Log a marketplace order with one or more products and individual or group delivery.'
           }
           actions={
             !noProducts ? (
               <div className="hidden lg:flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate(cancelTo)}
-                  disabled={saving}
-                >
+                <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
                   Cancel
                 </Button>
                 <Button type="submit" form="sale-form" variant="primary" loading={saving}>
@@ -478,10 +446,10 @@ export function SaleFormPage() {
               iconTone="indigo"
               step={isEditing ? undefined : 1}
               title="Order details"
-              description="Marketplace order ID, date, product, and platform."
+              description="Marketplace order ID, date, and channel."
             >
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                <div className="lg:col-span-3">
+                <div className="lg:col-span-4">
                   <Input
                     label="Order ID"
                     value={form.orderId}
@@ -491,7 +459,7 @@ export function SaleFormPage() {
                     placeholder="Marketplace order number"
                   />
                 </div>
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-3">
                   <Input
                     label="Order date"
                     type="date"
@@ -500,56 +468,144 @@ export function SaleFormPage() {
                     required
                   />
                 </div>
-                <div className="lg:col-span-1">
-                  <Input
-                    label="Qty"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.quantity || ''}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                      }))
-                    }
+                <div className="lg:col-span-5">
+                  <Select
+                    label="Marketplace"
+                    value={form.platform}
+                    options={[
+                      { value: '', label: 'Select marketplace…' },
+                      ...productPlatformOptions,
+                    ]}
+                    onChange={(e) => handlePlatformChange(e.target.value)}
+                    error={errors.platform}
                     required
                   />
                 </div>
-                <div className="lg:col-span-3">
-                  <Select
-                    label="Product"
-                    value={form.productId}
-                    options={[
-                      { value: '', label: 'Select product…' },
-                      ...formProducts.map((p) => ({
-                        value: p.id,
-                        label: p.sku ? `${p.name} (${p.sku})` : p.name,
-                      })),
-                    ]}
-                    onChange={(e) => handleProductChange(e.target.value)}
-                    error={errors.productId}
-                    required
+              </div>
+            </FormSection>
+
+            <FormSection
+              icon={Package}
+              iconTone="violet"
+              step={isEditing ? undefined : 2}
+              title="Order items"
+              description="Add every product in this marketplace order."
+              headerAction={
+                <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={!form.platform}>
+                  <Plus className="w-4 h-4" />
+                  Add item
+                </Button>
+              }
+            >
+              <div className="space-y-3">
+                {form.lines.map((line, index) => (
+                  <SaleLineEditor
+                    key={line.id}
+                    line={line}
+                    index={index}
+                    platform={form.platform}
+                    deliveryMode={form.deliveryMode}
+                    products={formProducts}
+                    currency={currency}
+                    canRemove={form.lines.length > 1}
+                    errors={errors.lines?.[line.id]}
+                    onChange={(patch) => updateLine(line.id, patch)}
+                    onEconomicsChange={(patch) => updateLineEconomics(line.id, patch)}
+                    onRemove={() => removeLine(line.id)}
                   />
+                ))}
+              </div>
+            </FormSection>
+
+            <FormSection
+              icon={Truck}
+              iconTone="emerald"
+              step={isEditing ? undefined : 3}
+              title="Delivery"
+              description="Individual per-item fees from product listings, or one combined shipment fee."
+            >
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {DELIVERY_MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleDeliveryModeChange(option.value)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        form.deliveryMode === option.value
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="lg:col-span-3">
-                  <Select
-                    label="Platform"
-                    value={form.platformListingId}
-                    options={[
-                      {
-                        value: '',
-                        label: selectedProduct ? 'Select platform…' : 'Choose product first',
-                      },
-                      ...listingOptions,
-                    ]}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      if (selectedProduct) applyListing(id, selectedProduct);
-                    }}
-                    error={errors.platformListingId}
-                    disabled={!selectedProduct}
-                    required
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {DELIVERY_MODE_OPTIONS.find((o) => o.value === form.deliveryMode)?.description}
+                </p>
+
+                {isGroupDelivery ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl">
+                    <Input
+                      label="Order delivery fee"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.orderShippingCost || ''}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          orderShippingCost: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                      helperText="One combined shipping charge for the whole order"
+                    />
+                    <Input
+                      label={pctLabel}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      disabled={!tracksTax}
+                      value={form.orderDeliveryTaxPercentage || ''}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          orderDeliveryTaxPercentage: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                    <AmountIncludesTaxField
+                      value={form.orderDeliveryTaxMode}
+                      disabled={!tracksTax}
+                      onChange={(mode) => setForm((f) => ({ ...f, orderDeliveryTaxMode: mode }))}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </FormSection>
+
+            <FormSection
+              icon={Layers}
+              iconTone="violet"
+              step={isEditing ? undefined : 4}
+              title="Order profit preview"
+              description="Combined economics for all items and delivery."
+            >
+              <div className={economicsSplitLayoutClass}>
+                <div className="xl:col-span-7">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {form.lines.length} item{form.lines.length === 1 ? '' : 's'} ·{' '}
+                    {preview.quantity} unit{preview.quantity === 1 ? '' : 's'} ·{' '}
+                    {isGroupDelivery ? 'group delivery' : 'individual delivery'}
+                  </p>
+                </div>
+                <div className={`xl:col-span-5 ${economicsPreviewColumnClass}`}>
+                  <LineEconomicsPreview
+                    title="Order totals"
+                    preview={preview}
+                    currency={currency}
+                    tracksTax={tracksTax}
                   />
                 </div>
               </div>
@@ -558,7 +614,7 @@ export function SaleFormPage() {
             <FormSection
               icon={Wallet}
               iconTone="emerald"
-              step={isEditing ? undefined : 2}
+              step={isEditing ? undefined : 5}
               title="Payment tracking"
               description="Optional — track how and when marketplace payout was received."
             >
@@ -574,7 +630,10 @@ export function SaleFormPage() {
                 <Select
                   label="Payment status"
                   value={form.paymentStatus}
-                  options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
@@ -586,293 +645,9 @@ export function SaleFormPage() {
             </FormSection>
 
             <FormSection
-              icon={Layers}
-              iconTone="violet"
-              step={isEditing ? undefined : 3}
-              title="Economics & tax"
-              description="Auto-filled from the platform listing — override if this order differed."
-            >
-              <div className={economicsSplitLayoutClass}>
-                <div className={economicsFieldsColumnClass}>
-                  <Select
-                    label="Tax type"
-                    value={form.economics.taxType}
-                    options={taxTypeOptions}
-                    onChange={(e) =>
-                      updateEconomics({
-                        taxType: e.target.value as SaleFormState['economics']['taxType'],
-                      })
-                    }
-                  />
-
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                      <SectionHeading
-                        title="Purchase"
-                        description="Input tax (ITC) on what you pay for the product."
-                      />
-                      <div className="space-y-3">
-                        <Input
-                          label="Purchase price"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.economics.purchasePrice || ''}
-                          onChange={(e) =>
-                            updateEconomics({ purchasePrice: parseNumber(e.target.value) })
-                          }
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Input
-                            label={pctLabel}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            disabled={!tracksTax}
-                            value={form.economics.purchaseTaxPercentage || ''}
-                            onChange={(e) =>
-                              updateEconomics({ purchaseTaxPercentage: parseNumber(e.target.value) })
-                            }
-                          />
-                          <AmountIncludesTaxField
-                            value={form.economics.purchaseTaxMode}
-                            disabled={!tracksTax}
-                            onChange={(mode) => updateEconomics({ purchaseTaxMode: mode })}
-                          />
-                        </div>
-                      </div>
-                      <SectionLinePreview
-                        amountLabel="Cost per unit"
-                        amount={perUnitLine.cogs}
-                        taxDirection="credit"
-                        taxAmount={perUnitLine.purchaseTaxAmount}
-                        currency={currency}
-                        tracksTax={tracksTax}
-                      />
-                    </div>
-
-                    <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                      <SectionHeading
-                        title="Selling"
-                        description="Output tax collected on the selling price."
-                      />
-                      <div className="space-y-3">
-                        <Input
-                          label="Selling price"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.economics.sellingPrice || ''}
-                          onChange={(e) =>
-                            updateEconomics({ sellingPrice: parseNumber(e.target.value) })
-                          }
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Input
-                            label={pctLabel}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            disabled={!tracksTax}
-                            value={form.economics.sellingTaxPercentage || ''}
-                            onChange={(e) =>
-                              updateEconomics({ sellingTaxPercentage: parseNumber(e.target.value) })
-                            }
-                          />
-                          <AmountIncludesTaxField
-                            value={form.economics.sellingTaxMode}
-                            disabled={!tracksTax}
-                            onChange={(mode) =>
-                              updateEconomics({ sellingTaxMode: mode, taxMode: mode })
-                            }
-                          />
-                        </div>
-                        <Input
-                          label="Output tax (per unit)"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          disabled={!tracksTax}
-                          value={displayedTaxPerUnit || ''}
-                          onChange={(e) =>
-                            updateEconomics({
-                              taxAmountPerUnit: parseNumber(e.target.value),
-                              taxAmountManual: true,
-                            })
-                          }
-                          helperText={
-                            form.economics.taxAmountManual
-                              ? 'Manual override'
-                              : 'Auto from selling tax %'
-                          }
-                        />
-                      </div>
-                      <SectionLinePreview
-                        amountLabel="Revenue per unit"
-                        amount={perUnitLine.grossRevenue}
-                        taxDirection="debit"
-                        taxAmount={perUnitLine.taxAmount}
-                        currency={currency}
-                        tracksTax={tracksTax}
-                      />
-                    </div>
-
-                    <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                      <SectionHeading
-                        title="Platform fees"
-                        description="Marketplace commission — fixed amount or % of selling price."
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Select
-                          label="Fee type"
-                          value={feeKind}
-                          options={platformFeeKindOptions}
-                          onChange={(e) => {
-                            const kind = e.target.value as PlatformFeeKind;
-                            updateEconomics({
-                              platformFeeKind: kind,
-                              platformFee:
-                                kind === PlatformFeeKind.FIXED ? form.economics.platformFee : undefined,
-                              platformFeePercent:
-                                kind === PlatformFeeKind.PERCENT
-                                  ? form.economics.platformFeePercent
-                                  : undefined,
-                            });
-                          }}
-                        />
-                        {feeKind === PlatformFeeKind.FIXED ? (
-                          <Input
-                            label="Platform fee (amount)"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={form.economics.platformFee ?? ''}
-                            onChange={(e) =>
-                              updateEconomics({
-                                platformFee: e.target.value ? parseNumber(e.target.value) : undefined,
-                                platformFeePercent: undefined,
-                              })
-                            }
-                            helperText="Per unit, e.g. FBA fee"
-                          />
-                        ) : (
-                          <Input
-                            label="Platform fee (%)"
-                            type="number"
-                            min="0"
-                            step="0.1"
-                            value={form.economics.platformFeePercent ?? ''}
-                            onChange={(e) =>
-                              updateEconomics({
-                                platformFeePercent: e.target.value
-                                  ? parseNumber(e.target.value)
-                                  : undefined,
-                                platformFee: undefined,
-                              })
-                            }
-                            helperText="e.g. 15 for Amazon referral"
-                          />
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Input
-                          label={`${pctLabel} on platform fee`}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          disabled={!tracksTax}
-                          value={form.economics.platformFeeTaxPercentage || ''}
-                          onChange={(e) =>
-                            updateEconomics({ platformFeeTaxPercentage: parseNumber(e.target.value) })
-                          }
-                        />
-                        <AmountIncludesTaxField
-                          value={form.economics.platformFeeTaxMode}
-                          disabled={!tracksTax}
-                          onChange={(mode) => updateEconomics({ platformFeeTaxMode: mode })}
-                        />
-                      </div>
-                      <SectionLinePreview
-                        amountLabel="Platform fee per unit"
-                        amount={perUnitLine.platformFees}
-                        taxDirection="credit"
-                        taxAmount={perUnitLine.platformFeeTaxAmount}
-                        currency={currency}
-                        tracksTax={tracksTax}
-                      />
-                    </div>
-
-                    <div className="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3">
-                      <SectionHeading
-                        title="Delivery"
-                        description="Shipping / delivery cost and input tax on it."
-                      />
-                      <div className="space-y-3">
-                        <Input
-                          label="Delivery fee"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.economics.shippingCost || ''}
-                          onChange={(e) =>
-                            updateEconomics({ shippingCost: parseNumber(e.target.value) })
-                          }
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Input
-                            label={pctLabel}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            disabled={!tracksTax}
-                            value={form.economics.deliveryTaxPercentage || ''}
-                            onChange={(e) =>
-                              updateEconomics({ deliveryTaxPercentage: parseNumber(e.target.value) })
-                            }
-                          />
-                          <AmountIncludesTaxField
-                            value={form.economics.deliveryTaxMode}
-                            disabled={!tracksTax}
-                            onChange={(mode) => updateEconomics({ deliveryTaxMode: mode })}
-                          />
-                        </div>
-                      </div>
-                      <SectionLinePreview
-                        amountLabel="Delivery cost per unit"
-                        amount={perUnitLine.shippingTotal}
-                        taxDirection="credit"
-                        taxAmount={perUnitLine.deliveryTaxAmount}
-                        currency={currency}
-                        tracksTax={tracksTax}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="xl:hidden">
-                    <LineEconomicsPreview
-                      title="Order profit preview"
-                      preview={preview}
-                      currency={currency}
-                      tracksTax={tracksTax}
-                    />
-                  </div>
-                </div>
-
-                <div className={`hidden xl:block ${economicsPreviewColumnClass}`}>
-                  <LineEconomicsPreview
-                    title="Order profit preview"
-                    preview={preview}
-                    currency={currency}
-                    tracksTax={tracksTax}
-                  />
-                </div>
-              </div>
-            </FormSection>
-
-            <FormSection
               icon={Package}
               iconTone="amber"
-              step={isEditing ? undefined : 4}
+              step={isEditing ? undefined : 6}
               title="Fulfillment"
               description="Order status, returns, and cancellations with fee + tax."
             >
@@ -890,7 +665,6 @@ export function SaleFormPage() {
                       type="date"
                       value={form.returnedAt}
                       onChange={(e) => setForm((f) => ({ ...f, returnedAt: e.target.value }))}
-                      helperText="When the return was processed"
                     />
                   )}
                   {isCancelled && (
@@ -899,70 +673,56 @@ export function SaleFormPage() {
                       type="date"
                       value={form.cancelledAt}
                       onChange={(e) => setForm((f) => ({ ...f, cancelledAt: e.target.value }))}
-                      helperText="When the order was cancelled"
                     />
                   )}
                 </div>
 
                 {isReturned && (
-                  <div className="space-y-3">
-                    <OutcomeChargeFields
-                      title="Return charges"
-                      description="Reverse shipping, restocking, and return logistics."
-                      amountLabel="Return charges"
-                      amount={form.returnCharges}
-                      onAmountChange={(value) =>
-                        setForm((f) => ({ ...f, returnCharges: value }))
-                      }
-                      taxPercentage={form.returnTaxPercentage}
-                      onTaxPercentageChange={(value) =>
-                        setForm((f) => ({ ...f, returnTaxPercentage: value }))
-                      }
-                      taxMode={form.returnTaxMode}
-                      onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
-                      tracksTax={tracksTax}
-                      pctLabel={pctLabel}
-                      currency={currency}
-                      previewBase={preview.returnOutcome.base}
-                      previewTax={preview.returnOutcome.tax}
-                      perUnit={false}
-                    />
-                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                      Adjust purchase, selling, and fee amounts above if they changed on return.
-                      Return charges and ITC are included in the profit preview.
-                    </p>
-                  </div>
+                  <OutcomeChargeFields
+                    title="Return charges"
+                    description="Reverse shipping, restocking, and return logistics."
+                    amountLabel="Return charges"
+                    amount={form.returnCharges}
+                    onAmountChange={(value) => setForm((f) => ({ ...f, returnCharges: value }))}
+                    taxPercentage={form.returnTaxPercentage}
+                    onTaxPercentageChange={(value) =>
+                      setForm((f) => ({ ...f, returnTaxPercentage: value }))
+                    }
+                    taxMode={form.returnTaxMode}
+                    onTaxModeChange={(mode) => setForm((f) => ({ ...f, returnTaxMode: mode }))}
+                    tracksTax={tracksTax}
+                    pctLabel={pctLabel}
+                    currency={currency}
+                    previewBase={preview.returnOutcome.base}
+                    previewTax={preview.returnOutcome.tax}
+                    perUnit={false}
+                  />
                 )}
 
                 {isCancelled && (
-                  <div className="space-y-3">
-                    <OutcomeChargeFields
-                      title="Cancellation charges"
-                      description="Marketplace or carrier fees when the order is cancelled."
-                      amountLabel="Cancellation charges"
-                      amount={form.cancellationCharges}
-                      onAmountChange={(value) =>
-                        setForm((f) => ({ ...f, cancellationCharges: value }))
-                      }
-                      taxPercentage={form.cancellationTaxPercentage}
-                      onTaxPercentageChange={(value) =>
-                        setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
-                      }
-                      taxMode={form.cancellationTaxMode}
-                      onTaxModeChange={(mode) =>
-                        setForm((f) => ({ ...f, cancellationTaxMode: mode }))
-                      }
-                      tracksTax={tracksTax}
-                      pctLabel={pctLabel}
-                      currency={currency}
-                      previewBase={preview.cancellationOutcome.base}
-                      previewTax={preview.cancellationOutcome.tax}
-                      perUnit={false}
-                    />
-                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                      Cancellation fees and any ITC on them reduce profit in the preview table.
-                    </p>
-                  </div>
+                  <OutcomeChargeFields
+                    title="Cancellation charges"
+                    description="Marketplace or carrier fees when the order is cancelled."
+                    amountLabel="Cancellation charges"
+                    amount={form.cancellationCharges}
+                    onAmountChange={(value) =>
+                      setForm((f) => ({ ...f, cancellationCharges: value }))
+                    }
+                    taxPercentage={form.cancellationTaxPercentage}
+                    onTaxPercentageChange={(value) =>
+                      setForm((f) => ({ ...f, cancellationTaxPercentage: value }))
+                    }
+                    taxMode={form.cancellationTaxMode}
+                    onTaxModeChange={(mode) =>
+                      setForm((f) => ({ ...f, cancellationTaxMode: mode }))
+                    }
+                    tracksTax={tracksTax}
+                    pctLabel={pctLabel}
+                    currency={currency}
+                    previewBase={preview.cancellationOutcome.base}
+                    previewTax={preview.cancellationOutcome.tax}
+                    perUnit={false}
+                  />
                 )}
               </div>
             </FormSection>
@@ -970,7 +730,7 @@ export function SaleFormPage() {
             <FormSection
               icon={Truck}
               iconTone="emerald"
-              step={isEditing ? undefined : 5}
+              step={isEditing ? undefined : 7}
               title="Shipment & notes"
               description="Tracking and any extra context for this order."
             >
@@ -981,20 +741,15 @@ export function SaleFormPage() {
                     value={form.trackingId}
                     onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
                     placeholder="e.g. AWB123456789"
-                    helperText="Carrier or marketplace tracking number"
                   />
                 </div>
-                <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 p-4 sm:p-5">
-                  <Textarea
-                    label="Order notes"
-                    optional
-                    value={form.notes}
-                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                    helperText="Delivery instructions, customer requests, or internal reminders."
-                    placeholder="e.g. Leave at reception, gift wrap requested…"
-                    rows={4}
-                  />
-                </div>
+                <Textarea
+                  label="Order notes"
+                  optional
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  rows={4}
+                />
               </div>
             </FormSection>
 
@@ -1002,34 +757,20 @@ export function SaleFormPage() {
               <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-3.5 py-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                  Order <span className="font-medium">{form.orderId.trim()}</span> for{' '}
-                  <span className="font-medium">{selectedProduct.name}</span> on{' '}
-                  <span className="font-medium">{selectedListing.platform}</span> is ready — review
-                  the profit preview, then log the sale.
+                  Order <span className="font-medium">{form.orderId.trim()}</span> on{' '}
+                  <span className="font-medium">{form.platform}</span> with{' '}
+                  <span className="font-medium">{form.lines.length}</span> item
+                  {form.lines.length === 1 ? '' : 's'} is ready to log.
                 </p>
               </div>
             )}
 
             <FormStickyActions className="lg:hidden">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(cancelTo)}
-                disabled={saving}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate(cancelTo)} disabled={saving}>
                 Cancel
               </Button>
               <Button type="submit" variant="primary" loading={saving}>
-                {!isEditing && !saving ? (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Log sale
-                  </>
-                ) : isEditing ? (
-                  'Save changes'
-                ) : (
-                  'Log sale'
-                )}
+                {isEditing ? 'Save changes' : 'Log sale'}
               </Button>
             </FormStickyActions>
           </form>

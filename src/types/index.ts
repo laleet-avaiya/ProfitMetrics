@@ -69,6 +69,16 @@ export const PlatformFeeKind = {
 
 export type PlatformFeeKind = (typeof PlatformFeeKind)[keyof typeof PlatformFeeKind];
 
+/** How delivery cost is applied on a sale order. */
+export const DeliveryMode = {
+  /** Each line uses its own per-unit delivery fee × quantity. */
+  INDIVIDUAL: 'individual',
+  /** One combined delivery charge for the whole order. */
+  GROUP: 'group',
+} as const;
+
+export type DeliveryMode = (typeof DeliveryMode)[keyof typeof DeliveryMode];
+
 /** Per-component tax settings shared by listings and sale snapshots. */
 export interface LineTaxSettings {
   purchaseTaxPercentage: number;
@@ -93,8 +103,10 @@ export interface ProductPlatformListing {
   /** Per-unit economics (company currency) */
   purchasePrice: number;
   sellingPrice: number;
-  /** Delivery / shipping fee per unit */
+  /** Delivery / shipping fee per unit (individual delivery mode) */
   shippingCost: number;
+  /** Default delivery mode for this listing — individual per unit or group shipment */
+  deliveryMode?: DeliveryMode;
   /** Fixed fee per unit (FBA, referral flat fee, etc.) */
   platformFee?: number;
   /** Percent of gross revenue (e.g. Amazon ~15%) */
@@ -182,6 +194,16 @@ export interface SaleLineEconomics {
   inputTaxAmount?: number;
 }
 
+export interface SaleLine {
+  id: string;
+  productId: string;
+  productName: string;
+  platformListingId?: string;
+  quantity: number;
+  /** Per-line economics snapshot */
+  economics: SaleLineEconomics;
+}
+
 export interface Sale {
   id: string;
   companyId: string;
@@ -189,6 +211,15 @@ export interface Sale {
   orderId: string;
   /** Business order date — stored as UTC instant (local calendar day on save) */
   orderDate: Date;
+  /** Order lines — multi-item marketplace orders. Legacy sales omit this. */
+  lines?: SaleLine[];
+  /** Individual per-line delivery vs one combined shipment fee */
+  deliveryMode?: DeliveryMode;
+  /** Combined delivery fee when deliveryMode is group */
+  orderShippingCost?: number;
+  orderDeliveryTaxPercentage?: number;
+  orderDeliveryTaxMode?: TaxMode;
+  /** Denormalized from first line / totals for list views and legacy reads */
   productId: string;
   productName: string;
   platform: string;

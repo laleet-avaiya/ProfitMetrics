@@ -25,10 +25,18 @@ import {
   salePaymentStatusBadgeClass,
 } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
-import { PlatformFeeKind, SaleStatus } from '../../types';
+import { SaleStatus } from '../../types';
 import { amountIncludesTaxLabel, taxPercentLabel } from '../../utils/listingTax';
 import { formatMoney, formatPercent } from '../../utils/profit';
 import { formatDateLocal } from '../../utils/date';
+import { deliveryModeLabel } from '../../constants/deliveryModes';
+import {
+  getSaleDeliveryTotal,
+  getSaleDisplayProductName,
+  getSaleLineCount,
+  getSaleLines,
+  getSaleTotalQuantity,
+} from '../../utils/saleLines';
 
 export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>();
@@ -43,12 +51,9 @@ export function SaleDetailPage() {
   });
 
   const e = sale?.economics;
+  const saleLines = sale ? getSaleLines(sale) : [];
+  const lineCount = sale ? getSaleLineCount(sale) : 0;
   const pctLabel = e ? taxPercentLabel(e.taxType) : 'Tax %';
-  const feeKind = e?.platformFeeKind ?? PlatformFeeKind.FIXED;
-  const feeDisplay =
-    feeKind === PlatformFeeKind.PERCENT
-      ? `${e?.platformFeePercent ?? 0}%`
-      : formatMoney(e?.platformFee ?? 0, currency);
   const profitPositive = (sale?.profit ?? 0) >= 0;
 
   return (
@@ -62,7 +67,11 @@ export function SaleDetailPage() {
       backTo="/sales"
       backLabel="Back to sales"
       title={sale ? `Order ${sale.orderId}` : 'Sale'}
-      description={sale ? `${sale.productName} · ${sale.platform}` : undefined}
+      description={
+        sale
+          ? `${getSaleDisplayProductName(sale)} · ${sale.platform}${lineCount > 1 ? ` · ${lineCount} items` : ''}`
+          : undefined
+      }
       meta={
         sale ? (
           <DetailMetaRow>
@@ -70,7 +79,9 @@ export function SaleDetailPage() {
               {formatDateLocal(sale.orderDate)}
             </DetailMetaChip>
             <DetailMetaChip tone="gray">{sale.platform}</DetailMetaChip>
-            <DetailMetaChip tone="gray">Qty {sale.quantity}</DetailMetaChip>
+            <DetailMetaChip tone="gray">
+              {lineCount > 1 ? `${lineCount} items` : `Qty ${getSaleTotalQuantity(sale)}`}
+            </DetailMetaChip>
             <SaleStatusBadge status={sale.status} />
           </DetailMetaRow>
         ) : undefined
@@ -133,15 +144,15 @@ export function SaleDetailPage() {
             <DetailGrid columns={3}>
               <DetailField label="Order ID" value={sale.orderId} valueClassName="font-mono text-xs" />
               <DetailField label="Order date" value={formatDateLocal(sale.orderDate)} />
-              <DetailField label="Quantity" value={String(sale.quantity)} />
               <DetailField
-                label="Product"
+                label="Items"
                 value={
-                  <Link to={`/products/${sale.productId}`} className={detailLinkClass}>
-                    {sale.productName}
-                  </Link>
+                  lineCount > 1
+                    ? `${lineCount} products · ${getSaleTotalQuantity(sale)} units`
+                    : String(getSaleTotalQuantity(sale))
                 }
               />
+              <DetailField label="Delivery" value={deliveryModeLabel(sale.deliveryMode)} />
               <DetailField label="Platform" value={sale.platform} />
               <DetailField label="Status" value={<SaleStatusBadge status={sale.status} />} />
               <DetailField label="Payment mode" value={paymentModeLabel(sale.paymentMode)} />
@@ -219,35 +230,65 @@ export function SaleDetailPage() {
           </DetailSection>
 
           <DetailSection
+            icon={ShoppingCart}
+            iconTone="indigo"
+            title="Order items"
+            description="Products included in this marketplace order."
+          >
+            <div className="overflow-x-auto -mx-1">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <th className="py-2 pr-3 font-medium">Product</th>
+                    <th className="py-2 px-3 font-medium text-right">Qty</th>
+                    <th className="py-2 px-3 font-medium text-right">Selling</th>
+                    <th className="py-2 px-3 font-medium text-right">Purchase</th>
+                    <th className="py-2 pl-3 font-medium text-right">Line revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {saleLines.map((line) => (
+                    <tr
+                      key={line.id}
+                      className="border-b border-gray-100 dark:border-gray-800/80 last:border-0"
+                    >
+                      <td className="py-2.5 pr-3">
+                        <Link to={`/products/${line.productId}`} className={detailLinkClass}>
+                          {line.productName}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">{line.quantity}</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">
+                        {formatMoney(line.economics.sellingPrice, currency)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right tabular-nums">
+                        {formatMoney(line.economics.purchasePrice, currency)}
+                      </td>
+                      <td className="py-2.5 pl-3 text-right tabular-nums font-medium">
+                        {formatMoney(line.economics.sellingPrice * line.quantity, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </DetailSection>
+
+          <DetailSection
             icon={Layers}
             iconTone="violet"
             title="Economics & tax"
-            description="Cost snapshot recorded when this sale was logged."
+            description="Order-level cost snapshot recorded when this sale was logged."
           >
             <DetailGrid columns={3}>
               <DetailField
-                label="Purchase price"
-                value={formatMoney(e.purchasePrice, currency)}
+                label="Delivery mode"
+                value={deliveryModeLabel(sale.deliveryMode)}
+              />
+              <DetailField
+                label="Delivery total"
+                value={formatMoney(getSaleDeliveryTotal(sale), currency)}
                 valueClassName="tabular-nums font-medium"
-              />
-              <DetailField
-                label={`${pctLabel} (purchase)`}
-                value={`${e.purchaseTaxPercentage ?? 0}% · Includes tax: ${amountIncludesTaxLabel(e.purchaseTaxMode)}`}
-              />
-              <DetailField
-                label="Selling price"
-                value={formatMoney(e.sellingPrice, currency)}
-                valueClassName="tabular-nums font-medium"
-              />
-              <DetailField
-                label={`${pctLabel} (selling)`}
-                value={`${e.sellingTaxPercentage ?? e.taxPercentage}% · Includes tax: ${amountIncludesTaxLabel(e.sellingTaxMode ?? e.taxMode)}`}
-              />
-              <DetailField label="Platform fee" value={feeDisplay} />
-              <DetailField
-                label="Delivery fee"
-                value={formatMoney(e.shippingCost, currency)}
-                valueClassName="tabular-nums"
               />
               <DetailField
                 label="Platform fees (total)"

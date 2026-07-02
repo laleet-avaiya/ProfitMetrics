@@ -1,10 +1,16 @@
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { firestoreService } from '../services/firestore';
 import type { Expense, Sale } from '../types';
-import { SaleExpenseKind, SaleStatus, TaxType } from '../types';
+import { DeliveryMode, SaleExpenseKind, SaleStatus, TaxType } from '../types';
 import { allocateNextExpenseNumber } from './documentNumbers';
 import { createListingId } from './productDefaults';
 import { nowUtc, utcToLocalDateInput } from './firestoreDates';
+import {
+  getSaleDeliveryMode,
+  getSaleDeliveryTaxAmount,
+  getSaleDeliveryTotal,
+  getSaleLineCount,
+} from './saleLines';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -57,24 +63,32 @@ function buildPlatformFeesSpec(sale: Sale): SaleExpenseSpec | null {
 }
 
 function buildDeliverySpec(sale: Sale): SaleExpenseSpec | null {
-  const qty = Math.max(1, sale.quantity);
-  const amount = roundMoney(Math.max(0, sale.economics.shippingCost) * qty);
+  const amount = getSaleDeliveryTotal(sale);
   if (amount <= 0) return null;
 
   const e = sale.economics;
+  const lineCount = getSaleLineCount(sale);
+  const modeLabel =
+    getSaleDeliveryMode(sale) === DeliveryMode.GROUP ? 'group delivery' : 'individual delivery';
   const spec: SaleExpenseSpec = {
     kind: SaleExpenseKind.DELIVERY,
     category: 'Delivery & Shipping',
-    description: `Delivery cost — Order ${sale.orderId} (${sale.platform})`,
+    description: `Delivery cost (${modeLabel}${lineCount > 1 ? ` · ${lineCount} items` : ''}) — Order ${sale.orderId} (${sale.platform})`,
     expenseDate: sale.orderDate,
     amount,
   };
 
-  if (tracksTax(sale) && (e.deliveryTaxAmount ?? 0) > 0) {
+  const deliveryTaxAmount = getSaleDeliveryTaxAmount(sale);
+  if (tracksTax(sale) && deliveryTaxAmount > 0) {
     spec.taxType = e.taxType;
-    spec.taxPercentage = e.deliveryTaxPercentage ?? 0;
-    spec.taxMode = e.deliveryTaxMode;
-    spec.taxAmount = e.deliveryTaxAmount;
+    if (getSaleDeliveryMode(sale) === DeliveryMode.GROUP) {
+      spec.taxPercentage = sale.orderDeliveryTaxPercentage ?? e.deliveryTaxPercentage ?? 0;
+      spec.taxMode = sale.orderDeliveryTaxMode ?? e.deliveryTaxMode;
+    } else {
+      spec.taxPercentage = e.deliveryTaxPercentage ?? 0;
+      spec.taxMode = e.deliveryTaxMode;
+    }
+    spec.taxAmount = deliveryTaxAmount;
   }
 
   return spec;

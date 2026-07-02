@@ -6,6 +6,7 @@ import {
   utcToLocalDateInput,
 } from './firestoreDates';
 import { isDateInRange } from './expenseHelpers';
+import { getSaleLineMetrics, saleCogs, saleShipping } from './saleLines';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -239,12 +240,12 @@ export function filterOperatingExpenses(expenses: Expense[]): Expense[] {
   return expenses.filter((e) => !isExpenseExcludedFromNetProfit(e));
 }
 
-function saleCogs(sale: Sale): number {
-  return roundMoney(sale.economics.purchasePrice * sale.quantity);
+function saleCogsFromSale(sale: Sale): number {
+  return saleCogs(sale);
 }
 
-function saleShipping(sale: Sale): number {
-  return roundMoney(sale.economics.shippingCost * sale.quantity);
+function saleShippingFromSale(sale: Sale): number {
+  return saleShipping(sale);
 }
 
 export function computePeriodSummary(
@@ -259,11 +260,11 @@ export function computePeriodSummary(
   const offlineRevenue = roundMoney(invoices.reduce((sum, i) => sum + i.total, 0));
   const grossRevenue = roundMoney(onlineRevenue + offlineRevenue);
 
-  const onlineCogs = roundMoney(sales.reduce((sum, s) => sum + saleCogs(s), 0));
+  const onlineCogs = roundMoney(sales.reduce((sum, s) => sum + saleCogsFromSale(s), 0));
   const offlineCogs = roundMoney(invoices.reduce((sum, i) => sum + i.totalCogs, 0));
   const totalCogs = roundMoney(onlineCogs + offlineCogs);
 
-  const totalShipping = roundMoney(sales.reduce((sum, s) => sum + saleShipping(s), 0));
+  const totalShipping = roundMoney(sales.reduce((sum, s) => sum + saleShippingFromSale(s), 0));
   const totalPlatformFees = roundMoney(sales.reduce((sum, s) => sum + s.platformFees, 0));
 
   const onlineTax = roundMoney(sales.reduce((sum, s) => sum + s.economics.taxAmount, 0));
@@ -407,7 +408,9 @@ export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): Produ
   };
 
   for (const sale of sales) {
-    add(sale.productId, sale.productName, sale.grossRevenue, sale.profit);
+    for (const line of getSaleLineMetrics(sale)) {
+      add(line.productId, line.productName, line.revenue, line.profit);
+    }
   }
 
   for (const invoice of invoices) {
