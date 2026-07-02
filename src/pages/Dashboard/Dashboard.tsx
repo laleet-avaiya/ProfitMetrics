@@ -14,7 +14,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Invoice, Payment, ProductStock, Sale } from '../../types';
+import type { Expense, Invoice, Payment, ProductStock, PurchaseOrder, Sale } from '../../types';
 import { TaxType } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatExpenseTaxLabel } from '../../utils/expenseHelpers';
@@ -25,6 +25,7 @@ import { paymentKindLabel } from '../../constants/paymentKinds';
 import {
   computeByPlatform,
   computeByProduct,
+  computeCashFlowSummary,
   computeInvoiceReceivables,
   computePaymentSummary,
   computePeriodSummary,
@@ -56,6 +57,8 @@ import {
   Users,
   Warehouse,
   Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from 'lucide-react';
 
 function taxSummaryTitle(taxType: TaxType | undefined): string {
@@ -146,6 +149,7 @@ export function Dashboard() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<ProductStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,16 +161,19 @@ export function Dashboard() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, paymentsList, expensesList, stockList] = await Promise.all([
+      const [salesList, invoicesList, paymentsList, purchasesList, expensesList, stockList] =
+        await Promise.all([
         firestoreService.sales.getAll(company.id),
         firestoreService.invoices.getAll(company.id),
         firestoreService.payments.getAll(company.id),
+        firestoreService.purchases.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
         firestoreService.stock.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
       setInvoices(invoicesList.filter((i) => !i.deleted));
       setPayments(paymentsList.filter((p) => !p.deleted));
+      setPurchases(purchasesList.filter((p) => !p.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
       setStock(stockList);
     } catch (err) {
@@ -224,6 +231,18 @@ export function Dashboard() {
   const paymentSummary = useMemo(
     () => computePaymentSummary(filteredPayments),
     [filteredPayments]
+  );
+
+  const cashFlow = useMemo(
+    () =>
+      computeCashFlowSummary(
+        filteredPayments,
+        purchases,
+        filteredExpenses,
+        dateRange.from,
+        dateRange.to
+      ),
+    [filteredPayments, purchases, filteredExpenses, dateRange]
   );
 
   const receivables = useMemo(() => computeInvoiceReceivables(invoices), [invoices]);
@@ -305,11 +324,15 @@ export function Dashboard() {
     sales.length > 0 ||
     invoices.length > 0 ||
     payments.length > 0 ||
+    purchases.length > 0 ||
     expenses.length > 0 ||
     stock.length > 0;
   const hasPeriodData =
-    summary.saleCount > 0 || filteredExpenses.length > 0 || filteredPayments.length > 0;
-  const hasPaymentActivity = paymentSummary.count > 0 || receivables.balanceDue > 0;
+    summary.saleCount > 0 ||
+    filteredExpenses.length > 0 ||
+    filteredPayments.length > 0 ||
+    cashFlow.paid > 0;
+  const hasCashFlowActivity = cashFlow.received > 0 || cashFlow.paid > 0;
   const periodSubtext = dateRange.label;
 
   const revenueSubtext =
@@ -424,58 +447,6 @@ export function Dashboard() {
                 />
               </div>
 
-              {hasPaymentActivity && (
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  <StatCard
-                    label="Payments received"
-                    value={formatMoney(paymentSummary.totalReceived, currency)}
-                    subtext={`${paymentSummary.count} payment${paymentSummary.count === 1 ? '' : 's'} · ${periodSubtext}`}
-                    valueClassName="text-emerald-700 dark:text-emerald-400"
-                  />
-                  <StatCard
-                    label="Invoice payments"
-                    value={formatMoney(paymentSummary.invoicePayments, currency)}
-                    subtext={
-                      paymentSummary.invoicePaymentCount > 0
-                        ? `${paymentSummary.invoicePaymentCount} in period`
-                        : 'None in period'
-                    }
-                  />
-                  <StatCard
-                    label="Direct payments"
-                    value={formatMoney(paymentSummary.directPayments, currency)}
-                    subtext={
-                      paymentSummary.directPaymentCount > 0
-                        ? `${paymentSummary.directPaymentCount} in period`
-                        : 'None in period'
-                    }
-                  />
-                  <StatCard
-                    label="Marketplace payouts"
-                    value={formatMoney(paymentSummary.marketplacePayouts, currency)}
-                    subtext={
-                      paymentSummary.marketplacePayoutCount > 0
-                        ? `${paymentSummary.marketplacePayoutCount} in period`
-                        : 'None in period'
-                    }
-                  />
-                  <StatCard
-                    label="Outstanding (AR)"
-                    value={formatMoney(receivables.balanceDue, currency)}
-                    subtext={
-                      receivables.openCount > 0
-                        ? `${receivables.openCount} open invoice${receivables.openCount === 1 ? '' : 's'}`
-                        : 'All invoices paid'
-                    }
-                    valueClassName={
-                      receivables.balanceDue > 0
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-emerald-700 dark:text-emerald-400'
-                    }
-                  />
-                </div>
-              )}
-
               {hasPeriodData && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
                   <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
@@ -536,6 +507,116 @@ export function Dashboard() {
             </>
           )}
         </Card>
+
+        {!loading && hasCashFlowActivity && (
+          <Card>
+            <CardHeader
+              title="Cash flow"
+              description={`Money in vs out · ${dateRange.label}`}
+              action={
+                <Link
+                  to="/payments"
+                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  View payments
+                </Link>
+              }
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <StatCard
+                label="Received"
+                value={formatMoney(cashFlow.received, currency)}
+                subtext={`${cashFlow.receivedCount} receipt${cashFlow.receivedCount === 1 ? '' : 's'} · ${periodSubtext}`}
+                valueClassName="text-emerald-700 dark:text-emerald-400"
+              />
+              <StatCard
+                label="Paid out"
+                value={formatMoney(cashFlow.paid, currency)}
+                subtext={`${cashFlow.paidCount} outflow${cashFlow.paidCount === 1 ? '' : 's'} · ${periodSubtext}`}
+                valueClassName="text-amber-700 dark:text-amber-400"
+              />
+              <StatCard
+                label="Net cash flow"
+                value={formatMoney(cashFlow.netCashFlow, currency)}
+                subtext={
+                  cashFlow.netCashFlow > 0
+                    ? 'Positive — more received than paid'
+                    : cashFlow.netCashFlow < 0
+                      ? 'Negative — more paid than received'
+                      : 'Balanced'
+                }
+                valueClassName={profitClass(cashFlow.netCashFlow)}
+              />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
+                  Invoice payments
+                </p>
+                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
+                  {formatMoney(paymentSummary.invoicePayments, currency)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
+                  Direct receipts
+                </p>
+                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
+                  {formatMoney(paymentSummary.directPayments, currency)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
+                  Marketplace payouts
+                </p>
+                <p className="text-sm font-semibold tabular-nums mt-0.5 text-emerald-700 dark:text-emerald-400">
+                  {formatMoney(paymentSummary.marketplacePayouts, currency)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <ArrowUpRight className="w-3 h-3 text-amber-600" />
+                  PO payments
+                </p>
+                <p className="text-sm font-semibold tabular-nums mt-0.5 text-amber-700 dark:text-amber-400">
+                  {formatMoney(cashFlow.poPayments, currency)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <ArrowUpRight className="w-3 h-3 text-amber-600" />
+                  Operating expenses
+                </p>
+                <p className="text-sm font-semibold tabular-nums mt-0.5 text-amber-700 dark:text-amber-400">
+                  {formatMoney(cashFlow.operatingExpenses, currency)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <Wallet className="w-3 h-3" />
+                  Outstanding (AR)
+                </p>
+                <p
+                  className={`text-sm font-semibold tabular-nums mt-0.5 ${
+                    receivables.balanceDue > 0
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-gray-900 dark:text-white'
+                  }`}
+                >
+                  {formatMoney(receivables.balanceDue, currency)}
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                  {receivables.openCount > 0
+                    ? `${receivables.openCount} open invoice${receivables.openCount === 1 ? '' : 's'}`
+                    : 'Current balance'}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {!loading && !hasPeriodData && (
           <Card className="py-8 flex flex-col items-center space-y-3">

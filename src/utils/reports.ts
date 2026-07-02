@@ -1,5 +1,5 @@
-import type { Expense, Invoice, Payment, PeriodProfitSummary, ProductStock, Sale } from '../types';
-import { InvoiceStatus, PaymentKind } from '../types';
+import type { Expense, Invoice, Payment, PeriodProfitSummary, ProductStock, PurchaseOrder, Sale } from '../types';
+import { InvoiceStatus, PaymentKind, PurchaseOrderStatus } from '../types';
 import {
   localDateInputToUtc,
   localDateInputToUtcEndOfDay,
@@ -168,6 +168,58 @@ export function computeInvoiceReceivables(invoices: Invoice[]): InvoiceReceivabl
     balanceDue: roundMoney(balanceDue),
     openCount,
     totalInvoiced: roundMoney(totalInvoiced),
+  };
+}
+
+export interface CashFlowSummary {
+  received: number;
+  receivedCount: number;
+  paid: number;
+  paidCount: number;
+  poPayments: number;
+  poPaymentCount: number;
+  operatingExpenses: number;
+  operatingExpenseCount: number;
+  netCashFlow: number;
+}
+
+/** Cash in (customer receipts) vs cash out (vendor PO payments + operating expenses) for a period. */
+export function computeCashFlowSummary(
+  receivedPayments: Payment[],
+  purchases: PurchaseOrder[],
+  expensesInRange: Expense[],
+  from?: Date,
+  to?: Date
+): CashFlowSummary {
+  const paymentSummary = computePaymentSummary(receivedPayments);
+  const operatingExpenseRows = filterOperatingExpenses(expensesInRange);
+
+  let poPayments = 0;
+  let poPaymentCount = 0;
+  for (const purchase of purchases) {
+    if (purchase.deleted || purchase.status === PurchaseOrderStatus.CANCELLED) continue;
+    for (const payment of purchase.payments) {
+      if (!isDateInRange(payment.paymentDate, from, to)) continue;
+      poPayments += payment.amount;
+      poPaymentCount++;
+    }
+  }
+
+  const operatingExpenses = roundMoney(
+    operatingExpenseRows.reduce((sum, expense) => sum + expense.amount, 0)
+  );
+  const paid = roundMoney(roundMoney(poPayments) + operatingExpenses);
+
+  return {
+    received: paymentSummary.totalReceived,
+    receivedCount: paymentSummary.count,
+    paid,
+    paidCount: poPaymentCount + operatingExpenseRows.length,
+    poPayments: roundMoney(poPayments),
+    poPaymentCount,
+    operatingExpenses,
+    operatingExpenseCount: operatingExpenseRows.length,
+    netCashFlow: roundMoney(paymentSummary.totalReceived - paid),
   };
 }
 
