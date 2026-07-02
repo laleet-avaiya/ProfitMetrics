@@ -1,8 +1,11 @@
+import type { CompanyRole } from '../constants/roles';
+
 // ─── Company (tenant) ───────────────────────────────────────────────────────
 
 export interface Company {
   id: string;
-  userId: string;
+  /** Firebase Auth uid of the company creator / primary admin */
+  ownerId: string;
   name: string;
   /** ISO-style business country: AE (UAE) or IN (India) */
   country: string;
@@ -40,6 +43,41 @@ export interface Company {
   aiMessageQuota?: number;
   /** AI assistant messages consumed in the current quota period */
   aiMessagesUsed?: number;
+}
+
+// ─── Team & access control ────────────────────────────────────────────────────
+
+export interface CompanyMember {
+  id: string;
+  companyId: string;
+  userId: string;
+  email: string;
+  displayName?: string;
+  role: CompanyRole;
+  status: 'active' | 'disabled';
+  invitedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CompanyInvite {
+  id: string;
+  companyId: string;
+  email: string;
+  role: CompanyRole;
+  invitedBy: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName?: string;
+  activeCompanyId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // ─── AI Assistant ─────────────────────────────────────────────────────────────

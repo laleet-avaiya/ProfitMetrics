@@ -23,9 +23,13 @@ import {
   PanelLeftOpen,
   SlidersHorizontal,
   Bot,
+  UserCog,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
+import { roleLabel } from '../../constants/roles';
+import type { Permission } from '../../constants/roles';
 import { BRAND_LOGO_ICON, BRAND_NAME } from '../../constants/brand';
 import {
   getSubscriptionDaysRemaining,
@@ -42,6 +46,7 @@ interface NavItem {
   path: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  permission?: Permission;
 }
 
 interface NavSection {
@@ -80,8 +85,9 @@ const navSections: NavSection[] = [
   {
     title: 'Account',
     items: [
-      { path: '/configuration', label: 'Configuration', icon: SlidersHorizontal },
-      { path: '/subscription', label: 'Subscription', icon: CreditCard },
+      { path: '/team', label: 'Team', icon: UserCog, permission: 'manage_team' },
+      { path: '/configuration', label: 'Configuration', icon: SlidersHorizontal, permission: 'manage_company' },
+      { path: '/subscription', label: 'Subscription', icon: CreditCard, permission: 'manage_subscription' },
       { path: '/settings', label: 'Settings', icon: Settings },
       { path: '/about', label: 'About', icon: Info },
     ],
@@ -110,7 +116,8 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { signOut, company, loading } = useAuth();
+  const { signOut, company, membership, loading } = useAuth();
+  const { can } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
   const prevPathname = useRef(location.pathname);
@@ -262,7 +269,9 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
                     {section.title}
                   </p>
                 ) : null}
-                {section.items.map((item) => (
+                {section.items
+                  .filter((item) => !item.permission || can(item.permission))
+                  .map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
@@ -284,6 +293,13 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
             sidebarCollapsed ? 'lg:p-2 p-3' : 'p-3'
           }`}
         >
+          {membership ? (
+            <div
+              className={`px-3 py-2 text-xs text-gray-500 dark:text-gray-400 ${sidebarCollapsed ? 'lg:hidden' : ''}`}
+            >
+              Signed in as {roleLabel(membership.role)}
+            </div>
+          ) : null}
           {showSidebarSubscriptionDays && (
             <Link
               to="/subscription"

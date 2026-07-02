@@ -1,17 +1,24 @@
 import { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { hasLegalConsent } from '../../utils/legalConsent';
+import type { Permission } from '../../constants/roles';
 import { LoadingView } from '../AppLoader/AppLoader';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  /** When false, allow access without T&C acceptance (terms pages only). */
   requireLegalConsent?: boolean;
+  requiredPermission?: Permission;
 }
 
-export function ProtectedRoute({ children, requireLegalConsent = true }: ProtectedRouteProps) {
-  const { user, company, loading } = useAuth();
+export function ProtectedRoute({
+  children,
+  requireLegalConsent = true,
+  requiredPermission,
+}: ProtectedRouteProps) {
+  const { user, company, membership, loading } = useAuth();
+  const { can } = usePermissions();
   const location = useLocation();
 
   if (loading) {
@@ -20,6 +27,17 @@ export function ProtectedRoute({ children, requireLegalConsent = true }: Protect
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!company || !membership) {
+    if (location.pathname === '/no-company' || location.pathname === '/create-company') {
+      return <>{children}</>;
+    }
+    return <Navigate to="/no-company" replace />;
+  }
+
+  if (requiredPermission && !can(requiredPermission)) {
+    return <Navigate to="/" replace />;
   }
 
   if (

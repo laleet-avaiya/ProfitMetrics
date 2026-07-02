@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { PAYMENT_KIND_OPTIONS, paymentKindLabel } from '../../constants/paymentKinds';
 import { paymentModeLabel } from '../../constants/paymentModes';
 import { firestoreService } from '../../services/firestore';
@@ -36,29 +37,19 @@ export function Payments() {
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const list = await firestoreService.payments.getAll(company.id);
-      setPayments(list.filter((p) => !p.deleted));
-    } catch {
-      notification.error('Failed to load payments');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data: payments, loading, reload } = useEntityList({
+    initialData: [] as Payment[],
+    errorMessage: 'Failed to load payments',
+    fetch: async (companyId) => {
+      const list = await firestoreService.payments.getAll(companyId);
+      return list.filter(notDeleted);
+    },
+  });
 
   const platformFilterOptions = useMemo(
     () =>
@@ -103,7 +94,7 @@ export function Payments() {
           await syncInvoicePaymentRollup(company.id, payment.invoiceId);
         }
         notification.success('Payment deleted');
-        loadData();
+        reload();
       },
     });
   };

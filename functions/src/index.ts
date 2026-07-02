@@ -10,7 +10,55 @@ initializeApp();
 
 const COLLECTION_AI_CHATS = 'aiChats';
 const COLLECTION_COMPANIES = 'companies';
+const COLLECTION_MEMBERS = 'companyMembers';
+const COLLECTION_USERS = 'users';
 const RECENT_MESSAGE_LIMIT = 8;
+
+function getMemberDocId(companyId: string, userId: string): string {
+  return `${companyId}_${userId}`;
+}
+
+async function resolveCompanyId(
+  db: FirebaseFirestore.Firestore,
+  userId: string,
+  requestedCompanyId?: string
+): Promise<string> {
+  if (requestedCompanyId) {
+    const memberSnap = await db
+      .collection(COLLECTION_MEMBERS)
+      .doc(getMemberDocId(requestedCompanyId, userId))
+      .get();
+    if (!memberSnap.exists || memberSnap.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'You do not have access to this company.');
+    }
+    return requestedCompanyId;
+  }
+
+  const userSnap = await db.collection(COLLECTION_USERS).doc(userId).get();
+  const activeCompanyId = userSnap.data()?.activeCompanyId;
+  if (typeof activeCompanyId === 'string' && activeCompanyId) {
+    const memberSnap = await db
+      .collection(COLLECTION_MEMBERS)
+      .doc(getMemberDocId(activeCompanyId, userId))
+      .get();
+    if (memberSnap.exists && memberSnap.data()?.status === 'active') {
+      return activeCompanyId;
+    }
+  }
+
+  const memberships = await db
+    .collection(COLLECTION_MEMBERS)
+    .where('userId', '==', userId)
+    .where('status', '==', 'active')
+    .limit(1)
+    .get();
+
+  if (memberships.empty) {
+    throw new HttpsError('failed-precondition', 'No active company membership found.');
+  }
+
+  return String(memberships.docs[0].data().companyId);
+}
 
 function getDocId(companyId: string, id: string): string {
   return `${companyId}_${id}`;
@@ -30,6 +78,7 @@ function toOpenAiMessages(
 interface ProcessAiMessageRequest {
   chatId?: string;
   message: string;
+  companyId?: string;
 }
 
 interface ProcessAiMessageResponse {
@@ -53,7 +102,7 @@ export const processAiMessage = onCall(
       throw new HttpsError('unauthenticated', 'You must be signed in to use the AI assistant.');
     }
 
-    const companyId = request.auth.uid;
+    const userId = request.auth.uid;
     const data = request.data as ProcessAiMessageRequest;
     const userMessage = typeof data.message === 'string' ? data.message.trim() : '';
 
@@ -66,6 +115,11 @@ export const processAiMessage = onCall(
     }
 
     const db = getFirestore();
+    const companyId = await resolveCompanyId(
+      db,
+      userId,
+      typeof data.companyId === 'string' ? data.companyId : undefined
+    );
     const companyRef = db.collection(COLLECTION_COMPANIES).doc(companyId);
     const companySnap = await companyRef.get();
 

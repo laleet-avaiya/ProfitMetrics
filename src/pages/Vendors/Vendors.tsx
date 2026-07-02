@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive,
@@ -25,6 +25,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
 import type { Expense, PurchaseOrder, Vendor } from '../../types';
 import { formatMoney } from '../../utils/profit';
@@ -40,36 +41,36 @@ export function Vendors() {
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [vendorList, expenseList, purchaseList] = await Promise.all([
-        firestoreService.vendors.getAll(company.id),
-        firestoreService.expenses.getAll(company.id),
-        firestoreService.purchases.getAll(company.id),
-      ]);
-      setVendors(vendorList.filter((v) => !v.deleted));
-      setExpenses(expenseList.filter((e) => !e.deleted));
-      setPurchases(purchaseList.filter((p) => !p.deleted));
-    } catch (err) {
-      console.error('Failed to load vendors:', err);
-      notification.error('Failed to load vendors');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
+  const emptyData = useMemo(
+    () => ({
+      vendors: [] as Vendor[],
+      expenses: [] as Expense[],
+      purchases: [] as PurchaseOrder[],
+    }),
+    []
+  );
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load vendors',
+    fetch: async (companyId) => {
+      const [vendorList, expenseList, purchaseList] = await Promise.all([
+        firestoreService.vendors.getAll(companyId),
+        firestoreService.expenses.getAll(companyId),
+        firestoreService.purchases.getAll(companyId),
+      ]);
+      return {
+        vendors: vendorList.filter(notDeleted),
+        expenses: expenseList.filter(notDeleted),
+        purchases: purchaseList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { vendors, expenses, purchases } = data;
+  const [search, setSearch] = useState('');
 
   const expenseTotals = useMemo(() => sumExpensesByVendor(expenses), [expenses]);
   const purchaseTotals = useMemo(() => sumPurchasesByVendor(purchases), [purchases]);
@@ -126,7 +127,7 @@ export function Vendors() {
             updatedAt: nowUtc(),
           });
           notification.success(archiving ? 'Vendor archived' : 'Vendor restored');
-          loadData();
+          reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to update vendor');
@@ -149,7 +150,7 @@ export function Vendors() {
         try {
           await firestoreService.vendors.delete(company.id, vendor.id);
           notification.success('Vendor deleted');
-          loadData();
+          reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to delete vendor');

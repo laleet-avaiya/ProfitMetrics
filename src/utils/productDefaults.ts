@@ -57,9 +57,10 @@ export function normalizeListings(listings: ProductPlatformListing[]): ProductPl
   if (listings.length === 0) return listings;
   return listings.map((listing) => {
     const normalized = normalizeListingTax(listing);
-    const { isDefault: _removed, ...rest } = normalized as ProductPlatformListing & {
+    const { isDefault, ...rest } = normalized as ProductPlatformListing & {
       isDefault?: boolean;
     };
+    void isDefault;
     return rest;
   });
 }

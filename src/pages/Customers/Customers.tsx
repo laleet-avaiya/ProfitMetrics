@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Archive, ArchiveRestore, Eye, Pencil, Plus, Trash2, UserCircle, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -15,6 +15,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
 import type { Customer, Invoice } from '../../types';
 import { isReportableInvoice } from '../../utils/reports';
@@ -29,33 +30,30 @@ export function Customers() {
   const notification = useNotification();
   const currency = company?.currency ?? 'AED';
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [customerList, invoiceList] = await Promise.all([
-        firestoreService.customers.getAll(company.id),
-        firestoreService.invoices.getAll(company.id),
-      ]);
-      setCustomers(customerList.filter((c) => !c.deleted));
-      setInvoices(invoiceList.filter((i) => !i.deleted));
-    } catch (err) {
-      console.error(err);
-      notification.error('Failed to load customers');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
+  const emptyData = useMemo(
+    () => ({ customers: [] as Customer[], invoices: [] as Invoice[] }),
+    []
+  );
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load customers',
+    fetch: async (companyId) => {
+      const [customerList, invoiceList] = await Promise.all([
+        firestoreService.customers.getAll(companyId),
+        firestoreService.invoices.getAll(companyId),
+      ]);
+      return {
+        customers: customerList.filter(notDeleted),
+        invoices: invoiceList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { customers, invoices } = data;
+  const [search, setSearch] = useState('');
 
   const invoiceStats = useMemo(() => {
     const map = new Map<string, { count: number; balanceDue: number }>();
@@ -92,7 +90,7 @@ export function Customers() {
       .update(company.id, customer.id, { status: next, updatedAt: nowUtc() })
       .then(() => {
         notification.success(next === 'archived' ? 'Customer archived' : 'Customer restored');
-        loadData();
+        reload();
       })
       .catch(() => notification.error('Failed to update customer'));
   };
@@ -107,7 +105,7 @@ export function Customers() {
       onConfirm: async () => {
         await firestoreService.customers.delete(company.id, customer.id);
         notification.success('Customer deleted');
-        loadData();
+        reload();
       },
     });
   };

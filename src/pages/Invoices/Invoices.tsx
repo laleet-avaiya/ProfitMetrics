@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, FileText, Pencil, Plus, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -15,6 +15,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel } from '../../constants/invoiceStatuses';
 import { purchasePaymentStatusLabel } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
@@ -34,38 +35,37 @@ export function Invoices() {
   const currency = company?.currency ?? 'AED';
   const [searchParams] = useSearchParams();
 
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [customerFilter, setCustomerFilter] = useState(() => searchParams.get('customer') ?? '');
+
+  const emptyData = useMemo(
+    () => ({ invoices: [] as Invoice[], customers: [] as Customer[] }),
+    []
+  );
+
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load invoices',
+    fetch: async (companyId) => {
+      const [invoiceList, customerList] = await Promise.all([
+        firestoreService.invoices.getAll(companyId),
+        firestoreService.customers.getAll(companyId),
+      ]);
+      return {
+        invoices: invoiceList.filter(notDeleted),
+        customers: customerList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { invoices, customers } = data;
 
   useEffect(() => {
     setCustomerFilter(searchParams.get('customer') ?? '');
   }, [searchParams]);
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [invoiceList, customerList] = await Promise.all([
-        firestoreService.invoices.getAll(company.id),
-        firestoreService.customers.getAll(company.id),
-      ]);
-      setInvoices(invoiceList.filter((i) => !i.deleted));
-      setCustomers(customerList.filter((c) => !c.deleted));
-    } catch {
-      notification.error('Failed to load invoices');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -110,7 +110,7 @@ export function Invoices() {
           }
           await firestoreService.invoices.delete(company.id, invoice.id);
           notification.success('Invoice deleted');
-          loadData();
+          reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to delete invoice');

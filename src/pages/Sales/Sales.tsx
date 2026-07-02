@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye,
@@ -26,6 +26,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel } from '../../constants/invoiceStatuses';
 import { purchasePaymentStatusLabel, normalizeSalePaymentStatus } from '../../constants/purchaseStatuses';
 import {
@@ -68,13 +69,35 @@ export function Sales() {
   const channel = normalizeSalesChannelFilter(searchParams.get('channel'));
   const customerFilter = searchParams.get('customer') ?? '';
 
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<InvoiceStatusFilter>('all');
+
+  const emptyData = useMemo(
+    () => ({
+      sales: [] as Sale[],
+      invoices: [] as Invoice[],
+      customers: [] as Customer[],
+    }),
+    []
+  );
+
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load sales',
+    fetch: async (companyId) => {
+      const [salesList, invoiceList, customerList] = await Promise.all([
+        firestoreService.sales.getAll(companyId),
+        firestoreService.invoices.getAll(companyId),
+        firestoreService.customers.getAll(companyId),
+      ]);
+      return {
+        sales: salesList.filter(notDeleted),
+        invoices: invoiceList.filter(notDeleted),
+        customers: customerList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { sales, invoices, customers } = data;
 
   const setChannel = (next: SalesChannelFilter) => {
     const params = new URLSearchParams(searchParams);
@@ -83,28 +106,8 @@ export function Sales() {
     setSearchParams(params, { replace: true });
   };
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [salesList, invoiceList, customerList] = await Promise.all([
-        firestoreService.sales.getAll(company.id),
-        firestoreService.invoices.getAll(company.id),
-        firestoreService.customers.getAll(company.id),
-      ]);
-      setSales(salesList.filter((s) => !s.deleted));
-      setInvoices(invoiceList.filter((i) => !i.deleted));
-      setCustomers(customerList.filter((c) => !c.deleted));
-    } catch {
-      notification.error('Failed to load sales');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
 
   const merged = useMemo(() => mergeSalesRows(sales, invoices), [sales, invoices]);
 
@@ -211,7 +214,7 @@ export function Sales() {
             await firestoreService.invoices.delete(company.id, row.id);
           }
           notification.success('Sale deleted');
-          loadData();
+          await reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to delete');

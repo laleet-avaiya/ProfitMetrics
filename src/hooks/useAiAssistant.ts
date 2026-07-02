@@ -129,6 +129,7 @@ export function useAiAssistant() {
         const result = await sendAiMessage({
           chatId: activeChatId ?? undefined,
           message: trimmed,
+          companyId,
         });
 
         const now = new Date();

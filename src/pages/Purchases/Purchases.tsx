@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Building2, ClipboardList, Eye, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -15,6 +15,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import {
   PURCHASE_STATUS_OPTIONS,
   purchasePaymentStatusLabel,
@@ -65,39 +66,37 @@ export function Purchases() {
   const currency = company?.currency ?? 'AED';
   const [searchParams] = useSearchParams();
 
-  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [vendorFilter, setVendorFilter] = useState(() => searchParams.get('vendor') ?? '');
+
+  const emptyData = useMemo(
+    () => ({ purchases: [] as PurchaseOrder[], vendors: [] as Vendor[] }),
+    []
+  );
+
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load purchase orders',
+    fetch: async (companyId) => {
+      const [purchaseList, vendorList] = await Promise.all([
+        firestoreService.purchases.getAll(companyId),
+        firestoreService.vendors.getAll(companyId),
+      ]);
+      return {
+        purchases: purchaseList.filter(notDeleted),
+        vendors: vendorList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { purchases, vendors } = data;
 
   useEffect(() => {
     setVendorFilter(searchParams.get('vendor') ?? '');
   }, [searchParams]);
 
-  const loadData = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [purchaseList, vendorList] = await Promise.all([
-        firestoreService.purchases.getAll(company.id),
-        firestoreService.vendors.getAll(company.id),
-      ]);
-      setPurchases(purchaseList.filter((p) => !p.deleted));
-      setVendors(vendorList.filter((v) => !v.deleted));
-    } catch (err) {
-      console.error('Failed to load purchases:', err);
-      notification.error('Failed to load purchase orders');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -143,7 +142,7 @@ export function Purchases() {
           await deletePurchaseLinkedExpenses(company.id, purchase.id);
           await firestoreService.purchases.delete(company.id, purchase.id);
           notification.success('Purchase order deleted');
-          loadData();
+          reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to delete purchase order');

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Input } from '../Input/Input';
 import { Select } from '../Select/Select';
@@ -15,6 +15,8 @@ import {
 
 export function Signup() {
   const { signUp } = useAuth();
+  const [searchParams] = useSearchParams();
+  const invited = searchParams.get('invited') === '1';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,7 +46,11 @@ export function Signup() {
     setLoading(true);
 
     try {
-      await signUp(email, password, { companyName, country });
+      if (invited) {
+        await signUp(email, password);
+      } else {
+        await signUp(email, password, { companyName, country });
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create account. Please try again.';
       setError(errorMessage);
@@ -66,51 +72,57 @@ export function Signup() {
               />
             </div>
             <h1 className="text-center text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-              Create your account
+              {invited ? 'Join your team' : 'Create your account'}
             </h1>
             <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-              Set your business country and currency — we&apos;ll apply the right tax defaults for UAE or India.
+              {invited
+                ? 'Sign up with the email address your admin invited to join the company.'
+                : "Set your business country and currency — we'll apply the right tax defaults for UAE or India."}
             </p>
           </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <fieldset disabled={loading} className="min-w-0 border-0 p-0 m-0 space-y-4">
-              <Input
-                label="Company name"
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
-                placeholder="Your company name"
-              />
+              {!invited ? (
+                <>
+                  <Input
+                    label="Company name"
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    required
+                    placeholder="Your company name"
+                  />
 
-              <Select
-                label="Business country"
-                value={country}
-                onChange={(e) => setCountry(e.target.value as BusinessCountry)}
-                options={COUNTRY_OPTIONS}
-                required
-                helperText="Determines currency, tax type, and registration labels"
-              />
+                  <Select
+                    label="Business country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value as BusinessCountry)}
+                    options={COUNTRY_OPTIONS}
+                    required
+                    helperText="Determines currency, tax type, and registration labels"
+                  />
 
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-3 py-3 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Currency</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {countryProfile.currencyLabel}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Default tax</span>
-                  <span className="font-medium text-gray-900 dark:text-white uppercase">
-                    {countryProfile.defaultTaxType} · {countryProfile.defaultTaxPercentage}%
-                    {' · '}
-                    {countryProfile.defaultTaxMode.replace('_', ' ')}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
-                  Used as defaults for new products and sales. You can change these later in Settings.
-                </p>
-              </div>
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-3 py-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Currency</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {countryProfile.currencyLabel}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Default tax</span>
+                      <span className="font-medium text-gray-900 dark:text-white uppercase">
+                        {countryProfile.defaultTaxType} · {countryProfile.defaultTaxPercentage}%
+                        {' · '}
+                        {countryProfile.defaultTaxMode.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">
+                      Used as defaults for new products and sales. You can change these later in Settings.
+                    </p>
+                  </div>
+                </>
+              ) : null}
 
               <Input
                 label="Email address"
@@ -171,9 +183,33 @@ export function Signup() {
 
             <FormActions>
               <Button type="submit" fullWidth loading={loading} disabled={loading}>
-                Create account
+                {invited ? 'Create account & join team' : 'Create account'}
               </Button>
             </FormActions>
+
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              {invited ? (
+                <>
+                  Creating a new company instead?{' '}
+                  <Link
+                    to="/signup"
+                    className="font-medium text-cyan-700 hover:text-cyan-600 dark:text-cyan-400 dark:hover:text-cyan-300"
+                  >
+                    Sign up as admin
+                  </Link>
+                </>
+              ) : (
+                <>
+                  Invited by your team?{' '}
+                  <Link
+                    to="/signup?invited=1"
+                    className="font-medium text-cyan-700 hover:text-cyan-600 dark:text-cyan-400 dark:hover:text-cyan-300"
+                  >
+                    Join with invite
+                  </Link>
+                </>
+              )}
+            </p>
 
             <p className="text-center text-sm text-gray-600 dark:text-gray-400">
               Already have an account?{' '}

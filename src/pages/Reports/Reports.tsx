@@ -26,8 +26,7 @@ import {
 } from '../../constants/reportCatalog';
 import { useNotification } from '../../hooks/useNotification';
 import { useReportData } from '../../hooks/useReportData';
-import { downloadWorkbook, slugifyFilename } from '../../utils/exportSpreadsheet';
-import { buildReportWorkbook, buildReportCompanyInfo, canExportReport } from '../../utils/reportExport';
+import { buildReportCompanyInfo, canExportReport } from '../../utils/reportExport';
 import type { ProfitLossBasis } from '../../utils/reports';
 import { useAuth } from '../../hooks/useAuth';
 import { ReportContent } from './ReportContent';
@@ -134,15 +133,13 @@ export function Reports() {
   const isStockReport = activeReportId === ReportId.STOCK_ON_HAND;
   const activeReport = report ?? getReportDefinition(DEFAULT_REPORT_ID)!;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!exportContext) return;
-    const sheets = buildReportWorkbook(exportContext);
-    if (sheets.length === 0) {
-      notification.error('Nothing to export for this report.');
-      return;
+    const { downloadReportWorkbook } = await import('../../utils/downloadReport');
+    const result = await downloadReportWorkbook(exportContext, activeReport.title);
+    if (!result.ok) {
+      notification.error(result.reason);
     }
-    const stamp = new Date().toISOString().slice(0, 10);
-    downloadWorkbook(`${slugifyFilename(activeReport.title)}-${stamp}`, sheets);
   };
 
   const setActiveReport = (id: string) => {

@@ -7,26 +7,49 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isCompanyOwner(companyId) {
-      return isAuthenticated() && request.auth.uid == companyId;
+    function memberDocPath(companyId) {
+      return /databases/$(database)/documents/companyMembers/$(companyId + '_' + request.auth.uid);
     }
 
-    /** Read own docs; also allow get when doc does not exist yet (e.g. stock by productId). */
-    function canReadOwnDoc() {
+    function memberExists(companyId) {
+      return isAuthenticated() && exists(memberDocPath(companyId));
+    }
+
+    function getMember(companyId) {
+      return get(memberDocPath(companyId)).data;
+    }
+
+    function isActiveMember(companyId) {
+      return memberExists(companyId) && getMember(companyId).status == 'active';
+    }
+
+    function memberRole(companyId) {
+      return getMember(companyId).role;
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isActiveMember(companyId) && memberRole(companyId) == 'admin';
+    }
+
+    function canWriteCompany(companyId) {
+      return isActiveMember(companyId) && memberRole(companyId) in ['admin', 'manager'];
+    }
+
+    function canReadCompanyDoc() {
       return isAuthenticated()
-        && (resource == null || resource.data.companyId == request.auth.uid);
+        && (resource == null || isActiveMember(resource.data.companyId));
     }
 
     function ownsDocument() {
-      return isAuthenticated() && resource.data.companyId == request.auth.uid;
+      return isAuthenticated() && isActiveMember(resource.data.companyId);
     }
 
-    function createsForOwnCompany() {
-      return isAuthenticated() && request.resource.data.companyId == request.auth.uid;
+    function createsForMemberCompany() {
+      return canWriteCompany(request.resource.data.companyId);
     }
 
-    function maintainsOwnCompany() {
-      return request.resource.data.companyId == request.auth.uid;
+    function maintainsCompanyId() {
+      return request.resource.data.companyId == resource.data.companyId;
     }
 
     function companyQuotaFieldsUnchanged() {
@@ -34,88 +57,166 @@ service cloud.firestore {
       return !changed.hasAny(['aiMessagesUsed', 'aiMessageQuota']);
     }
 
-    function companyIdentityUnchanged() {
-      return request.resource.data.companyId == request.auth.uid
-        && request.resource.data.userId == request.auth.uid;
+    function companyOwnerUnchanged() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    function isBootstrapAdminMember(memberId) {
+      let data = request.resource.data;
+      return isAuthenticated()
+        && data.userId == request.auth.uid
+        && data.role == 'admin'
+        && data.status == 'active'
+        && memberId == data.companyId + '_' + request.auth.uid
+        && get(/databases/$(database)/documents/companies/$(data.companyId)).data.ownerId == request.auth.uid;
     }
 
     function ownsParentAiChat(chatDocId) {
       return isAuthenticated()
-        && get(/databases/$(database)/documents/aiChats/$(chatDocId)).data.companyId == request.auth.uid;
+        && isActiveMember(get(/databases/$(database)/documents/aiChats/$(chatDocId)).data.companyId);
+    }
+
+    function authEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function inviteEmailMatchesAuth() {
+      return isAuthenticated()
+        && request.auth.token.email != null
+        && resource.data.email == authEmail();
+    }
+
+    function isSelfJoinViaInvite(memberId) {
+      let data = request.resource.data;
+      return isAuthenticated()
+        && data.userId == request.auth.uid
+        && data.status == 'active'
+        && data.inviteId != null
+        && memberId == data.companyId + '_' + request.auth.uid
+        && get(/databases/$(database)/documents/companyInvites/$(data.inviteId)).data.status == 'pending'
+        && get(/databases/$(database)/documents/companyInvites/$(data.inviteId)).data.email == authEmail()
+        && get(/databases/$(database)/documents/companyInvites/$(data.inviteId)).data.companyId == data.companyId
+        && get(/databases/$(database)/documents/companyInvites/$(data.inviteId)).data.role == data.role;
+    }
+
+    function isAcceptingInvite() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return inviteEmailMatchesAuth()
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+        && changed.hasOnly(['status', 'updatedAt']);
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if false;
     }
 
     match /companies/{companyId} {
-      allow read, delete: if isCompanyOwner(companyId);
-      allow create: if isCompanyOwner(companyId) && companyIdentityUnchanged();
-      allow update: if isCompanyOwner(companyId) && companyQuotaFieldsUnchanged() && companyIdentityUnchanged();
+      allow read: if isActiveMember(companyId);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.id == companyId;
+      allow update: if isCompanyAdmin(companyId) && companyQuotaFieldsUnchanged() && companyOwnerUnchanged();
+      allow delete: if isCompanyAdmin(companyId) && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /companyMembers/{memberId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isActiveMember(resource.data.companyId)
+      );
+      allow create: if isBootstrapAdminMember(memberId)
+        || isSelfJoinViaInvite(memberId)
+        || (isCompanyAdmin(request.resource.data.companyId)
+          && request.resource.data.status == 'active'
+          && request.resource.data.role in ['admin', 'manager', 'viewer']);
+      allow update: if isCompanyAdmin(resource.data.companyId)
+        && resource.data.userId != request.auth.uid
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role in ['admin', 'manager', 'viewer'];
+      allow delete: if isCompanyAdmin(resource.data.companyId) && resource.data.userId != request.auth.uid;
+    }
+
+    match /companyInvites/{inviteId} {
+      allow read: if isAuthenticated() && (
+        isCompanyAdmin(resource.data.companyId) || inviteEmailMatchesAuth()
+      );
+      allow create: if isCompanyAdmin(request.resource.data.companyId)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.role in ['admin', 'manager', 'viewer'];
+      allow update: if isCompanyAdmin(resource.data.companyId)
+        || isAcceptingInvite();
+      allow delete: if isCompanyAdmin(resource.data.companyId);
     }
 
     match /products/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /sales/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /expenses/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /vendors/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /purchases/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /stock/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /customers/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /invoices/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /payments/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
     }
 
     match /auditLogs/{logId} {
       allow create: if isAuthenticated()
-        && request.resource.data.companyId == request.auth.uid
+        && isActiveMember(request.resource.data.companyId)
         && request.resource.data.userId == request.auth.uid;
-      allow read: if isAuthenticated() && resource.data.companyId == request.auth.uid;
+      allow read: if isAuthenticated() && isCompanyAdmin(resource.data.companyId);
       allow update, delete: if false;
     }
 
     match /aiChats/{docId} {
-      allow read: if canReadOwnDoc();
-      allow update, delete: if ownsDocument() && maintainsOwnCompany();
-      allow create: if createsForOwnCompany();
+      allow read: if canReadCompanyDoc();
+      allow update, delete: if ownsDocument() && canWriteCompany(resource.data.companyId) && maintainsCompanyId();
+      allow create: if createsForMemberCompany();
 
       match /messages/{messageId} {
         allow read, delete: if ownsParentAiChat(docId);

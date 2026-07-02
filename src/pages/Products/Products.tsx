@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye,
@@ -22,9 +22,9 @@ import {
   tableTruncateCellClass,
   tableWrapClass,
 } from '../../constants/ui';
-import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
-import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
 import type { Product, ProductStock } from '../../types';
 import { computeLineEconomics, formatPercent, lineEconomicsInputFromListing } from '../../utils/profit';
@@ -45,36 +45,31 @@ function averageListingMargin(product: Product): number | null {
 
 export function Products() {
   const navigate = useNavigate();
-  const { company } = useAuth();
+  const { canWrite } = usePermissions();
   const { summary: marketplaceSummary } = useCompanyMarketplaces();
-  const notification = useNotification();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [stockMap, setStockMap] = useState<Map<string, ProductStock>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const emptyData = useMemo(
+    () => ({ products: [] as Product[], stockMap: new Map<string, ProductStock>() }),
+    []
+  );
 
-  const loadProducts = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
+  const { data, loading } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load products',
+    fetch: async (companyId) => {
       const [list, stockList] = await Promise.all([
-        firestoreService.products.getAll(company.id),
-        firestoreService.stock.getAll(company.id),
+        firestoreService.products.getAll(companyId),
+        firestoreService.stock.getAll(companyId),
       ]);
-      setProducts(list.filter((p) => !p.deleted));
-      setStockMap(getStockMap(stockList));
-    } catch (err) {
-      console.error('Failed to load products:', err);
-      notification.error('Failed to load products');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
+      return {
+        products: list.filter(notDeleted),
+        stockMap: getStockMap(stockList),
+      };
+    },
+  });
 
-  useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+  const { products, stockMap } = data;
+  const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -143,10 +138,12 @@ export function Products() {
             searchPlaceholder="Search by name, SKU, or category"
             searchAriaLabel="Search products"
             actions={
-              <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
-                <Plus className="w-4 h-4" />
-                Add product
-              </Button>
+              canWrite ? (
+                <Button variant="primary" onClick={openCreate} className="flex-1 sm:flex-none">
+                  <Plus className="w-4 h-4" />
+                  Add product
+                </Button>
+              ) : undefined
             }
           />
 
@@ -239,14 +236,16 @@ export function Products() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => openEdit(product)}
-                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                aria-label={`Edit ${product.name}`}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
+                              {canWrite ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(product)}
+                                  className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  aria-label={`Edit ${product.name}`}
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>

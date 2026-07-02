@@ -12,7 +12,7 @@ jobs:
     with:
       environment: production
       build_command: npm run build
-      deploy_message: "� Deploy to Production from GitHub Actions"
+      deploy_message: "Deploy: ${{ github.sha }}"
       publish_dir: ./dist
     secrets:
       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}

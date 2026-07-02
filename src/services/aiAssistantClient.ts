@@ -4,6 +4,7 @@ import { functions } from './firebase';
 export interface ProcessAiMessageRequest {
   chatId?: string;
   message: string;
+  companyId?: string;
 }
 
 export interface ProcessAiMessageResponse {

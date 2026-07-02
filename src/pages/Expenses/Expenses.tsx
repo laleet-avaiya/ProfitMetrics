@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, Pencil, Plus, Receipt, Trash2, Wallet } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
@@ -15,6 +15,7 @@ import {
 } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { EXPENSE_CATEGORIES } from '../../constants/expenseCategories';
 import { firestoreService } from '../../services/firestore';
 import type { Expense, Vendor } from '../../types';
@@ -36,40 +37,34 @@ export function Expenses() {
   const currency = company?.currency ?? 'AED';
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState(() => searchParams.get('vendor') ?? '');
 
+  const emptyData = useMemo(() => ({ expenses: [] as Expense[], vendors: [] as Vendor[] }), []);
+
+  const { data, loading, reload } = useEntityList({
+    initialData: emptyData,
+    errorMessage: 'Failed to load expenses',
+    fetch: async (companyId) => {
+      const [list, vendorList] = await Promise.all([
+        firestoreService.expenses.getAll(companyId),
+        firestoreService.vendors.getAll(companyId),
+      ]);
+      return {
+        expenses: list.filter(notDeleted),
+        vendors: vendorList.filter(notDeleted),
+      };
+    },
+  });
+
+  const { expenses, vendors } = data;
+
   useEffect(() => {
     const vendorFromUrl = searchParams.get('vendor') ?? '';
     setVendorFilter(vendorFromUrl);
   }, [searchParams]);
-
-  const loadExpenses = useCallback(async () => {
-    if (!company) return;
-    setLoading(true);
-    try {
-      const [list, vendorList] = await Promise.all([
-        firestoreService.expenses.getAll(company.id),
-        firestoreService.vendors.getAll(company.id),
-      ]);
-      setExpenses(list.filter((e) => !e.deleted));
-      setVendors(vendorList.filter((v) => !v.deleted));
-    } catch (err) {
-      console.error('Failed to load expenses:', err);
-      notification.error('Failed to load expenses');
-    } finally {
-      setLoading(false);
-    }
-  }, [company, notification]);
-
-  useEffect(() => {
-    loadExpenses();
-  }, [loadExpenses]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -121,7 +116,7 @@ export function Expenses() {
         try {
           await firestoreService.expenses.delete(company.id, expense.id);
           notification.success('Expense deleted');
-          loadExpenses();
+          reload();
         } catch (err) {
           console.error(err);
           notification.error('Failed to delete expense');

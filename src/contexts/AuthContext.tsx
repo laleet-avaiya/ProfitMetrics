@@ -8,11 +8,13 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
-  type User
+  type User,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { appendAuditLog, auditCompanyChangedKeys } from '../services/auditLog';
+import { membershipService } from '../services/membership';
+import { userProfileService } from '../services/userProfile';
 import {
   convertTimestamps,
   fromFirestoreTimestamp,
@@ -20,9 +22,8 @@ import {
   prepareDatesForFirestore,
 } from '../utils/firestoreDates';
 import { AuthContext } from './AuthContextInstance';
-import type { AuthContextType } from './AuthContext.types';
-import type { SignUpCompanyDetails } from './AuthContext.types';
-import type { Company } from '../types';
+import type { AuthContextType, SignUpCompanyDetails } from './AuthContext.types';
+import type { Company, CompanyMember } from '../types';
 import {
   BusinessCountry,
   countryDefaultsForCompany,
@@ -32,12 +33,13 @@ import {
 import { DEFAULT_MARKETPLACES, normalizeMarketplaceList } from '../constants/platforms';
 import { DEFAULT_AI_MESSAGE_QUOTA } from '../constants/aiAssistant';
 
+const COMPANY_COLLECTION = 'companies';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [membership, setMembership] = useState<CompanyMember | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const COMPANY_COLLECTION = 'companies';
 
   function getDefaultSubscription(): { start: Date; end: Date } {
     const start = nowUtc();
@@ -55,16 +57,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return {
       id,
-      ...converted,
+      ownerId: String(converted.ownerId ?? ''),
+      name: String(converted.name ?? ''),
       country,
       currency: (converted.currency as string) ?? profile.currency,
       timezone: (converted.timezone as string) ?? profile.timezone,
-      defaultTaxType: converted.defaultTaxType ?? profile.defaultTaxType,
-      defaultTaxMode: converted.defaultTaxMode ?? profile.defaultTaxMode,
-      defaultTaxPercentage: converted.defaultTaxPercentage ?? profile.defaultTaxPercentage,
+      defaultTaxType: (converted.defaultTaxType as Company['defaultTaxType']) ?? profile.defaultTaxType,
+      defaultTaxMode: (converted.defaultTaxMode as Company['defaultTaxMode']) ?? profile.defaultTaxMode,
+      defaultTaxPercentage: Number(converted.defaultTaxPercentage ?? profile.defaultTaxPercentage),
       marketplaces: Array.isArray(converted.marketplaces)
         ? normalizeMarketplaceList(converted.marketplaces as string[])
         : undefined,
+      trn: converted.trn as string | undefined,
+      address: converted.address as string | undefined,
+      phone: converted.phone as string | undefined,
+      phone2: converted.phone2 as string | undefined,
+      email: converted.email as string | undefined,
+      logo: converted.logo as string | undefined,
       subscriptionStart: fromFirestoreTimestamp(converted.subscriptionStart),
       subscriptionEnd: fromFirestoreTimestamp(converted.subscriptionEnd),
       termsAcceptedAt: fromFirestoreTimestamp(converted.termsAcceptedAt),
@@ -79,139 +88,170 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof converted.aiMessagesUsed === 'number' ? converted.aiMessagesUsed : 0,
       createdAt: fromFirestoreTimestamp(converted.createdAt) ?? nowUtc(),
       updatedAt: fromFirestoreTimestamp(converted.updatedAt) ?? nowUtc(),
-    } as Company;
+    };
   }
 
-  // Load company data from Firestore
-  const loadCompany = async (userId: string) => {
+  const loadCompany = async (companyId: string): Promise<Company | null> => {
     try {
-      const companyRef = doc(db, COMPANY_COLLECTION, userId);
+      const companyRef = doc(db, COMPANY_COLLECTION, companyId);
       const companyDoc = await getDoc(companyRef);
-      if (companyDoc.exists()) {
-        const data = companyDoc.data();
-        let subStart = data.subscriptionStart?.toDate?.();
-        let subEnd = data.subscriptionEnd?.toDate?.();
-        if (subStart == null || subEnd == null) {
-          const def = getDefaultSubscription();
-          subStart = subStart ?? def.start;
-          subEnd = subEnd ?? def.end;
-          const payload = prepareDatesForFirestore({
+      if (!companyDoc.exists()) return null;
+
+      const data = companyDoc.data();
+      let subStart = data.subscriptionStart?.toDate?.();
+      let subEnd = data.subscriptionEnd?.toDate?.();
+      if (subStart == null || subEnd == null) {
+        const def = getDefaultSubscription();
+        subStart = subStart ?? def.start;
+        subEnd = subEnd ?? def.end;
+        await updateDoc(
+          companyRef,
+          prepareDatesForFirestore({
             subscriptionStart: subStart,
             subscriptionEnd: subEnd,
             updatedAt: nowUtc(),
-          });
-          await updateDoc(companyRef, payload);
-        }
-        const country = isBusinessCountry(data.country) ? data.country : BusinessCountry.UAE;
-        setCompany(mapCompanyDoc(companyDoc.id, { ...data, country } as Record<string, unknown>));
+          })
+        );
       }
+      const country = isBusinessCountry(data.country) ? data.country : BusinessCountry.UAE;
+      const mapped = mapCompanyDoc(companyDoc.id, { ...data, country } as Record<string, unknown>);
+      setCompany(mapped);
+      return mapped;
     } catch (error) {
       console.error('Error loading company:', error);
+      return null;
     }
   };
 
-  // Create company on signup
-  const createCompany = async (userId: string, details: SignUpCompanyDetails): Promise<void> => {
+  const loadMembership = async (companyId: string, userId: string): Promise<CompanyMember | null> => {
     try {
-      const now = nowUtc();
-      const subscriptionEnd = new Date(now);
-      subscriptionEnd.setDate(subscriptionEnd.getDate() + 7);
-      const locale = countryDefaultsForCompany(details.country);
-      const profile = getCountryProfile(details.country);
-
-      const companyData: Omit<Company, 'id'> = {
-        userId,
-        name: details.companyName,
-        ...locale,
-        marketplaces: [...DEFAULT_MARKETPLACES],
-        subscriptionStart: now,
-        subscriptionEnd,
-        aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
-        aiMessagesUsed: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const payload = prepareDatesForFirestore({
-        userId,
-        name: details.companyName,
-        companyId: userId,
-        ...locale,
-        marketplaces: [...DEFAULT_MARKETPLACES],
-        subscriptionStart: now,
-        subscriptionEnd,
-        aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
-        aiMessagesUsed: 0,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await setDoc(doc(db, COMPANY_COLLECTION, userId), payload);
-
-      appendAuditLog(userId, userId, {
-        action: 'company.created',
-        entityType: 'company',
-        entityId: userId,
-        summary: `Company ${details.companyName} created (${profile.label})`,
-      });
-
-      setCompany({ id: userId, ...companyData } as Company);
+      const member = await membershipService.getMember(companyId, userId);
+      setMembership(member?.status === 'active' ? member : null);
+      return member;
     } catch (error) {
-      console.error('Error creating company:', error);
-      throw error;
+      console.error('Error loading membership:', error);
+      setMembership(null);
+      return null;
     }
   };
 
-  const signUp = async (email: string, password: string, details: SignUpCompanyDetails): Promise<void> => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await createCompany(userCredential.user.uid, details);
-    } catch (error: unknown) {
-      console.error('Error signing up:', error);
-      throw error;
+  const loadSession = async (firebaseUser: User): Promise<void> => {
+    const email = firebaseUser.email ?? '';
+    await membershipService.acceptPendingInvites(firebaseUser.uid, email);
+
+    const memberships = await membershipService.listMembershipsForUser(firebaseUser.uid);
+    if (memberships.length === 0) {
+      setCompany(null);
+      setMembership(null);
+      return;
     }
+
+    let profile = await userProfileService.get(firebaseUser.uid);
+    const activeCompanyId =
+      profile?.activeCompanyId &&
+      memberships.some((member) => member.companyId === profile?.activeCompanyId)
+        ? profile.activeCompanyId
+        : memberships[0].companyId;
+
+    if (!profile) {
+      profile = await userProfileService.create(firebaseUser.uid, email, activeCompanyId);
+    } else if (profile.activeCompanyId !== activeCompanyId) {
+      await userProfileService.setActiveCompany(firebaseUser.uid, activeCompanyId);
+    }
+
+    await loadCompany(activeCompanyId);
+    await loadMembership(activeCompanyId, firebaseUser.uid);
   };
 
-  // Sign in with email and password
+  const createCompany = async (
+    userId: string,
+    email: string,
+    details: SignUpCompanyDetails
+  ): Promise<void> => {
+    const companyId = crypto.randomUUID();
+    const now = nowUtc();
+    const subscriptionEnd = new Date(now);
+    subscriptionEnd.setDate(subscriptionEnd.getDate() + 7);
+    const locale = countryDefaultsForCompany(details.country);
+    const profile = getCountryProfile(details.country);
+
+    const companyData: Company = {
+      id: companyId,
+      ownerId: userId,
+      name: details.companyName,
+      ...locale,
+      marketplaces: [...DEFAULT_MARKETPLACES],
+      subscriptionStart: now,
+      subscriptionEnd,
+      aiMessageQuota: DEFAULT_AI_MESSAGE_QUOTA,
+      aiMessagesUsed: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await setDoc(
+      doc(db, COMPANY_COLLECTION, companyId),
+      prepareDatesForFirestore(companyData as unknown as Record<string, unknown>)
+    );
+    await membershipService.createAdminMember(companyId, userId, email);
+    await userProfileService.create(userId, email, companyId);
+
+    appendAuditLog(companyId, userId, {
+      action: 'company.created',
+      entityType: 'company',
+      entityId: companyId,
+      summary: `Company ${details.companyName} created (${profile.label})`,
+    });
+
+    setCompany(companyData);
+    const member = await membershipService.getMember(companyId, userId);
+    setMembership(member);
+  };
+
+  const signUp = async (
+    email: string,
+    password: string,
+    details?: SignUpCompanyDetails
+  ): Promise<void> => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const { uid } = userCredential.user;
+
+    const accepted = await membershipService.acceptPendingInvites(uid, email);
+    if (accepted) {
+      await userProfileService.create(uid, email, accepted.companyId);
+      await loadSession(userCredential.user);
+      return;
+    }
+
+    if (!details?.companyName?.trim()) {
+      throw new Error('Company name is required unless you were invited to an existing team.');
+    }
+
+    await createCompany(uid, email, details);
+  };
+
   const signIn = async (email: string, password: string): Promise<void> => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: unknown) {
-      console.error('Error signing in:', error);
-      throw error;
-    }
+    await signInWithEmailAndPassword(auth, email, password);
   };
-
 
   const sendPasswordReset = async (email: string): Promise<void> => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error: unknown) {
-      console.error('Error sending password reset email:', error);
-      throw error;
-    }
+    await sendPasswordResetEmail(auth, email);
   };
 
-  // Sign out
   const signOut = async (): Promise<void> => {
-    try {
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        appendAuditLog(uid, uid, {
-          action: 'auth.sign_out',
-          entityType: 'auth',
-          summary: 'Signed out',
-        });
-      }
-      await firebaseSignOut(auth);
-      setCompany(null);
-    } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
+    const uid = auth.currentUser?.uid;
+    if (uid && company) {
+      appendAuditLog(company.id, uid, {
+        action: 'auth.sign_out',
+        entityType: 'auth',
+        summary: 'Signed out',
+      });
     }
+    await firebaseSignOut(auth);
+    setCompany(null);
+    setMembership(null);
   };
 
-  // Change password (re-authenticate then update)
   const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
     if (!user?.email) {
       throw new Error('Email account required to change password');
@@ -220,11 +260,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, newPassword);
-      appendAuditLog(user.uid, user.uid, {
-        action: 'auth.password_changed',
-        entityType: 'auth',
-        summary: 'Password changed',
-      });
+      if (company) {
+        appendAuditLog(company.id, user.uid, {
+          action: 'auth.password_changed',
+          entityType: 'auth',
+          summary: 'Password changed',
+        });
+      }
     } catch (error: unknown) {
       console.error('Error changing password:', error);
       if (error && typeof error === 'object' && 'code' in error) {
@@ -240,15 +282,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Update company information
   const updateCompany = async (updates: Partial<Company>): Promise<void> => {
     if (!user || !company) {
       throw new Error('User or company not found');
     }
 
-    // Firestore does not accept undefined; strip undefined values from payload
     const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
+      Object.entries(updates).filter(([, value]) => value !== undefined)
     ) as Partial<Company>;
 
     const updatePayload = prepareDatesForFirestore({
@@ -256,24 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatedAt: nowUtc(),
     });
 
-    try {
-      await updateDoc(doc(db, COMPANY_COLLECTION, user.uid), updatePayload);
-    } catch {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit id, updatedAt from payload
-      const { id, createdAt, updatedAt, ...companyRest } = company;
-      await setDoc(
-        doc(db, COMPANY_COLLECTION, user.uid),
-        prepareDatesForFirestore({
-          ...companyRest,
-          ...cleanUpdates,
-          userId: user.uid,
-          companyId: user.uid,
-          createdAt: createdAt ?? nowUtc(),
-          updatedAt: nowUtc(),
-        }),
-        { merge: true }
-      );
-    }
+    await updateDoc(doc(db, COMPANY_COLLECTION, company.id), updatePayload);
 
     setCompany({
       ...company,
@@ -281,23 +304,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatedAt: nowUtc(),
     } as Company);
 
-    appendAuditLog(user.uid, user.uid, {
+    appendAuditLog(company.id, user.uid, {
       action: 'company.updated',
       entityType: 'company',
-      entityId: user.uid,
+      entityId: company.id,
       summary: 'Company profile updated',
       changedFields: auditCompanyChangedKeys(cleanUpdates as Record<string, unknown>),
     });
   };
 
   const refreshCompany = async (): Promise<void> => {
-    if (!user) return;
-    await loadCompany(user.uid);
+    if (!user || !company) return;
+    await loadCompany(company.id);
+    await loadMembership(company.id, user.uid);
+  };
+
+  const setupCompany = async (details: SignUpCompanyDetails): Promise<void> => {
+    if (!user?.email) {
+      throw new Error('You must be signed in to create a company');
+    }
+
+    const memberships = await membershipService.listMembershipsForUser(user.uid);
+    if (memberships.length > 0) {
+      throw new Error('You already belong to a company');
+    }
+
+    await createCompany(user.uid, user.email, details);
   };
 
   const value: AuthContextType = {
     user,
     company,
+    membership,
     loading,
     signUp,
     signIn,
@@ -306,6 +344,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateCompany,
     changePassword,
     refreshCompany,
+    setupCompany,
   };
 
   useEffect(() => {
@@ -313,9 +352,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        await loadCompany(firebaseUser.uid);
+        await loadSession(firebaseUser);
       } else {
         setCompany(null);
+        setMembership(null);
       }
 
       setLoading(false);
@@ -324,9 +364,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
