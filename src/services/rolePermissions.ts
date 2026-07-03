@@ -40,7 +40,12 @@ export const rolePermissionsService = {
 
   async seedDefaults(companyId: string): Promise<void> {
     const batch = writeBatch(db);
-    const roles: CompanyRoleType[] = [CompanyRole.ADMIN, CompanyRole.MANAGER, CompanyRole.VIEWER];
+    const roles: CompanyRoleType[] = [
+      CompanyRole.ADMIN,
+      CompanyRole.MANAGER,
+      CompanyRole.VIEWER,
+      CompanyRole.ACCOUNTANT,
+    ];
     const now = nowUtc();
 
     for (const role of roles) {

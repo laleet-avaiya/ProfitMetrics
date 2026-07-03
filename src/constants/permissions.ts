@@ -154,6 +154,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<CompanyRoleType, ModulePermissionM
     [permissionKey(AppModule.SUBSCRIPTION, PermissionAction.VIEW)]: true,
     ...businessModulesViewOnly(),
   } as ModulePermissionMap,
+  [CompanyRole.ACCOUNTANT]: {
+    ...allPermissions(false),
+    [permissionKey(AppModule.REPORTS, PermissionAction.VIEW)]: true,
+  } as ModulePermissionMap,
 };
 
 export function hasModulePermission(
@@ -167,6 +171,56 @@ export function hasModulePermission(
   const key = permissionKey(module, action);
   if (permissions && key in permissions) return permissions[key] === true;
   return DEFAULT_ROLE_PERMISSIONS[role][key] === true;
+}
+
+const HOME_MODULE_ORDER: AppModule[] = [
+  AppModule.DASHBOARD,
+  AppModule.REPORTS,
+  AppModule.AI_ASSISTANT,
+  AppModule.CUSTOMERS,
+  AppModule.SALES,
+  AppModule.INVOICES,
+  AppModule.PAYMENTS,
+  AppModule.PURCHASES,
+  AppModule.EXPENSES,
+  AppModule.VENDORS,
+  AppModule.PRODUCTS,
+  AppModule.TEAM,
+  AppModule.CONFIGURATION,
+  AppModule.SETTINGS,
+  AppModule.SUBSCRIPTION,
+];
+
+const MODULE_HOME_PATHS: Partial<Record<AppModule, string>> = {
+  [AppModule.DASHBOARD]: '/',
+  [AppModule.REPORTS]: '/reports',
+  [AppModule.AI_ASSISTANT]: '/ai-assistant',
+  [AppModule.CUSTOMERS]: '/customers',
+  [AppModule.SALES]: '/sales',
+  [AppModule.INVOICES]: '/invoices',
+  [AppModule.PAYMENTS]: '/payments',
+  [AppModule.PURCHASES]: '/purchases',
+  [AppModule.EXPENSES]: '/expenses',
+  [AppModule.VENDORS]: '/vendors',
+  [AppModule.PRODUCTS]: '/products',
+  [AppModule.TEAM]: '/team',
+  [AppModule.CONFIGURATION]: '/configuration',
+  [AppModule.SETTINGS]: '/settings',
+  [AppModule.SUBSCRIPTION]: '/subscription',
+};
+
+/** First route the signed-in member can access (e.g. accountants land on /reports). */
+export function getDefaultAppPath(
+  role: CompanyRoleType | undefined,
+  permissions: ModulePermissionMap | null | undefined
+): string {
+  for (const module of HOME_MODULE_ORDER) {
+    const path = MODULE_HOME_PATHS[module];
+    if (path && hasModulePermission(role, permissions, module, PermissionAction.VIEW)) {
+      return path;
+    }
+  }
+  return '/companies';
 }
 
 /** Maps Firestore collection names to permission modules. */

@@ -29,7 +29,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { roleLabel } from '../../constants/roles';
-import { AppModule } from '../../constants/permissions';
+import { AppModule, getDefaultAppPath } from '../../constants/permissions';
 import { BRAND_LOGO_ICON, BRAND_NAME } from '../../constants/brand';
 import {
   getSubscriptionDaysRemaining,
@@ -116,8 +116,9 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { signOut, company, org, membership, loading } = useAuth();
+  const { signOut, company, org, membership, rolePermissions, loading } = useAuth();
   const { can } = usePermissions();
+  const homePath = getDefaultAppPath(membership?.role, rolePermissions);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarCollapsed);
   const prevPathname = useRef(location.pathname);
@@ -212,7 +213,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
           }`}
         >
           <Link
-            to="/"
+            to={homePath}
             className={`flex items-center no-underline min-w-0 ${
               sidebarCollapsed ? 'lg:justify-center lg:flex-none' : 'gap-3 flex-1'
             }`}

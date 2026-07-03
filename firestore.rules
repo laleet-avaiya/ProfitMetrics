@@ -57,13 +57,31 @@ service cloud.firestore {
       return isActiveMember(companyId)
         && (
           memberRole(companyId) == 'admin'
-          || get(rolePermissionsPath(companyId, memberRole(companyId))).data.permissions[module + '.' + action] == true
+          || (memberRole(companyId) == 'accountant' && module == 'reports' && action == 'view')
+          || (exists(rolePermissionsPath(companyId, memberRole(companyId)))
+            && get(rolePermissionsPath(companyId, memberRole(companyId))).data.permissions[module + '.' + action] == true)
         );
+    }
+
+    function isReportDataModule(module) {
+      return module == 'products'
+        || module == 'sales'
+        || module == 'expenses'
+        || module == 'vendors'
+        || module == 'purchases'
+        || module == 'customers'
+        || module == 'invoices'
+        || module == 'payments';
+    }
+
+    function canReadCompanyModule(companyId, module) {
+      return hasModulePermission(companyId, module, 'view')
+        || (memberRole(companyId) == 'accountant' && isReportDataModule(module));
     }
 
     function canReadModuleDoc(module) {
       return isAuthenticated()
-        && (resource == null || hasModulePermission(resource.data.companyId, module, 'view'));
+        && (resource == null || canReadCompanyModule(resource.data.companyId, module));
     }
 
     function createdByUnchanged() {
@@ -284,12 +302,12 @@ service cloud.firestore {
         || isSelfJoinViaInvite(memberId)
         || (hasModulePermission(request.resource.data.companyId, 'team', 'create')
           && request.resource.data.status == 'active'
-          && request.resource.data.role in ['admin', 'manager', 'viewer']);
+          && request.resource.data.role in ['admin', 'manager', 'viewer', 'accountant']);
       allow update: if hasModulePermission(resource.data.companyId, 'team', 'update')
         && resource.data.userId != request.auth.uid
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.userId == resource.data.userId
-        && request.resource.data.role in ['admin', 'manager', 'viewer']
+        && request.resource.data.role in ['admin', 'manager', 'viewer', 'accountant']
         && (
           resource.data.deleted == request.resource.data.deleted
           || (request.resource.data.deleted == true
@@ -306,7 +324,7 @@ service cloud.firestore {
       );
       allow create: if hasModulePermission(request.resource.data.companyId, 'team', 'create')
         && request.resource.data.status == 'pending'
-        && request.resource.data.role in ['admin', 'manager', 'viewer'];
+        && request.resource.data.role in ['admin', 'manager', 'viewer', 'accountant'];
       allow update: if hasModulePermission(resource.data.companyId, 'team', 'update')
         || isAcceptingInvite()
         || (hasModulePermission(resource.data.companyId, 'team', 'delete')

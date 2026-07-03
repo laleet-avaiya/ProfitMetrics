@@ -17,7 +17,7 @@ import { rolePermissionsService } from '../../services/rolePermissions';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 
-const EDITABLE_ROLES = [CompanyRole.MANAGER, CompanyRole.VIEWER] as const;
+const EDITABLE_ROLES = [CompanyRole.MANAGER, CompanyRole.VIEWER, CompanyRole.ACCOUNTANT] as const;
 
 export function RolePermissionsEditor() {
   const { company, refreshRolePermissions } = useAuth();

@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
 import { hasLegalConsent } from '../../utils/legalConsent';
-import type { AppModule, PermissionAction } from '../../constants/permissions';
+import { getDefaultAppPath, type AppModule, type PermissionAction } from '../../constants/permissions';
 import { LoadingView } from '../AppLoader/AppLoader';
 
 interface ProtectedRouteProps {
@@ -23,9 +23,10 @@ export function ProtectedRoute({
   module,
   action = 'view',
 }: ProtectedRouteProps) {
-  const { user, org, company, membership, loading } = useAuth();
+  const { user, org, company, membership, rolePermissions, loading } = useAuth();
   const { can } = usePermissions();
   const location = useLocation();
+  const defaultAppPath = getDefaultAppPath(membership?.role, rolePermissions);
 
   if (loading) {
     return <LoadingView message="Loading…" size="lg" className="min-h-screen gap-4" />;
@@ -47,7 +48,10 @@ export function ProtectedRoute({
   }
 
   if (module && !can(module, action)) {
-    return <Navigate to="/" replace />;
+    if (location.pathname === defaultAppPath) {
+      return <Navigate to="/companies" replace />;
+    }
+    return <Navigate to={defaultAppPath} replace />;
   }
 
   if (
