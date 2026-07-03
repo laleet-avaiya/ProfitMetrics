@@ -1,11 +1,11 @@
-import { Check } from 'lucide-react';
+import { Check, MessageCircle } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { SupportContactLinks } from '../../components/SupportContact/SupportContactLinks';
 import { getSubscriptionPricing } from '../../constants/subscriptionPlans';
+import { SUPPORT_WHATSAPP } from '../../constants/supportContact';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/date';
-import { formatMoney } from '../../utils/profit';
 import { getSubscriptionDaysRemaining } from '../../utils/subscription';
 import { DEFAULT_AI_MESSAGE_QUOTA } from '../../constants/aiAssistant';
 
@@ -17,6 +17,9 @@ export function Subscription() {
   const isExpired = daysLeft !== null && daysLeft <= 0;
   const pricing = getSubscriptionPricing(company?.country);
   const plan = pricing.plan;
+  const whatsApp =
+    SUPPORT_WHATSAPP.find((c) => c.region === (company?.country === 'IN' ? 'India' : 'UAE')) ??
+    SUPPORT_WHATSAPP[0];
   const aiQuota = org?.aiMessageQuota ?? DEFAULT_AI_MESSAGE_QUOTA;
   const aiUsed = org?.aiMessagesUsed ?? 0;
 
@@ -25,7 +28,7 @@ export function Subscription() {
       <PageShell>
         <PageHeader
           title="Subscription"
-          description="Your organization plan status, pricing, and renewal options"
+          description="Your organization plan status and renewal options"
         />
 
         <div className="space-y-6">
@@ -98,11 +101,21 @@ export function Subscription() {
               </div>
 
               <div className="mb-5">
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatMoney(plan.yearlyPrice, pricing.currency)}
-                  <span className="text-sm font-normal text-gray-500 dark:text-gray-400"> / year</span>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Contact us to discuss pricing
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Billed annually · 12 months access</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-3">
+                  Annual plans with 12 months access — we&apos;ll share details based on your business.
+                </p>
+                <a
+                  href={whatsApp.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" aria-hidden />
+                  WhatsApp {whatsApp.display}
+                </a>
               </div>
 
               <ul className="space-y-2">
@@ -124,8 +137,8 @@ export function Subscription() {
               Subscribe or renew
             </h2>
             <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-4">
-              Online checkout is coming soon. To subscribe after trial or renew after expiry, contact support
-              with your organization name to pay the annual fee.
+              Online checkout is coming soon. To subscribe after trial or renew after expiry, contact us on
+              WhatsApp with your organization name and we&apos;ll help you get set up.
             </p>
             <SupportContactLinks />
           </section>

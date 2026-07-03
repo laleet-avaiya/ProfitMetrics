@@ -1,28 +1,24 @@
-/** Display pricing by business country (billing handled via support for now). */
+/** Subscription plan display (pricing discussed via support). */
 
 export interface SubscriptionPlan {
   name: string;
   description: string;
-  yearlyPrice: number;
   features: string[];
 }
 
 export interface SubscriptionPricingRegion {
-  currency: string;
   billingNote: string;
   trialDays: number;
   plan: SubscriptionPlan;
 }
 
 const INDIA_PRICING: SubscriptionPricingRegion = {
-  currency: 'INR',
   trialDays: 7,
   billingNote:
-    '₹9,999 per year, exclusive of GST. Pay once yearly via UPI, bank transfer, or invoice. Contact support to subscribe or renew.',
+    'Pricing is tailored to your business. Message us on WhatsApp to discuss plans and payment options.',
   plan: {
     name: 'Profit Metrics',
-    description: 'Full access for small ecommerce sellers — one simple annual price.',
-    yearlyPrice: 9999,
+    description: 'Full access for small ecommerce sellers.',
     features: [
       'Unlimited products, sales & expenses',
       'Per-platform fee, GST & profit templates',
@@ -34,14 +30,12 @@ const INDIA_PRICING: SubscriptionPricingRegion = {
 };
 
 const UAE_PRICING: SubscriptionPricingRegion = {
-  currency: 'AED',
   trialDays: 7,
   billingNote:
-    'AED 1,299 per year, exclusive of VAT where applicable. Contact support to subscribe or renew.',
+    'Pricing is tailored to your business. Message us on WhatsApp to discuss plans and subscription options.',
   plan: {
     name: 'Profit Metrics',
-    description: 'Full access for small ecommerce sellers — one simple annual price.',
-    yearlyPrice: 1299,
+    description: 'Full access for small ecommerce sellers.',
     features: [
       'Unlimited products, sales & expenses',
       'Per-platform fee, VAT & profit templates',

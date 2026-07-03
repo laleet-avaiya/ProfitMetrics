@@ -22,10 +22,15 @@ export function useEntityList<T>({
   const { company, loading: authLoading } = useAuth();
   const notification = useNotification();
   const fetchRef = useRef(fetch);
+  const initialDataRef = useRef(initialData);
 
   useEffect(() => {
     fetchRef.current = fetch;
   }, [fetch]);
+
+  useEffect(() => {
+    initialDataRef.current = initialData;
+  }, [initialData]);
 
   const [data, setData] = useState<T>(initialData);
   const [loading, setLoading] = useState(true);
@@ -35,7 +40,7 @@ export function useEntityList<T>({
 
   useEffect(() => {
     if (!enabled) {
-      setData(initialData);
+      setData(initialDataRef.current);
       setLoading(false);
       return;
     }
@@ -46,7 +51,7 @@ export function useEntityList<T>({
     }
 
     if (!company) {
-      setData(initialData);
+      setData(initialDataRef.current);
       setLoading(false);
       return;
     }
@@ -63,7 +68,7 @@ export function useEntityList<T>({
         console.error(err);
         if (!cancelled) {
           notification.error(errorMessage);
-          setData(initialData);
+          setData(initialDataRef.current);
         }
       })
       .finally(() => {
@@ -73,7 +78,7 @@ export function useEntityList<T>({
     return () => {
       cancelled = true;
     };
-  }, [authLoading, company, enabled, errorMessage, initialData, notification, reloadKey]);
+  }, [authLoading, company, enabled, errorMessage, notification, reloadKey]);
 
   return { data, loading, reload };
 }

@@ -46,10 +46,6 @@ Sign up and your company workspace is ready. Dark mode, mobile-friendly, and bui
 - Dashboard with at-a-glance KPIs and trend charts
 - Email and WhatsApp support when you need a human
 
-**7-day free trial** — then one simple annual plan:
-- **India:** ₹9,999/year (excl. GST)
-- **UAE:** AED 1,299/year (excl. VAT where applicable)
-
 No per-order fees. No surprise add-ons. Full access.
 
 ---

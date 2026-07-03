@@ -45,8 +45,10 @@ export function Payments() {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
 
+  const emptyData = useMemo(() => [] as Payment[], []);
+
   const { data: payments, loading, reload } = useEntityList({
-    initialData: [] as Payment[],
+    initialData: emptyData,
     errorMessage: 'Failed to load payments',
     fetch: async (companyId) => {
       const list = await firestoreService.payments.getAll(companyId);
