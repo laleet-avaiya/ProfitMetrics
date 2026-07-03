@@ -5,8 +5,10 @@ import { salesKindLabel } from '../../constants/salesChannels';
 
 export interface SalesDocumentPrintLine {
   productName: string;
+  description?: string;
   quantity: number;
   unitPrice: number;
+  lineSubtotal: number;
   taxPercentage?: number;
   taxAmount?: number;
   lineTotal: number;
@@ -20,10 +22,13 @@ export interface SalesDocumentPrintProps {
   billTo: string;
   billToAddress?: string;
   billToTaxId?: string;
+  billToPhone?: string;
+  billToEmail?: string;
   lines: SalesDocumentPrintLine[];
   subtotal: number;
   taxAmount: number;
   total: number;
+  totalPaid?: number;
   balanceDue?: number;
   notes?: string;
   company: Company;

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
+import { Textarea } from '../../components/Textarea/Textarea';
 import { Select } from '../../components/Select/Select';
 import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
 import { Button } from '../../components/Button/Button';
@@ -80,6 +81,13 @@ export function Settings() {
     defaultTaxType: TaxType.VAT as (typeof TaxType)[keyof typeof TaxType],
     defaultTaxMode: TaxMode.INCLUSIVE as (typeof TaxMode)[keyof typeof TaxMode],
     defaultTaxPercentage: '5',
+    bankName: '',
+    bankAccountName: '',
+    bankIban: '',
+    bankAccountNumber: '',
+    bankSwift: '',
+    invoiceFooterNotes: '',
+    invoiceTerms: '',
   });
 
   const localeProfile = useMemo(() => getCountryProfile(formData.country), [formData.country]);
@@ -108,6 +116,13 @@ export function Settings() {
         defaultTaxType: company.defaultTaxType ?? TaxType.VAT,
         defaultTaxMode: company.defaultTaxMode ?? TaxMode.INCLUSIVE,
         defaultTaxPercentage: String(company.defaultTaxPercentage ?? 5),
+        bankName: company.bankName || '',
+        bankAccountName: company.bankAccountName || '',
+        bankIban: company.bankIban || '',
+        bankAccountNumber: company.bankAccountNumber || '',
+        bankSwift: company.bankSwift || '',
+        invoiceFooterNotes: company.invoiceFooterNotes || '',
+        invoiceTerms: company.invoiceTerms || '',
       });
     }
   }, [company]);
@@ -132,6 +147,13 @@ export function Settings() {
         defaultTaxType: formData.defaultTaxType,
         defaultTaxMode: formData.defaultTaxMode,
         defaultTaxPercentage: parseFloat(formData.defaultTaxPercentage) || 0,
+        bankName: formData.bankName || undefined,
+        bankAccountName: formData.bankAccountName || undefined,
+        bankIban: formData.bankIban || undefined,
+        bankAccountNumber: formData.bankAccountNumber || undefined,
+        bankSwift: formData.bankSwift || undefined,
+        invoiceFooterNotes: formData.invoiceFooterNotes || undefined,
+        invoiceTerms: formData.invoiceTerms || undefined,
       });
       notification.success('Settings saved successfully!');
     } catch (error) {
@@ -456,6 +478,79 @@ export function Settings() {
                           />
                         </div>
                       )}
+                    </div>
+                  </FormFieldGroup>
+
+                  <FormFieldGroupDivider />
+
+                  <FormFieldGroup
+                    title="Invoice & bank"
+                    description="Shown on the professional (grid) invoice layout when printing sales or invoices."
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                      <div className="lg:col-span-4">
+                        <Input
+                          label="Bank name"
+                          name="bankName"
+                          value={formData.bankName}
+                          onChange={(e) => handleChange('bankName', e.target.value)}
+                          placeholder="e.g. Emirates NBD"
+                        />
+                      </div>
+                      <div className="lg:col-span-4">
+                        <Input
+                          label="Beneficiary name"
+                          name="bankAccountName"
+                          value={formData.bankAccountName}
+                          onChange={(e) => handleChange('bankAccountName', e.target.value)}
+                          placeholder="Account holder name"
+                        />
+                      </div>
+                      <div className="lg:col-span-4">
+                        <Input
+                          label="IBAN"
+                          name="bankIban"
+                          value={formData.bankIban}
+                          onChange={(e) => handleChange('bankIban', e.target.value)}
+                          placeholder="AE00…"
+                        />
+                      </div>
+                      <div className="lg:col-span-4">
+                        <Input
+                          label="Account number"
+                          name="bankAccountNumber"
+                          value={formData.bankAccountNumber}
+                          onChange={(e) => handleChange('bankAccountNumber', e.target.value)}
+                        />
+                      </div>
+                      <div className="lg:col-span-4">
+                        <Input
+                          label="SWIFT / BIC"
+                          name="bankSwift"
+                          value={formData.bankSwift}
+                          onChange={(e) => handleChange('bankSwift', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <Textarea
+                        label="Invoice footer notes"
+                        name="invoiceFooterNotes"
+                        value={formData.invoiceFooterNotes}
+                        onChange={(e) => handleChange('invoiceFooterNotes', e.target.value)}
+                        placeholder="Thank you for your business."
+                        rows={2}
+                        optional
+                      />
+                      <Textarea
+                        label="Terms & conditions"
+                        name="invoiceTerms"
+                        value={formData.invoiceTerms}
+                        onChange={(e) => handleChange('invoiceTerms', e.target.value)}
+                        placeholder="Report any issues within 3 days."
+                        rows={2}
+                        optional
+                      />
                     </div>
                   </FormFieldGroup>
 

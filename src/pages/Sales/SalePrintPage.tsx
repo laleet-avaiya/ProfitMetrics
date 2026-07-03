@@ -4,9 +4,16 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageShell } from '../../components/PageShell/PageShell';
 import { Button } from '../../components/Button/Button';
+import { Select } from '../../components/Select/Select';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
-import { SalesDocumentPrint } from '../../components/SalesDocumentPrint/SalesDocumentPrint';
+import { InvoicePrintView } from '../../components/SalesDocumentPrint/InvoicePrintView';
 import type { SalesDocumentPrintProps } from '../../components/SalesDocumentPrint/SalesDocumentPrint';
+import {
+  getStoredInvoicePrintFormat,
+  INVOICE_PRINT_FORMAT_OPTIONS,
+  type InvoicePrintFormat,
+  storeInvoicePrintFormat,
+} from '../../constants/invoicePrintFormats';
 import { useAuth } from '../../hooks/useAuth';
 import { firestoreService } from '../../services/firestore';
 import { buildInvoicePrintProps, buildSalePrintProps } from '../../utils/salesDocumentPrint';
@@ -35,6 +42,7 @@ function DocumentPrintShell({
   const [printProps, setPrintProps] = useState<PrintProps | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [printFormat, setPrintFormat] = useState<InvoicePrintFormat>(getStoredInvoicePrintFormat);
 
   useEffect(() => {
     if (!company || !id) return;
@@ -101,17 +109,29 @@ function DocumentPrintShell({
   return (
     <Layout>
       <PageShell>
-        <div className="print:hidden flex flex-wrap gap-2 mb-4">
+        <div className="print:hidden flex flex-wrap items-end gap-3 mb-4">
           <Button variant="outline" onClick={() => navigate(backTo)}>
             <ArrowLeft className="w-4 h-4" />
             {backLabel}
           </Button>
+          <div className="w-52">
+            <Select
+              label="Invoice layout"
+              value={printFormat}
+              options={INVOICE_PRINT_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              onChange={(e) => {
+                const next = e.target.value as InvoicePrintFormat;
+                setPrintFormat(next);
+                storeInvoicePrintFormat(next);
+              }}
+            />
+          </div>
           <Button variant="primary" onClick={() => window.print()}>
             <Printer className="w-4 h-4" />
             Print invoice
           </Button>
         </div>
-        <SalesDocumentPrint {...printProps} currency={currency} />
+        <InvoicePrintView format={printFormat} {...printProps} currency={currency} />
       </PageShell>
     </Layout>
   );

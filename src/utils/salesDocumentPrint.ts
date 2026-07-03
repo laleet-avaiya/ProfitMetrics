@@ -5,8 +5,10 @@ import { getSaleLines } from './saleLines';
 export function printLinesFromInvoice(invoice: Invoice): SalesDocumentPrintLine[] {
   return invoice.lines.map((line) => ({
     productName: line.productName,
+    description: 'ITEM',
     quantity: line.quantity,
     unitPrice: line.unitPrice,
+    lineSubtotal: line.lineSubtotal,
     taxPercentage: line.taxPercentage,
     taxAmount: line.taxAmount,
     lineTotal: line.lineTotal,
@@ -14,14 +16,20 @@ export function printLinesFromInvoice(invoice: Invoice): SalesDocumentPrintLine[
 }
 
 export function printLinesFromSale(sale: Sale): SalesDocumentPrintLine[] {
-  return getSaleLines(sale).map((line) => ({
-    productName: line.productName,
-    quantity: line.quantity,
-    unitPrice: line.economics.sellingPrice,
-    taxPercentage: line.economics.sellingTaxPercentage ?? line.economics.taxPercentage,
-    taxAmount: line.economics.taxAmount,
-    lineTotal: line.economics.sellingPrice * line.quantity,
-  }));
+  return getSaleLines(sale).map((line) => {
+    const lineTotal = line.economics.sellingPrice * line.quantity;
+    const taxAmount = line.economics.taxAmount ?? 0;
+    return {
+      productName: line.productName,
+      description: 'ITEM',
+      quantity: line.quantity,
+      unitPrice: line.economics.sellingPrice,
+      lineSubtotal: lineTotal - taxAmount,
+      taxPercentage: line.economics.sellingTaxPercentage ?? line.economics.taxPercentage,
+      taxAmount,
+      lineTotal,
+    };
+  });
 }
 
 export function buildInvoicePrintProps(
@@ -37,10 +45,13 @@ export function buildInvoicePrintProps(
     billTo: invoice.customerName ?? customer?.name ?? 'Customer',
     billToAddress: customer?.address,
     billToTaxId: customer?.taxId,
+    billToPhone: customer?.phone,
+    billToEmail: customer?.email,
     lines: printLinesFromInvoice(invoice),
     subtotal: invoice.subtotal,
     taxAmount: invoice.taxAmount,
     total: invoice.total,
+    totalPaid: invoice.totalPaid,
     balanceDue: invoice.balanceDue,
     notes: invoice.notes,
     company,

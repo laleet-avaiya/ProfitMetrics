@@ -14,6 +14,13 @@ export interface Company {
   email?: string;
   logo?: string;
   currency: string;
+  bankName?: string;
+  bankAccountName?: string;
+  bankIban?: string;
+  bankAccountNumber?: string;
+  bankSwift?: string;
+  invoiceFooterNotes?: string;
+  invoiceTerms?: string;
   defaultTaxType: TaxType;
   defaultTaxMode: TaxMode;
   defaultTaxPercentage: number;
