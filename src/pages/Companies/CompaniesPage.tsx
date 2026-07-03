@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Building2, CreditCard, LogOut, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -11,6 +11,7 @@ import { getSubscriptionDaysRemaining, shouldShowSubscriptionRenewalNotice } fro
 export function CompaniesPage() {
   const navigate = useNavigate();
   const { org, orgMembership, userCompanies, selectCompany, signOut, loading } = useAuth();
+  const [selectingId, setSelectingId] = useState<string | null>(null);
 
   const daysLeft = org?.subscriptionEnd != null ? getSubscriptionDaysRemaining(org.subscriptionEnd) : null;
   const isExpired = daysLeft !== null && daysLeft <= 0;
@@ -26,8 +27,15 @@ export function CompaniesPage() {
   );
 
   const handleSelect = async (companyId: string) => {
-    await selectCompany(companyId);
-    navigate('/', { replace: true });
+    if (selectingId) return;
+    setSelectingId(companyId);
+    try {
+      await selectCompany(companyId);
+      navigate('/', { replace: true });
+    } catch (err) {
+      console.error(err);
+      setSelectingId(null);
+    }
   };
 
   if (loading) {
@@ -117,24 +125,40 @@ export function CompaniesPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedCompanies.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelect(item.id).catch(console.error)}
-                  className="w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{item.country}</p>
+              {sortedCompanies.map((item) => {
+                const isOpening = selectingId === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-xl border bg-white dark:bg-gray-800 p-4 transition-all ${
+                      isOpening
+                        ? 'border-indigo-300 dark:border-indigo-600 ring-1 ring-indigo-500/20'
+                        : 'border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="shrink-0 w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{item.country}</p>
+                      </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={isOpening}
+                        disabled={selectingId !== null && !isOpening}
+                        onClick={() => handleSelect(item.id)}
+                        className="shrink-0"
+                      >
+                        {isOpening ? 'Opening…' : 'Open company'}
+                      </Button>
                     </div>
                   </div>
-                </button>
-              ))}
+                );
+              })}
 
               {canAddCompany ? (
                 <Link
