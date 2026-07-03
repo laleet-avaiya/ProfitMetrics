@@ -1,6 +1,11 @@
 import { firestoreService } from '../services/firestore';
 import type { PurchaseOrder, PurchaseOrderLine } from '../types';
+import { PurchaseOrderStatus } from '../types';
+import { isPurchaseReceiptLocked } from './purchaseHelpers';
 import { receiveStock } from './stockHelpers';
+
+const RECEIPT_LOCKED_MESSAGE =
+  'Stock for this purchase order was already received. Create a new PO to receive more goods.';
 
 /** Apply stock receipts for newly received quantities since the previous PO state. */
 export async function syncPurchaseStockReceipts(
@@ -9,11 +14,21 @@ export async function syncPurchaseStockReceipts(
   current: PurchaseOrder,
   userId: string
 ): Promise<void> {
-  if (current.status === 'cancelled') {
+  if (current.status === PurchaseOrderStatus.CANCELLED) {
     if (previous) {
       await reversePurchaseStockReceipts(companyId, previous, zeroReceivedLines(previous), userId);
     }
     return;
+  }
+
+  if (previous && isPurchaseReceiptLocked(previous)) {
+    const receivingMore = current.lines.some((line) => {
+      const prevLine = previous.lines.find((l) => l.id === line.id);
+      return line.quantityReceived > (prevLine?.quantityReceived ?? 0);
+    });
+    if (receivingMore) {
+      throw new Error(RECEIPT_LOCKED_MESSAGE);
+    }
   }
 
   if (previous) {
@@ -38,6 +53,8 @@ export async function syncPurchaseStockReceipts(
     );
   }
 }
+
+export { RECEIPT_LOCKED_MESSAGE };
 
 function zeroReceivedLines(purchase: PurchaseOrder): PurchaseOrder {
   return {
@@ -72,6 +89,8 @@ export async function reversePurchaseStockReceipts(
       companyId,
       prevLine.productId,
       {
+        companyId,
+        productName: prevLine.productName,
         quantityOnHand: newQty,
         totalValue: Math.round(newQty * stock.avgPurchasePrice * 100) / 100,
         updatedAt: new Date(),

@@ -193,6 +193,8 @@ export interface Sale {
   deletedAt?: Date;
   deletedBy?: string;
   attachments?: EntityAttachment[];
+  /** Whether stock has been deducted for this marketplace sale */
+  stockApplied?: boolean;
 }
 
 // ─── Expenses ───────────────────────────────────────────────────────────────
@@ -369,6 +371,8 @@ export interface PurchaseOrder {
   payments: PurchasePayment[];
   notes?: string;
   receivedAt?: Date;
+  /** When true, received quantities are locked — stock cannot be added again for this PO. */
+  stockReceiptLocked?: boolean;
   createdBy?: string;
   updatedBy?: string;
   createdAt: Date;

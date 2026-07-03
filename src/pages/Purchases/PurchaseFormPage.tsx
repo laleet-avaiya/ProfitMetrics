@@ -49,6 +49,7 @@ import {
   type PurchaseFormState,
 } from '../../utils/purchaseHelpers';
 import { allocateNextPoNumber, previewNextPoNumber } from '../../utils/documentNumbers';
+import { isPurchaseReceiptLocked } from '../../utils/purchaseHelpers';
 import { syncPurchaseStockReceipts } from '../../utils/purchaseStock';
 import { syncPurchaseExpenses } from '../../utils/purchaseExpenses';
 import { getActiveVendors } from '../../utils/vendorHelpers';
@@ -226,15 +227,17 @@ export function PurchaseFormPage() {
       );
 
       if (isEditing && purchase) {
-        try {
-          await syncPurchaseStockReceipts(company.id, purchase, payload, user!.uid);
-        } catch (stockErr) {
-          console.error(stockErr);
-          notification.error(
-            stockErr instanceof Error ? stockErr.message : 'Could not update stock receipts'
-          );
-          setSaving(false);
-          return;
+        if (!isPurchaseReceiptLocked(purchase)) {
+          try {
+            await syncPurchaseStockReceipts(company.id, purchase, payload, user!.uid);
+          } catch (stockErr) {
+            console.error(stockErr);
+            notification.error(
+              stockErr instanceof Error ? stockErr.message : 'Could not update stock receipts'
+            );
+            setSaving(false);
+            return;
+          }
         }
         await firestoreService.purchases.update(
           company.id,

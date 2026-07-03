@@ -41,9 +41,11 @@ import {
   allocatePurchasePaymentTax,
   derivePaymentStatus,
   derivePurchaseStatus,
+  hasPurchaseReceiptChanges,
+  isPurchaseReceiptLocked,
 } from '../../utils/purchaseHelpers';
 import { syncPurchaseExpenses } from '../../utils/purchaseExpenses';
-import { syncPurchaseStockReceipts } from '../../utils/purchaseStock';
+import { RECEIPT_LOCKED_MESSAGE, syncPurchaseStockReceipts } from '../../utils/purchaseStock';
 import { createListingId } from '../../utils/productDefaults';
 import { localDateInputToUtc, nowUtc, utcToLocalDateInput } from '../../utils/firestoreDates';
 import { formatMoney } from '../../utils/profit';
@@ -93,6 +95,7 @@ export function PurchaseDetailPage() {
   }, [purchase]);
 
   const isCancelled = purchase?.status === PurchaseOrderStatus.CANCELLED;
+  const receiptsLocked = purchase ? isPurchaseReceiptLocked(purchase) : false;
 
   const persistAttachments = async (attachments: NonNullable<typeof purchase>['attachments']) => {
     if (!company || !purchase || !user) return;
@@ -112,16 +115,34 @@ export function PurchaseDetailPage() {
 
   const handleSaveReceipts = async () => {
     if (!company || !purchase || isCancelled) return;
+    if (receiptsLocked) {
+      notification.error(RECEIPT_LOCKED_MESSAGE);
+      return;
+    }
+
     const lines = buildUpdatedLines();
     if (!lines) return;
 
+    const updatedPreview: PurchaseOrder = {
+      ...purchase,
+      lines,
+      status: derivePurchaseStatus(lines),
+    };
+
+    if (!hasPurchaseReceiptChanges(purchase, updatedPreview)) {
+      notification.info('No receipt changes to save.');
+      return;
+    }
+
     setSavingReceipt(true);
     try {
-      const status = derivePurchaseStatus(lines);
+      const status = updatedPreview.status;
+      const stockReceiptLocked = status === PurchaseOrderStatus.RECEIVED;
       const updated: PurchaseOrder = {
         ...purchase,
         lines,
         status,
+        stockReceiptLocked: purchase.stockReceiptLocked || stockReceiptLocked,
         receivedAt:
           status === PurchaseOrderStatus.RECEIVED ? purchase.receivedAt ?? nowUtc() : purchase.receivedAt,
         updatedAt: nowUtc(),
@@ -131,11 +152,16 @@ export function PurchaseDetailPage() {
       await firestoreService.purchases.update(company.id, purchase.id, {
         lines,
         status,
+        stockReceiptLocked: updated.stockReceiptLocked,
         receivedAt: updated.receivedAt,
         updatedAt: updated.updatedAt,
       }, user!.uid);
       reload();
-      notification.success('Receipts updated and stock adjusted');
+      notification.success(
+        stockReceiptLocked
+          ? 'Goods fully received — stock updated. This PO is now locked.'
+          : 'Receipts updated and stock adjusted'
+      );
     } catch (err) {
       console.error(err);
       notification.error(err instanceof Error ? err.message : 'Failed to update receipts');
@@ -347,16 +373,18 @@ export function PurchaseDetailPage() {
             </DetailGrid>
           </DetailSection>
 
-          {!isCancelled ? (
+          {!isCancelled && !receiptsLocked ? (
             <DetailSection
               icon={Truck}
               iconTone="violet"
               title="Receive goods"
               description="Mark received quantities — stock is added automatically with weighted average pricing."
               headerAction={
-                <Button type="button" variant="outline" size="sm" onClick={handleMarkAllReceived}>
-                  Mark all received
-                </Button>
+                canUpdate ? (
+                  <Button type="button" variant="outline" size="sm" onClick={handleMarkAllReceived}>
+                    Mark all received
+                  </Button>
+                ) : undefined
               }
             >
               <div className="space-y-3">
@@ -376,6 +404,7 @@ export function PurchaseDetailPage() {
                         min={0}
                         max={line.quantityOrdered}
                         value={receivedQty[line.id] ?? '0'}
+                        disabled={!canUpdate}
                         onChange={(e) =>
                           setReceivedQty((prev) => ({ ...prev, [line.id]: e.target.value }))
                         }
@@ -383,15 +412,35 @@ export function PurchaseDetailPage() {
                     </div>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleSaveReceipts}
-                  disabled={savingReceipt}
-                >
-                  {savingReceipt ? 'Saving…' : 'Update receipts & stock'}
-                </Button>
+                {canUpdate ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveReceipts}
+                    disabled={savingReceipt}
+                  >
+                    {savingReceipt ? 'Saving…' : 'Update receipts & stock'}
+                  </Button>
+                ) : null}
               </div>
+            </DetailSection>
+          ) : !isCancelled && receiptsLocked ? (
+            <DetailSection
+              icon={Truck}
+              iconTone="emerald"
+              title="Goods received"
+              description="Stock was added for this purchase order. Receiving again is disabled to prevent duplicate inventory."
+            >
+              <DetailGrid columns={2}>
+                <DetailField
+                  label="Status"
+                  value={purchaseStatusLabel(purchase.status)}
+                />
+                <DetailField
+                  label="Received on"
+                  value={purchase.receivedAt ? formatDateLocal(purchase.receivedAt) : '—'}
+                />
+              </DetailGrid>
             </DetailSection>
           ) : null}
 

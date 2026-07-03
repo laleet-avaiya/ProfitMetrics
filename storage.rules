@@ -1,27 +1,12 @@
 rules_version = '2';
 
+// TEMPORARY — permissive rules for development / unblock.
+// Any signed-in user can read and write storage files.
+
 service firebase.storage {
   match /b/{bucket}/o {
-    function isActiveCompanyMember(companyId) {
-      return request.auth != null
-        && firestore.exists(/databases/(default)/documents/companyMembers/$(companyId + '_' + request.auth.uid))
-        && firestore.get(/databases/(default)/documents/companyMembers/$(companyId + '_' + request.auth.uid)).data.status == 'active';
-    }
-
-    function attachmentWriteAllowed() {
-      return request.resource == null
-        || (
-          request.resource.size < 10 * 1024 * 1024
-          && (
-            request.resource.contentType.matches('image/.*')
-            || request.resource.contentType == 'application/pdf'
-          )
-        );
-    }
-
-    match /{orgId}/companies/{companyId}/{allPaths=**} {
-      allow read: if isActiveCompanyMember(companyId);
-      allow write: if isActiveCompanyMember(companyId) && attachmentWriteAllowed();
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

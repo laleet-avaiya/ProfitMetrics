@@ -140,6 +140,24 @@ export function derivePurchaseStatus(lines: PurchaseOrderLine[]): PurchaseOrderS
   return PurchaseOrderStatus.PARTIALLY_RECEIVED;
 }
 
+/** True when goods were fully received — stock must not be applied again on this PO. */
+export function isPurchaseReceiptLocked(purchase: PurchaseOrder): boolean {
+  return (
+    purchase.stockReceiptLocked === true ||
+    purchase.status === PurchaseOrderStatus.RECEIVED
+  );
+}
+
+export function hasPurchaseReceiptChanges(
+  previous: PurchaseOrder,
+  next: PurchaseOrder
+): boolean {
+  return next.lines.some((line) => {
+    const prev = previous.lines.find((l) => l.id === line.id);
+    return line.quantityReceived !== (prev?.quantityReceived ?? 0);
+  });
+}
+
 export function derivePaymentStatus(
   total: number,
   totalPaid: number
@@ -305,6 +323,10 @@ export function buildPurchaseFromForm(
       status === PurchaseOrderStatus.RECEIVED
         ? existing?.receivedAt ?? now
         : existing?.receivedAt,
+    stockReceiptLocked:
+      existing?.stockReceiptLocked ||
+      status === PurchaseOrderStatus.RECEIVED ||
+      undefined,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

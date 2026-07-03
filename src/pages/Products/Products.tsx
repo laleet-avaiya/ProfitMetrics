@@ -9,6 +9,7 @@ import {
   Target,
 } from 'lucide-react';
 import { SectionPage } from '../../components/SectionPage/SectionPage';
+import { StockReconciliationPanel } from '../../components/StockReconciliation/StockReconciliationPanel';
 import { Button } from '../../components/Button/Button';
 import { Card, StatCard } from '../../components/ui/Card';
 import { ListToolbar } from '../../components/ui/ListToolbar';
@@ -54,7 +55,7 @@ export function Products() {
     []
   );
 
-  const { data, loading } = useEntityList({
+  const { data, loading, reload } = useEntityList({
     initialData: emptyData,
     errorMessage: 'Failed to load products',
     fetch: async (companyId) => {
@@ -131,6 +132,8 @@ export function Products() {
           <StatCard key={stat.label} label={stat.label} value={stat.value} subtext="Filtered results" tone={stat.tone} icon={stat.icon} />
         ))}
       </div>
+
+      <StockReconciliationPanel canReconcile={canUpdate} onReconciled={() => void reload()} />
 
       <Card className="space-y-3">
           <ListToolbar

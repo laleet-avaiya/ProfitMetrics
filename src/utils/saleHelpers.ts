@@ -598,6 +598,7 @@ export function buildSaleFromForm(
     profit: preview.profit,
     profitMarginPercent: preview.profitMarginPercent,
     notes: form.notes.trim() || undefined,
+    stockApplied: existing?.stockApplied,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

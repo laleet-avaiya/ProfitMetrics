@@ -6,6 +6,38 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+type StockPatch = Partial<
+  Pick<
+    ProductStock,
+    | 'productName'
+    | 'quantityOnHand'
+    | 'avgPurchasePrice'
+    | 'avgSellingPrice'
+    | 'totalValue'
+    | 'lastReceivedAt'
+    | 'updatedAt'
+  >
+>;
+
+/** Always include companyId so Firestore rules and legacy docs stay valid. */
+async function patchStock(
+  companyId: string,
+  productId: string,
+  userId: string,
+  patch: StockPatch
+): Promise<void> {
+  await firestoreService.stock.update(
+    companyId,
+    productId,
+    {
+      companyId,
+      ...patch,
+      updatedAt: patch.updatedAt ?? nowUtc(),
+    },
+    userId
+  );
+}
+
 /** Weighted average: (currentQty × currentAvg + incomingQty × incomingPrice) / totalQty */
 export function computeWeightedAverage(
   currentQty: number,
@@ -98,8 +130,19 @@ export async function receiveStock(
     sellingPrice
   );
 
-  const updated: ProductStock = {
+  await patchStock(companyId, productId, userId, {
+    productName,
+    quantityOnHand: newQty,
+    avgPurchasePrice: newAvgPurchase,
+    avgSellingPrice: newAvgSelling,
+    totalValue: roundMoney(newQty * newAvgPurchase),
+    lastReceivedAt: now,
+    updatedAt: now,
+  });
+
+  return {
     ...existing,
+    companyId,
     productName,
     quantityOnHand: newQty,
     avgPurchasePrice: newAvgPurchase,
@@ -108,9 +151,6 @@ export async function receiveStock(
     lastReceivedAt: now,
     updatedAt: now,
   };
-
-  await firestoreService.stock.update(companyId, productId, updated, userId);
-  return updated;
 }
 
 /** Remove units from stock (e.g. on sale). Returns false if insufficient stock. */
@@ -137,15 +177,25 @@ export async function deductStock(
 
   const newQty = available - quantity;
   const avgPurchase = existing!.avgPurchasePrice;
-  const updated: ProductStock = {
-    ...existing!,
+  const updatedAt = nowUtc();
+
+  await patchStock(companyId, productId, userId, {
+    productName: existing!.productName,
     quantityOnHand: newQty,
     totalValue: roundMoney(newQty * avgPurchase),
-    updatedAt: nowUtc(),
-  };
+    updatedAt,
+  });
 
-  await firestoreService.stock.update(companyId, productId, updated, userId);
-  return { ok: true, stock: updated };
+  return {
+    ok: true,
+    stock: {
+      ...existing!,
+      companyId,
+      quantityOnHand: newQty,
+      totalValue: roundMoney(newQty * avgPurchase),
+      updatedAt,
+    },
+  };
 }
 
 /** Return units to stock (e.g. sale return/cancel). Averages unchanged. */
@@ -172,16 +222,23 @@ export async function restoreStock(
   }
 
   const newQty = existing.quantityOnHand + quantity;
-  const updated: ProductStock = {
-    ...existing,
+  const updatedAt = nowUtc();
+
+  await patchStock(companyId, productId, userId, {
     productName,
     quantityOnHand: newQty,
     totalValue: roundMoney(newQty * existing.avgPurchasePrice),
-    updatedAt: nowUtc(),
-  };
+    updatedAt,
+  });
 
-  await firestoreService.stock.update(companyId, productId, updated, userId);
-  return updated;
+  return {
+    ...existing,
+    companyId,
+    productName,
+    quantityOnHand: newQty,
+    totalValue: roundMoney(newQty * existing.avgPurchasePrice),
+    updatedAt,
+  };
 }
 
 export function getStockMap(stockList: ProductStock[]): Map<string, ProductStock> {

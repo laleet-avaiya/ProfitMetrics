@@ -357,6 +357,12 @@ export function SaleFormPage() {
         );
         try {
           await requireSyncSaleStock(company.id, payload, user!.uid, sale);
+          await firestoreService.sales.update(
+            company.id,
+            sale.id,
+            { stockApplied: true, updatedAt: payload.updatedAt },
+            user!.uid
+          );
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
           notification.error(
@@ -401,6 +407,12 @@ export function SaleFormPage() {
         }
         try {
           await requireSyncSaleStock(company.id, created, user!.uid);
+          await firestoreService.sales.update(
+            company.id,
+            created.id,
+            { stockApplied: true, updatedAt: created.updatedAt },
+            user!.uid
+          );
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
           try {
