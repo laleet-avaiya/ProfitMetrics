@@ -108,7 +108,7 @@ function DocumentPrintShell({
 
   return (
     <Layout>
-      <PageShell>
+      <PageShell className="print:space-y-0">
         <div className="print:hidden flex flex-wrap items-end gap-3 mb-4">
           <Button variant="outline" onClick={() => navigate(backTo)}>
             <ArrowLeft className="w-4 h-4" />

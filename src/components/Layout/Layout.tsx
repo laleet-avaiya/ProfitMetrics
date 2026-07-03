@@ -196,7 +196,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
     } py-2 rounded-md text-sm font-medium transition-colors ${extra}`;
 
   return (
-    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900 transition-colors print:bg-white print:min-h-0">
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 h-dvh max-h-dvh lg:h-screen print:hidden
@@ -358,15 +358,15 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
       </aside>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden print:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <div
-        className={`flex min-h-0 flex-1 flex-col min-w-0 transition-[margin] duration-300 ease-in-out ${
+        className={`flex min-h-0 flex-1 flex-col min-w-0 transition-[margin] duration-300 ease-in-out print:ml-0 ${
           fullBleed ? 'h-dvh max-h-dvh overflow-hidden' : ''
         } ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}
       >
-        <header className="lg:hidden sticky top-0 z-30 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+        <header className="lg:hidden sticky top-0 z-30 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 print:hidden">
           <div className="flex items-center justify-between h-12 px-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -382,7 +382,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
           </div>
         </header>
         {showSubscriptionWarning && (
-          <div className="shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
+          <div className="shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 print:hidden">
             <div className="px-4 py-3">
               <Link to="/subscription" className="flex items-center gap-3 text-amber-800 dark:text-amber-200 text-sm font-medium">
                 <CreditCardIcon className="w-5 h-5 shrink-0" />
@@ -396,7 +396,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
           className={
             fullBleed
               ? 'flex min-h-0 flex-1 flex-col w-full overflow-hidden p-0'
-              : 'flex-1 w-full max-w-screen-2xl mx-auto px-4 py-4 lg:px-6'
+              : 'flex-1 w-full max-w-screen-2xl mx-auto px-4 py-4 lg:px-6 print:max-w-none print:mx-0 print:px-0 print:py-0'
           }
         >
           {children}

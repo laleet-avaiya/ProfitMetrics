@@ -51,8 +51,9 @@ export function PageHeader({ title, description, actions, showBack }: PageHeader
 
 interface PageShellProps {
   children: ReactNode;
+  className?: string;
 }
 
-export function PageShell({ children }: PageShellProps) {
-  return <div className={pageShellClass}>{children}</div>;
+export function PageShell({ children, className = '' }: PageShellProps) {
+  return <div className={`${pageShellClass} ${className}`.trim()}>{children}</div>;
 }

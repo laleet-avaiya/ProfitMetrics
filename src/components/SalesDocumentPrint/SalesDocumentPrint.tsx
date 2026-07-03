@@ -55,7 +55,7 @@ export function SalesDocumentPrint({
   const docTitle = kind === 'offline' ? 'Tax Invoice' : 'Sales Invoice';
 
   return (
-    <div className="print-page mx-auto max-w-[210mm] bg-white text-gray-900 p-6 sm:p-8">
+    <div className="print-page mx-auto max-w-[210mm] bg-white text-gray-900 p-6 sm:p-8 print:p-0 print:max-w-none">
       <header className="flex flex-wrap justify-between gap-4 border-b border-gray-300 pb-4 mb-6">
         <div>
           {company.logo ? (

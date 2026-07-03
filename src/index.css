@@ -308,8 +308,22 @@ form fieldset {
   main {
     width: 100% !important;
     max-width: none !important;
-    min-width: 210mm !important;
+    min-width: 0 !important;
     overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  /* Strip app shell backgrounds and sidebar offset when printing */
+  #root,
+  #root > div {
+    background: #fff !important;
+    min-height: 0 !important;
+  }
+
+  #root > div > div:last-child {
+    margin-left: 0 !important;
   }
 
   /*
@@ -325,9 +339,23 @@ form fieldset {
 
   #root {
     width: 100% !important;
-    min-width: 210mm !important;
     max-width: none !important;
     background: #fff !important;
+  }
+
+  .print-page {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  /* Hide app chrome — invoice content only */
+  aside,
+  header {
+    display: none !important;
   }
 
   /* Disable transitions and animations when printing */

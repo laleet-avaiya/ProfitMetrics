@@ -71,7 +71,7 @@ export function ProfessionalInvoicePrint({
   );
 
   return (
-    <div className="print-page mx-auto max-w-[210mm] bg-white text-black p-4 sm:p-6 text-[11px] leading-snug">
+    <div className="print-page mx-auto max-w-[210mm] bg-white text-black p-4 sm:p-6 print:p-0 print:max-w-none text-[11px] leading-snug">
       <div className="grid grid-cols-1 sm:grid-cols-2 border border-black border-b-0">
         <GridCell>
           {company.logo ? (
