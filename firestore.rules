@@ -30,7 +30,7 @@ service cloud.firestore {
     function isActiveCompanyMember(companyId) {
       return exists(memberRef(companyId))
         && memberSnap(companyId).data.status == 'active'
-        && memberSnap(companyId).data.deleted != true;
+        && memberSnap(companyId).data.get('deleted', false) != true;
     }
 
     function companyMemberRole(companyId) {
@@ -116,8 +116,11 @@ service cloud.firestore {
     function effectivePermission(companyId, role, module, action) {
       let key = permissionKey(module, action);
       let roleDocRef = rolePermissionsRef(companyId, role);
-      return exists(roleDocRef) && key in get(roleDocRef).data.permissions
-        ? get(roleDocRef).data.permissions[key] == true
+      let perms = exists(roleDocRef)
+        ? get(roleDocRef).data.get('permissions', {})
+        : {};
+      return key in perms
+        ? perms[key] == true
         : defaultPermission(role, module, action);
     }
 
@@ -321,8 +324,12 @@ service cloud.firestore {
     // ── Role permission definitions ───────────────────────────────────────
 
     match /companyRoles/{roleDocId} {
+      // resource is null for not-yet-created role docs (legacy repair path),
+      // so derive the companyId from the doc id (`<companyId>_<role>`).
       allow read: if isAuthenticated()
-        && isActiveCompanyMember(resource.data.companyId);
+        && isActiveCompanyMember(
+          resource != null ? resource.data.companyId : roleDocId.split('_')[0]
+        );
 
       allow create, update: if isAuthenticated()
         && canManageCompanyRoles(request.resource.data.companyId);

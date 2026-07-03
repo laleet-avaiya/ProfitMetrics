@@ -158,15 +158,39 @@ export function InvoiceLineEditor({
         </tr>
         {expanded ? (
           <tr className="bg-gray-50/80 dark:bg-gray-900/30">
-            <td colSpan={7} className="px-3 py-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl">
-                <Select
-                  label="Tax type"
-                  value={line.taxType}
-                  onChange={(e) => onChange({ taxType: e.target.value as TaxType })}
-                  options={taxTypeOptions}
-                />
-                {taxFields}
+            <td colSpan={7} className="px-3 pb-3 pt-1">
+              <div className="rounded-lg border border-gray-200/80 dark:border-gray-700/70 bg-white dark:bg-gray-800/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
+                  Tax details
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-start">
+                  <Select
+                    label="Tax type"
+                    value={line.taxType}
+                    onChange={(e) => onChange({ taxType: e.target.value as TaxType })}
+                    options={taxTypeOptions}
+                  />
+                  {line.taxType !== TaxType.NONE ? (
+                    <>
+                      <Input
+                        label="Tax %"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.taxPercentage}
+                        onChange={(e) => onChange({ taxPercentage: e.target.value })}
+                      />
+                      <TaxModeField
+                        value={line.taxMode}
+                        onChange={(taxMode) => onChange({ taxMode })}
+                      />
+                    </>
+                  ) : (
+                    <p className="sm:col-span-2 sm:self-center text-xs text-gray-500 dark:text-gray-400">
+                      No tax applied to this line.
+                    </p>
+                  )}
+                </div>
               </div>
             </td>
           </tr>
