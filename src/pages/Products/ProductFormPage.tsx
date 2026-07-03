@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Layers, Package, Paperclip, Warehouse } from 'lucide-react';
+import { Layers, Package, Paperclip, Shapes, Warehouse } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
 import { Select } from '../../components/Select/Select';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { PlatformListingEditor } from '../../components/PlatformListingEditor/PlatformListingEditor';
+import { VariantEditor } from '../../components/VariantEditor/VariantEditor';
 import { FormTabs } from '../../components/ui/FormTabs';
 import {
   EntityAttachmentsPanel,
@@ -29,13 +30,26 @@ import { isConfiguredMarketplace } from '../../constants/platforms';
 import { useNotification } from '../../hooks/useNotification';
 import { createListingId, normalizeListings } from '../../utils/productDefaults';
 import { firestoreService } from '../../services/firestore';
-import type { Product, ProductPlatformListing, ProductStock } from '../../types';
+import type {
+  Product,
+  ProductPlatformListing,
+  ProductStock,
+  ProductVariant,
+  ProductVariantOption,
+} from '../../types';
 import type { EntityAttachment } from '../../models/attachment';
 import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { nowUtc } from '../../utils/firestoreDates';
 import { formatMarketplaceSummary } from '../../constants/platforms';
 import { adjustProductStock } from '../../utils/stockAdjustment';
 import { formatMoney } from '../../utils/profit';
+import { sanitizeVariantOptions } from '../../utils/variantHelpers';
+import {
+  tableClass,
+  tableHeadCellClass,
+  tableHeadRowClass,
+  tableWrapClass,
+} from '../../constants/ui';
 
 const STOCK_ADJUST_REASONS = [
   { value: '', label: 'Select a reason…' },
@@ -57,9 +71,11 @@ interface FormState {
   status: Product['status'];
   lowStockThreshold: string;
   platformListings: ProductPlatformListing[];
+  variantOptions: ProductVariantOption[];
+  variants: ProductVariant[];
 }
 
-type ProductFormTab = 'details' | 'platforms' | 'inventory' | 'documents';
+type ProductFormTab = 'details' | 'platforms' | 'variants' | 'inventory' | 'documents';
 
 function emptyForm(): FormState {
   return {
@@ -71,6 +87,8 @@ function emptyForm(): FormState {
     status: 'active',
     lowStockThreshold: '',
     platformListings: [],
+    variantOptions: [],
+    variants: [],
   };
 }
 
@@ -87,6 +105,8 @@ function productToForm(product: Product): FormState {
         ? String(product.lowStockThreshold)
         : '',
     platformListings: normalizeListings(product.platformListings ?? []),
+    variantOptions: product.variantOptions ?? [],
+    variants: product.variants ?? [],
   };
 }
 
@@ -112,7 +132,9 @@ export function ProductFormPage() {
   const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [stock, setStock] = useState<ProductStock | null>(null);
+  const [stockList, setStockList] = useState<ProductStock[]>([]);
   const [stockQty, setStockQty] = useState('0');
+  const [variantQty, setVariantQty] = useState<Record<string, string>>({});
   const [stockReason, setStockReason] = useState('');
   const [stockNote, setStockNote] = useState('');
 
@@ -120,6 +142,10 @@ export function ProductFormPage() {
     if (!isEditing || !company || !productId) {
       setForm(emptyForm());
       setProduct(null);
+      setStock(null);
+      setStockList([]);
+      setStockQty('0');
+      setVariantQty({});
       setLoading(false);
       return;
     }
@@ -127,9 +153,11 @@ export function ProductFormPage() {
     let cancelled = false;
     setLoading(true);
 
-    firestoreService.products
-      .get(company.id, productId)
-      .then((found) => {
+    Promise.all([
+      firestoreService.products.get(company.id, productId),
+      firestoreService.stock.getAll(company.id),
+    ])
+      .then(([found, stockAll]) => {
         if (cancelled) return;
         if (found?.deleted) {
           setProduct(null);
@@ -140,6 +168,18 @@ export function ProductFormPage() {
         setForm(found ? productToForm(found) : emptyForm());
         setAttachments(found?.attachments ?? []);
         setPendingFiles([]);
+
+        const forProduct = stockAll.filter((s) => !s.deleted && s.productId === productId);
+        setStockList(forProduct);
+        const base = forProduct.find((s) => !s.variantId) ?? null;
+        setStock(base);
+        setStockQty(String(base?.quantityOnHand ?? 0));
+        const qtyMap: Record<string, string> = {};
+        for (const variant of found?.variants ?? []) {
+          const rec = forProduct.find((s) => s.variantId === variant.id);
+          qtyMap[variant.id] = String(rec?.quantityOnHand ?? 0);
+        }
+        setVariantQty(qtyMap);
       })
       .catch((err) => {
         console.error('Failed to load product:', err);
@@ -154,30 +194,34 @@ export function ProductFormPage() {
     };
   }, [company, isEditing, productId, notification]);
 
-  useEffect(() => {
-    if (!isEditing || !company || !productId) {
-      setStock(null);
-      setStockQty('0');
-      return;
-    }
-    let cancelled = false;
-    firestoreService.stock
-      .getByProductId(company.id, productId)
-      .then((found) => {
-        if (cancelled) return;
-        setStock(found);
-        setStockQty(String(found?.quantityOnHand ?? 0));
-      })
-      .catch((err) => console.error('Failed to load stock:', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [company, isEditing, productId]);
+  const hasVariants = form.variants.length > 0;
+  const variantStockMap = useMemo(
+    () => new Map(stockList.filter((s) => s.variantId).map((s) => [s.variantId!, s])),
+    [stockList]
+  );
 
   const currentOnHand = stock?.quantityOnHand ?? 0;
   const parsedStockQty = Math.max(0, Math.floor(Number(stockQty) || 0));
   const stockDelta = parsedStockQty - currentOnHand;
-  const stockChanged = isEditing && stockDelta !== 0;
+
+  const changedVariants = useMemo(() => {
+    if (!hasVariants) return [] as ProductVariant[];
+    return form.variants.filter((v) => {
+      const target = Math.max(0, Math.floor(Number(variantQty[v.id] ?? '0') || 0));
+      const current = variantStockMap.get(v.id)?.quantityOnHand ?? 0;
+      return target !== current;
+    });
+  }, [hasVariants, form.variants, variantQty, variantStockMap]);
+
+  const stockChanged = isEditing && (hasVariants ? changedVariants.length > 0 : stockDelta !== 0);
+  const totalVariantOnHand = useMemo(
+    () =>
+      form.variants.reduce(
+        (sum, v) => sum + (variantStockMap.get(v.id)?.quantityOnHand ?? 0),
+        0
+      ),
+    [form.variants, variantStockMap]
+  );
 
   const platformSummary = useMemo(
     () => formatMarketplaceSummary(marketplaces),
@@ -228,6 +272,8 @@ export function ProductFormPage() {
     setSaving(true);
     try {
       const listings = normalizeListings(form.platformListings);
+      const cleanOptions = sanitizeVariantOptions(form.variantOptions);
+      const variants = cleanOptions.length > 0 ? form.variants : [];
       const now = nowUtc();
 
       if (isEditing && product) {
@@ -240,21 +286,39 @@ export function ProductFormPage() {
           status: 'active',
           lowStockThreshold: parseThreshold(form.lowStockThreshold) ?? 0,
           platformListings: listings,
+          variantOptions: cleanOptions,
+          variants,
           attachments,
           updatedAt: now,
         }, user!.uid);
 
         if (stockChanged) {
           try {
-            await adjustProductStock({
-              companyId: company.id,
-              productId: product.id,
-              productName: form.name.trim(),
-              newQuantity: parsedStockQty,
-              reason: stockReason,
-              note: stockNote,
-              userId: user!.uid,
-            });
+            if (hasVariants) {
+              for (const variant of changedVariants) {
+                await adjustProductStock({
+                  companyId: company.id,
+                  productId: product.id,
+                  productName: form.name.trim(),
+                  variantId: variant.id,
+                  variantLabel: variant.label,
+                  newQuantity: Math.max(0, Math.floor(Number(variantQty[variant.id] ?? '0') || 0)),
+                  reason: stockReason,
+                  note: stockNote,
+                  userId: user!.uid,
+                });
+              }
+            } else {
+              await adjustProductStock({
+                companyId: company.id,
+                productId: product.id,
+                productName: form.name.trim(),
+                newQuantity: parsedStockQty,
+                reason: stockReason,
+                note: stockNote,
+                userId: user!.uid,
+              });
+            }
           } catch (stockErr) {
             console.error('Failed to adjust stock:', stockErr);
             notification.error('Product saved, but the stock adjustment failed.');
@@ -287,6 +351,9 @@ export function ProductFormPage() {
           category: form.category.trim() || undefined,
           status: 'active',
           platformListings: listings,
+          ...(cleanOptions.length > 0
+            ? { variantOptions: cleanOptions, variants }
+            : {}),
           ...(parseThreshold(form.lowStockThreshold)
             ? { lowStockThreshold: parseThreshold(form.lowStockThreshold) }
             : {}),
@@ -323,6 +390,12 @@ export function ProductFormPage() {
       label: 'Platforms',
       icon: Layers,
       badge: form.platformListings.length || undefined,
+    },
+    {
+      id: 'variants' as const,
+      label: 'Variants',
+      icon: Shapes,
+      badge: form.variants.length || undefined,
     },
     ...(isEditing
       ? [{ id: 'inventory' as const, label: 'Inventory', icon: Warehouse }]
@@ -471,69 +544,180 @@ export function ProductFormPage() {
                 />
               ) : null}
 
+              {activeTab === 'variants' ? (
+                <VariantEditor
+                  options={form.variantOptions}
+                  variants={form.variants}
+                  currency={currency}
+                  onOptionsChange={(variantOptions) =>
+                    setForm((f) => ({ ...f, variantOptions }))
+                  }
+                  onVariantsChange={(variants) => setForm((f) => ({ ...f, variants }))}
+                />
+              ) : null}
+
               {activeTab === 'inventory' && isEditing ? (
-                <div className="max-w-2xl space-y-4">
-                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Current on-hand
-                        </p>
-                        <p className="mt-0.5 text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">
-                          {currentOnHand}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Stock value</p>
-                        <p className="mt-0.5 text-sm font-medium text-gray-700 dark:text-gray-300 tabular-nums">
-                          {formatMoney(stock?.totalValue ?? 0, currency)}
-                        </p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                          Avg cost {formatMoney(stock?.avgPurchasePrice ?? 0, currency)}
+                <div className="max-w-3xl space-y-4">
+                  {hasVariants ? (
+                    <>
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 p-4 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                            Total on-hand (all variants)
+                          </p>
+                          <p className="mt-0.5 text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">
+                            {totalVariantOnHand}
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {form.variants.length} variant{form.variants.length === 1 ? '' : 's'}
                         </p>
                       </div>
-                    </div>
-                  </div>
 
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Manually correct the on-hand count (e.g. after a stock take). Purchases and
-                    sales still update stock automatically — every manual change is logged.
-                  </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Set the on-hand count per variant. Purchases and sales still update stock
+                        automatically — every manual change is logged.
+                      </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      label="New on-hand quantity"
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={stockQty}
-                      onChange={(e) => setStockQty(e.target.value)}
-                      helperText={
-                        stockDelta !== 0
-                          ? `${stockDelta > 0 ? '+' : ''}${stockDelta} vs current`
-                          : 'No change'
-                      }
-                    />
-                    <Select
-                      label="Reason"
-                      value={stockReason}
-                      onChange={(e) => setStockReason(e.target.value)}
-                      options={STOCK_ADJUST_REASONS}
-                      required={stockChanged}
-                      error={errors.stock}
-                      disabled={!stockChanged}
-                    />
-                  </div>
+                      <div className={tableWrapClass}>
+                        <table className={tableClass}>
+                          <thead>
+                            <tr className={tableHeadRowClass}>
+                              <th className={tableHeadCellClass}>Variant</th>
+                              <th className={`${tableHeadCellClass} w-28`}>Current</th>
+                              <th className={`${tableHeadCellClass} w-40`}>New on-hand</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {form.variants.map((variant) => {
+                              const rec = variantStockMap.get(variant.id);
+                              const current = rec?.quantityOnHand ?? 0;
+                              const target = Math.max(
+                                0,
+                                Math.floor(Number(variantQty[variant.id] ?? '0') || 0)
+                              );
+                              const delta = target - current;
+                              return (
+                                <tr
+                                  key={variant.id}
+                                  className="border-t border-gray-100 dark:border-gray-800"
+                                >
+                                  <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                                    {variant.label}
+                                  </td>
+                                  <td className="px-3 py-2 text-sm tabular-nums text-gray-600 dark:text-gray-300">
+                                    {current}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="1"
+                                      value={variantQty[variant.id] ?? '0'}
+                                      onChange={(e) =>
+                                        setVariantQty((prev) => ({
+                                          ...prev,
+                                          [variant.id]: e.target.value,
+                                        }))
+                                      }
+                                      helperText={
+                                        delta !== 0 ? `${delta > 0 ? '+' : ''}${delta}` : undefined
+                                      }
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
 
-                  <Textarea
-                    label="Note"
-                    optional
-                    value={stockNote}
-                    onChange={(e) => setStockNote(e.target.value)}
-                    placeholder="Optional context for this adjustment…"
-                    rows={2}
-                    disabled={!stockChanged}
-                  />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Select
+                          label="Reason"
+                          value={stockReason}
+                          onChange={(e) => setStockReason(e.target.value)}
+                          options={STOCK_ADJUST_REASONS}
+                          required={stockChanged}
+                          error={errors.stock}
+                          disabled={!stockChanged}
+                        />
+                      </div>
+                      <Textarea
+                        label="Note"
+                        optional
+                        value={stockNote}
+                        onChange={(e) => setStockNote(e.target.value)}
+                        placeholder="Optional context for these adjustments…"
+                        rows={2}
+                        disabled={!stockChanged}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                              Current on-hand
+                            </p>
+                            <p className="mt-0.5 text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">
+                              {currentOnHand}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Stock value</p>
+                            <p className="mt-0.5 text-sm font-medium text-gray-700 dark:text-gray-300 tabular-nums">
+                              {formatMoney(stock?.totalValue ?? 0, currency)}
+                            </p>
+                            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                              Avg cost {formatMoney(stock?.avgPurchasePrice ?? 0, currency)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Manually correct the on-hand count (e.g. after a stock take). Purchases and
+                        sales still update stock automatically — every manual change is logged.
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label="New on-hand quantity"
+                          type="number"
+                          min={0}
+                          step="1"
+                          value={stockQty}
+                          onChange={(e) => setStockQty(e.target.value)}
+                          helperText={
+                            stockDelta !== 0
+                              ? `${stockDelta > 0 ? '+' : ''}${stockDelta} vs current`
+                              : 'No change'
+                          }
+                        />
+                        <Select
+                          label="Reason"
+                          value={stockReason}
+                          onChange={(e) => setStockReason(e.target.value)}
+                          options={STOCK_ADJUST_REASONS}
+                          required={stockChanged}
+                          error={errors.stock}
+                          disabled={!stockChanged}
+                        />
+                      </div>
+
+                      <Textarea
+                        label="Note"
+                        optional
+                        value={stockNote}
+                        onChange={(e) => setStockNote(e.target.value)}
+                        placeholder="Optional context for this adjustment…"
+                        rows={2}
+                        disabled={!stockChanged}
+                      />
+                    </>
+                  )}
                 </div>
               ) : null}
 

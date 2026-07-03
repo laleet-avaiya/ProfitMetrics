@@ -20,6 +20,10 @@ export interface InvoiceLineFormState {
   productId: string;
   /** Free-text item name used when the line is a custom (non-catalog) entry */
   productName: string;
+  /** Selected variant id when the product has variants */
+  variantId: string;
+  /** Denormalized variant label snapshot */
+  variantLabel: string;
   /** HSN / SAC code snapshot — auto-filled from the product, editable */
   hsnCode: string;
   /** When true, the line is a free-text item with no linked catalog product */
@@ -65,6 +69,8 @@ export function emptyInvoiceLineForm(): InvoiceLineFormState {
     id: createListingId(),
     productId: '',
     productName: '',
+    variantId: '',
+    variantLabel: '',
     hsnCode: '',
     isCustom: false,
     quantity: '1',
@@ -158,6 +164,8 @@ function lineFromForm(
     id: line.id,
     productId: line.isCustom ? '' : line.productId,
     productName,
+    variantId: line.isCustom ? undefined : line.variantId || undefined,
+    variantLabel: line.isCustom ? undefined : line.variantLabel || undefined,
     hsnCode: resolvedHsn || undefined,
     quantity,
     unitPrice,
@@ -204,6 +212,8 @@ export function invoiceToForm(invoice: Invoice): InvoiceFormState {
       id: l.id,
       productId: l.productId,
       productName: l.productName ?? '',
+      variantId: l.variantId ?? '',
+      variantLabel: l.variantLabel ?? '',
       hsnCode: l.hsnCode ?? '',
       isCustom: !l.productId,
       quantity: String(l.quantity),

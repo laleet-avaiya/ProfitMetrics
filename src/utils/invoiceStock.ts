@@ -17,6 +17,8 @@ function invoiceToStockSale(invoice: Invoice): Sale {
       id: line.id,
       productId: line.productId,
       productName: line.productName,
+      variantId: line.variantId,
+      variantLabel: line.variantLabel,
       quantity: line.quantity,
       economics: {
         purchasePrice: line.purchasePrice,
@@ -78,9 +80,10 @@ export async function applyInvoiceStock(
 
   for (const line of invoice.lines) {
     if (!line.productId) continue;
-    const result = await deductStock(companyId, line.productId, line.quantity, userId);
+    const result = await deductStock(companyId, line.productId, line.quantity, userId, line.variantId);
     if (!result.ok) {
-      return { ok: false, productName: line.productName, available: result.available, needed: line.quantity };
+      const label = line.variantLabel ? `${line.productName} (${line.variantLabel})` : line.productName;
+      return { ok: false, productName: label, available: result.available, needed: line.quantity };
     }
   }
 
@@ -123,7 +126,15 @@ export async function restoreInvoiceStock(
 
   for (const line of invoice.lines) {
     if (!line.productId) continue;
-    await restoreStock(companyId, line.productId, line.productName, line.quantity, userId);
+    await restoreStock(
+      companyId,
+      line.productId,
+      line.productName,
+      line.quantity,
+      userId,
+      line.variantId,
+      line.variantLabel
+    );
   }
 
   await firestoreService.invoices.update(

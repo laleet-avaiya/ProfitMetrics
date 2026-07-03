@@ -3,6 +3,7 @@ import type { PurchaseOrder, PurchaseOrderLine } from '../types';
 import { PurchaseOrderStatus } from '../types';
 import { isPurchaseReceiptLocked } from './purchaseHelpers';
 import { receiveStock } from './stockHelpers';
+import { stockKey } from './variantHelpers';
 
 const RECEIPT_LOCKED_MESSAGE =
   'Stock for this purchase order was already received. Create a new PO to receive more goods.';
@@ -49,7 +50,9 @@ export async function syncPurchaseStockReceipts(
       delta,
       line.purchasePrice,
       line.sellingPrice,
-      userId
+      userId,
+      line.variantId,
+      line.variantLabel
     );
   }
 }
@@ -77,17 +80,21 @@ export async function reversePurchaseStockReceipts(
 
     if (delta <= 0) continue;
 
-    const stock = await firestoreService.stock.getByProductId(companyId, prevLine.productId);
+    const key = stockKey(prevLine.productId, prevLine.variantId);
+    const stock = await firestoreService.stock.getByProductId(companyId, key);
+    const label = prevLine.variantLabel
+      ? `${prevLine.productName} (${prevLine.variantLabel})`
+      : prevLine.productName;
     if (!stock || stock.quantityOnHand < delta) {
       throw new Error(
-        `Cannot reduce received quantity for ${prevLine.productName}: insufficient stock (${stock?.quantityOnHand ?? 0} on hand)`
+        `Cannot reduce received quantity for ${label}: insufficient stock (${stock?.quantityOnHand ?? 0} on hand)`
       );
     }
 
     const newQty = stock.quantityOnHand - delta;
     await firestoreService.stock.update(
       companyId,
-      prevLine.productId,
+      key,
       {
         companyId,
         productName: prevLine.productName,

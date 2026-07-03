@@ -21,8 +21,6 @@ import {
   FormPageMobileActions,
   FormPanel,
   FormReadyBanner,
-  FormSidebarRow,
-  FormSidebarSection,
 } from '../../components/FormPage';
 import { InvoiceFormSummaryBar } from '../../components/InvoiceFormSummaryBar/InvoiceFormSummaryBar';
 import { InvoiceLineEditor } from '../../components/InvoiceLineEditor/InvoiceLineEditor';
@@ -163,6 +161,8 @@ export function InvoiceFormPage() {
       productId,
       isCustom: false,
       productName: '',
+      variantId: '',
+      variantLabel: '',
       hsnCode: product?.hsnCode ?? '',
       unitPrice: listing ? String(listing.sellingPrice) : stock ? String(stock.avgSellingPrice) : '',
       purchasePrice,
@@ -170,6 +170,23 @@ export function InvoiceFormPage() {
       taxPercentage: String(listing?.sellingTaxPercentage ?? listing?.taxPercentage ?? 0),
       taxMode: listing?.sellingTaxMode ?? listing?.taxMode ?? TaxMode.INCLUSIVE,
     });
+  };
+
+  const fillFromVariant = (lineId: string, variantId: string) => {
+    const line = form.lines.find((l) => l.id === lineId);
+    const product = products.find((p) => p.id === line?.productId);
+    const variant = product?.variants?.find((v) => v.id === variantId);
+    if (!variant) {
+      updateLine(lineId, { variantId: '', variantLabel: '' });
+      return;
+    }
+    const patch: Partial<InvoiceFormState['lines'][0]> = {
+      variantId: variant.id,
+      variantLabel: variant.label,
+    };
+    if (variant.sellingPrice != null) patch.unitPrice = String(variant.sellingPrice);
+    if (variant.purchasePrice != null) patch.purchasePrice = String(variant.purchasePrice);
+    updateLine(lineId, patch);
   };
 
   const addLine = () => {
@@ -208,6 +225,14 @@ export function InvoiceFormPage() {
     }
     if (form.lines.filter(isInvoiceLineFilled).length === 0)
       next.lines = 'Add at least one product or custom item';
+    if (!next.lines) {
+      const missingVariant = form.lines.some((l) => {
+        if (l.isCustom || !l.productId) return false;
+        const product = products.find((p) => p.id === l.productId);
+        return Boolean(product?.variants && product.variants.length > 0) && !l.variantId;
+      });
+      if (missingVariant) next.lines = 'Select a variant for each product that has variants';
+    }
     setErrors(next);
 
     if (next.customer) {
@@ -363,24 +388,7 @@ export function InvoiceFormPage() {
               ariaLabel="Invoice form sections"
             />
 
-            <FormPageGrid
-              sidebar={
-                <FormSidebarSection title="Breakdown">
-                  <FormSidebarRow label="Subtotal" value={formatMoney(preview.subtotal, currency)} />
-                  <FormSidebarRow label="Tax" value={formatMoney(preview.taxAmount, currency)} />
-                  <FormSidebarRow label="COGS" value={formatMoney(preview.totalCogs, currency)} />
-                  <FormSidebarRow
-                    label="Total"
-                    value={formatMoney(preview.total, currency)}
-                    emphasize
-                  />
-                  <FormSidebarRow
-                    label="Est. profit"
-                    value={formatMoney(preview.profit, currency)}
-                  />
-                </FormSidebarSection>
-              }
-            >
+            <FormPageGrid>
               <FormPanel role="tabpanel">
                 {activeTab === 'invoice' ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -542,6 +550,7 @@ export function InvoiceFormPage() {
                               canRemove={form.lines.length > 1}
                               onChange={(patch) => updateLine(line.id, patch)}
                               onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                              onVariantSelect={(variantId) => fillFromVariant(line.id, variantId)}
                               onRemove={() => removeLine(line.id)}
                             />
                           ))}
@@ -561,6 +570,7 @@ export function InvoiceFormPage() {
                           canRemove={form.lines.length > 1}
                           onChange={(patch) => updateLine(line.id, patch)}
                           onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                          onVariantSelect={(variantId) => fillFromVariant(line.id, variantId)}
                           onRemove={() => removeLine(line.id)}
                         />
                       ))}
@@ -614,6 +624,19 @@ export function InvoiceFormPage() {
               </FormPanel>
             </FormPageGrid>
 
+            <FormPanel>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
+                Breakdown
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <BreakdownStat label="Subtotal" value={formatMoney(preview.subtotal, currency)} />
+                <BreakdownStat label="Tax" value={formatMoney(preview.taxAmount, currency)} />
+                <BreakdownStat label="COGS" value={formatMoney(preview.totalCogs, currency)} />
+                <BreakdownStat label="Total" value={formatMoney(preview.total, currency)} emphasize />
+                <BreakdownStat label="Est. profit" value={formatMoney(preview.profit, currency)} />
+              </div>
+            </FormPanel>
+
             {isReady ? (
               <FormReadyBanner>
                 {filledLines} line{filledLines === 1 ? '' : 's'} — ready to create.
@@ -629,5 +652,30 @@ export function InvoiceFormPage() {
           </FormPageBody>
       </PageShell>
     </Layout>
+  );
+}
+
+function BreakdownStat({
+  label,
+  value,
+  emphasize,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/30 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
+      <p
+        className={`mt-0.5 text-sm tabular-nums ${
+          emphasize
+            ? 'font-semibold text-indigo-600 dark:text-indigo-400'
+            : 'text-gray-900 dark:text-white'
+        }`}
+      >
+        {value}
+      </p>
+    </div>
   );
 }

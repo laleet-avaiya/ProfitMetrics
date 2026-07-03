@@ -35,6 +35,7 @@ interface InvoiceLineEditorProps {
   canRemove: boolean;
   onChange: (patch: Partial<InvoiceLineFormState>) => void;
   onProductSelect: (productId: string) => void;
+  onVariantSelect: (variantId: string) => void;
   onRemove: () => void;
   layout?: 'card' | 'table';
 }
@@ -47,6 +48,7 @@ export function InvoiceLineEditor({
   canRemove,
   onChange,
   onProductSelect,
+  onVariantSelect,
   onRemove,
   layout = 'card',
 }: InvoiceLineEditorProps) {
@@ -57,6 +59,17 @@ export function InvoiceLineEditor({
     ],
     [products]
   );
+
+  const selectedProductForVariants = products.find((p) => p.id === line.productId);
+  const variantOptions = useMemo(() => {
+    const variants = selectedProductForVariants?.variants ?? [];
+    if (variants.length === 0) return [];
+    return [
+      { value: '', label: 'Select variant…' },
+      ...variants.map((v) => ({ value: v.id, label: v.label })),
+    ];
+  }, [selectedProductForVariants]);
+  const hasVariants = variantOptions.length > 0;
 
   const lineTotal = useMemo(() => {
     const qty = parseQty(line.quantity);
@@ -95,7 +108,7 @@ export function InvoiceLineEditor({
       <>
         <tr className="border-t border-gray-100 dark:border-gray-700/80 hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
           <td className={`${tableCellClass} w-8 text-xs text-gray-500 tabular-nums`}>{index + 1}</td>
-          <td className={`${tableCellClass} min-w-[10rem] max-w-[14rem]`}>
+          <td className={`${tableCellClass} min-w-[16rem] max-w-[24rem]`}>
             {line.isCustom ? (
               <input
                 type="text"
@@ -113,6 +126,17 @@ export function InvoiceLineEditor({
                 controlClassName={`${selectControlClass} h-8 px-2`}
               />
             )}
+            {!line.isCustom && hasVariants ? (
+              <div className="mt-1">
+                <SearchableSelect
+                  options={variantOptions}
+                  value={line.variantId}
+                  onChange={(e) => onVariantSelect(e.target.value)}
+                  placeholder="Variant…"
+                  controlClassName={`${selectControlClass} h-8 px-2`}
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => setMode(!line.isCustom)}
@@ -273,6 +297,16 @@ export function InvoiceLineEditor({
               options={productOptions}
             />
           )}
+          {!line.isCustom && hasVariants ? (
+            <div className="mt-2">
+              <Select
+                label="Variant"
+                value={line.variantId}
+                onChange={(e) => onVariantSelect(e.target.value)}
+                options={variantOptions}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Input

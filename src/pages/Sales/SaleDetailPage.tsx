@@ -278,6 +278,11 @@ export function SaleDetailPage() {
                         <Link to={`/products/${line.productId}`} className={detailLinkClass}>
                           {line.productName}
                         </Link>
+                        {line.variantLabel ? (
+                          <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            {line.variantLabel}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="py-2.5 px-3 text-right tabular-nums">{line.quantity}</td>
                       <td className="py-2.5 px-3 text-right tabular-nums">

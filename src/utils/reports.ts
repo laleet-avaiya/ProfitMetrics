@@ -7,6 +7,7 @@ import {
 } from './firestoreDates';
 import { isDateInRange } from './expenseHelpers';
 import { getSaleLineMetrics, saleCogs, saleShipping } from './saleLines';
+import { stockKey } from './variantHelpers';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -818,6 +819,8 @@ export function computeStockSummary(stock: ProductStock[]): StockSummary {
 export interface LowStockAlertRow {
   productId: string;
   productName: string;
+  variantId?: string;
+  variantLabel?: string;
   sku?: string;
   quantityOnHand: number;
   threshold: number;
@@ -826,14 +829,16 @@ export interface LowStockAlertRow {
 }
 
 /**
- * Products whose on-hand quantity is at or below their configured reorder point.
- * Products without a threshold (0 / undefined) are ignored. Sorted most urgent first.
+ * Products (or variants) whose on-hand quantity is at or below the configured
+ * reorder point. Products without a threshold (0 / undefined) are ignored. For
+ * products with variants, each variant is checked against the product threshold.
+ * Sorted most urgent first.
  */
 export function computeLowStockAlerts(
   products: Product[],
   stock: ProductStock[]
 ): LowStockAlertRow[] {
-  const stockByProduct = new Map(stock.map((s) => [s.productId, s]));
+  const stockByKey = new Map(stock.map((s) => [stockKey(s.productId, s.variantId), s]));
   const rows: LowStockAlertRow[] = [];
 
   for (const product of products) {
@@ -841,7 +846,26 @@ export function computeLowStockAlerts(
     const threshold = product.lowStockThreshold ?? 0;
     if (threshold <= 0) continue;
 
-    const quantityOnHand = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
+    if (product.variants && product.variants.length > 0) {
+      for (const variant of product.variants) {
+        const quantityOnHand =
+          stockByKey.get(stockKey(product.id, variant.id))?.quantityOnHand ?? 0;
+        if (quantityOnHand > threshold) continue;
+        rows.push({
+          productId: product.id,
+          productName: product.name,
+          variantId: variant.id,
+          variantLabel: variant.label,
+          sku: variant.sku ?? product.sku,
+          quantityOnHand,
+          threshold,
+          shortfall: Math.max(0, threshold - quantityOnHand),
+        });
+      }
+      continue;
+    }
+
+    const quantityOnHand = stockByKey.get(product.id)?.quantityOnHand ?? 0;
     if (quantityOnHand > threshold) continue;
 
     rows.push({
@@ -863,8 +887,12 @@ export function computeLowStockAlerts(
 }
 
 export interface StockReportRow {
+  /** Stock key: productId, or productId + variantId */
+  key: string;
   productId: string;
   productName: string;
+  variantId?: string;
+  variantLabel?: string;
   sku?: string;
   quantityOnHand: number;
   avgPurchasePrice: number;
@@ -879,8 +907,13 @@ export function computeStockReport(
   options?: { inStockOnly?: boolean }
 ): StockReportRow[] {
   let rows: StockReportRow[] = stock.map((item) => ({
+    key: stockKey(item.productId, item.variantId),
     productId: item.productId,
-    productName: item.productName,
+    productName: item.variantLabel
+      ? `${item.productName} — ${item.variantLabel}`
+      : item.productName,
+    variantId: item.variantId,
+    variantLabel: item.variantLabel,
     sku: skuByProductId.get(item.productId),
     quantityOnHand: item.quantityOnHand,
     avgPurchasePrice: item.avgPurchasePrice,

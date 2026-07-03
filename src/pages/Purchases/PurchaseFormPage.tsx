@@ -47,6 +47,7 @@ import {
   getActiveProducts,
   purchaseToForm,
   type PurchaseFormState,
+  type PurchaseLineFormState,
 } from '../../utils/purchaseHelpers';
 import { allocateNextPoNumber, previewNextPoNumber } from '../../utils/documentNumbers';
 import { isPurchaseReceiptLocked } from '../../utils/purchaseHelpers';
@@ -179,6 +180,8 @@ export function PurchaseFormPage() {
     const listing = product?.platformListings[0];
     updateLine(lineId, {
       productId,
+      variantId: '',
+      variantLabel: '',
       purchasePrice: listing ? String(listing.purchasePrice) : '',
       sellingPrice: listing ? String(listing.sellingPrice) : '',
       taxType: listing?.taxType ?? TaxType.NONE,
@@ -187,11 +190,36 @@ export function PurchaseFormPage() {
     });
   };
 
+  const fillFromVariant = (lineId: string, variantId: string) => {
+    const line = form.lines.find((l) => l.id === lineId);
+    const product = products.find((p) => p.id === line?.productId);
+    const variant = product?.variants?.find((v) => v.id === variantId);
+    if (!variant) {
+      updateLine(lineId, { variantId: '', variantLabel: '' });
+      return;
+    }
+    const patch: Partial<PurchaseLineFormState> = {
+      variantId: variant.id,
+      variantLabel: variant.label,
+    };
+    if (variant.purchasePrice != null) patch.purchasePrice = String(variant.purchasePrice);
+    if (variant.sellingPrice != null) patch.sellingPrice = String(variant.sellingPrice);
+    updateLine(lineId, patch);
+  };
+
   const validate = (): boolean => {
     const next: typeof errors = {};
     if (!form.vendorId) next.vendorId = 'Select a vendor';
     const validLines = form.lines.filter((l) => l.productId);
     if (validLines.length === 0) next.lines = 'Add at least one product line';
+    if (!next.lines) {
+      const missingVariant = form.lines.some((l) => {
+        if (!l.productId) return false;
+        const product = products.find((p) => p.id === l.productId);
+        return Boolean(product?.variants && product.variants.length > 0) && !l.variantId;
+      });
+      if (missingVariant) next.lines = 'Select a variant for each product that has variants';
+    }
     setErrors(next);
 
     if (next.vendorId) {
@@ -487,6 +515,7 @@ export function PurchaseFormPage() {
                               canRemove={form.lines.length > 1}
                               onChange={(patch) => updateLine(line.id, patch)}
                               onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                              onVariantSelect={(variantId) => fillFromVariant(line.id, variantId)}
                               onRemove={() => removeLine(line.id)}
                             />
                           ))}
@@ -506,6 +535,7 @@ export function PurchaseFormPage() {
                           canRemove={form.lines.length > 1}
                           onChange={(patch) => updateLine(line.id, patch)}
                           onProductSelect={(productId) => fillFromProduct(line.id, productId)}
+                          onVariantSelect={(variantId) => fillFromVariant(line.id, variantId)}
                           onRemove={() => removeLine(line.id)}
                         />
                       ))}

@@ -147,7 +147,12 @@ export function InvoiceDetailPage() {
                 <tbody>
                   {invoice.lines.map((line) => (
                     <tr key={line.id}>
-                      <td className="px-3 py-2"><Link to={`/products/${line.productId}`} className={detailLinkClass}>{line.productName}</Link></td>
+                      <td className="px-3 py-2">
+                        <Link to={`/products/${line.productId}`} className={detailLinkClass}>{line.productName}</Link>
+                        {line.variantLabel ? (
+                          <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">{line.variantLabel}</span>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{line.quantity}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{formatMoney(line.unitPrice, currency)}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">{formatMoney(line.lineTotal, currency)}</td>

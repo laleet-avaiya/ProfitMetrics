@@ -60,6 +60,8 @@ export interface SaleFormEconomics {
 export interface SaleLineFormState {
   id: string;
   productId: string;
+  variantId: string;
+  variantLabel: string;
   platformListingId: string;
   quantity: number;
   economics: SaleFormEconomics;
@@ -126,6 +128,8 @@ export function emptySaleLineForm(): SaleLineFormState {
   return {
     id: createListingId(),
     productId: '',
+    variantId: '',
+    variantLabel: '',
     platformListingId: '',
     quantity: 1,
     economics: defaultEconomics(),
@@ -258,6 +262,8 @@ function lineFormFromSaleLine(line: SaleLine): SaleLineFormState {
   return {
     id: line.id,
     productId: line.productId,
+    variantId: line.variantId ?? '',
+    variantLabel: line.variantLabel ?? '',
     platformListingId: line.platformListingId ?? '',
     quantity: line.quantity,
     economics: economicsFromSaleRecord(line.economics, qty),
@@ -562,6 +568,8 @@ export function buildSaleFromForm(
       id: line.id,
       productId: line.productId,
       productName: productNames.get(line.productId) ?? 'Unknown product',
+      variantId: line.variantId || undefined,
+      variantLabel: line.variantLabel || undefined,
       hsnCode: hsnCode || undefined,
       platformListingId: line.platformListingId || undefined,
       quantity: Math.max(1, line.quantity),

@@ -4,6 +4,7 @@ import type { StockMovement } from '../types';
 import { StockMovementType } from '../types';
 import { nowUtc } from './firestoreDates';
 import { createListingId } from './productDefaults';
+import { stockKey } from './variantHelpers';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -13,6 +14,9 @@ export interface AdjustStockParams {
   companyId: string;
   productId: string;
   productName: string;
+  /** Variant to adjust, when the product has variants */
+  variantId?: string;
+  variantLabel?: string;
   /** Target on-hand quantity after the adjustment */
   newQuantity: number;
   reason: string;
@@ -28,10 +32,12 @@ export interface AdjustStockParams {
 export async function adjustProductStock(
   params: AdjustStockParams
 ): Promise<StockMovement | null> {
-  const { companyId, productId, productName, reason, note, userId } = params;
+  const { companyId, productId, productName, variantId, variantLabel, reason, note, userId } =
+    params;
   const newQty = Math.max(0, Math.floor(params.newQuantity));
+  const key = stockKey(productId, variantId);
 
-  const existing = await firestoreService.stock.getByProductId(companyId, productId);
+  const existing = await firestoreService.stock.getByProductId(companyId, key);
   const previousQty = existing?.quantityOnHand ?? 0;
   const delta = newQty - previousQty;
 
@@ -43,10 +49,12 @@ export async function adjustProductStock(
   if (existing) {
     await firestoreService.stock.update(
       companyId,
-      productId,
+      key,
       {
         companyId,
         productName,
+        variantId: variantId || undefined,
+        variantLabel: variantLabel || existing.variantLabel || undefined,
         quantityOnHand: newQty,
         totalValue: roundMoney(newQty * avgPurchase),
         updatedAt: now,
@@ -57,9 +65,11 @@ export async function adjustProductStock(
     await firestoreService.stock.create(
       companyId,
       {
-        id: productId,
+        id: key,
         companyId,
         productId,
+        variantId: variantId || undefined,
+        variantLabel: variantLabel || undefined,
         productName,
         quantityOnHand: newQty,
         avgPurchasePrice: 0,
@@ -72,10 +82,13 @@ export async function adjustProductStock(
     );
   }
 
+  const labelSuffix = variantLabel ? ` (${variantLabel})` : '';
   const movement: StockMovement = {
     id: createListingId(),
     companyId,
     productId,
+    variantId: variantId || undefined,
+    variantLabel: variantLabel || undefined,
     productName,
     type: StockMovementType.ADJUSTMENT,
     delta,
@@ -92,8 +105,8 @@ export async function adjustProductStock(
   appendAuditLog(companyId, userId, {
     action: 'stock.adjusted',
     entityType: 'stock',
-    entityId: productId,
-    summary: `Stock adjusted for ${productName}: ${previousQty} → ${newQty} (${
+    entityId: key,
+    summary: `Stock adjusted for ${productName}${labelSuffix}: ${previousQty} → ${newQty} (${
       delta >= 0 ? '+' : ''
     }${delta})`,
   });

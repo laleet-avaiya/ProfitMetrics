@@ -92,7 +92,7 @@ export function SaleFormPage() {
   const [errors, setErrors] = useState<{
     orderId?: string;
     platform?: string;
-    lines?: Record<string, { productId?: string; platformListingId?: string }>;
+    lines?: Record<string, { productId?: string; platformListingId?: string; variantId?: string }>;
   }>({});
 
   const formProducts = useMemo(() => {
@@ -297,13 +297,13 @@ export function SaleFormPage() {
 
   const validate = (): boolean => {
     const next: typeof errors = {};
-    const lineErrors: Record<string, { productId?: string; platformListingId?: string }> = {};
+    const lineErrors: Record<string, { productId?: string; platformListingId?: string; variantId?: string }> = {};
 
     if (!form.orderId.trim()) next.orderId = 'Order ID is required';
     if (!form.platform.trim()) next.platform = 'Select a marketplace';
 
     for (const line of form.lines) {
-      const err: { productId?: string; platformListingId?: string } = {};
+      const err: { productId?: string; platformListingId?: string; variantId?: string } = {};
       if (!line.productId) err.productId = 'Select a product';
       const product = formProducts.find((p) => p.id === line.productId);
       const listings = product && form.platform ? getListingsForPlatform(product, form.platform) : [];
@@ -312,6 +312,9 @@ export function SaleFormPage() {
       }
       if (line.productId && listings.length === 0) {
         err.platformListingId = `No ${form.platform} listing for this product`;
+      }
+      if (line.productId && product?.variants && product.variants.length > 0 && !line.variantId) {
+        err.variantId = 'Select a variant';
       }
       if (Object.keys(err).length > 0) lineErrors[line.id] = err;
     }

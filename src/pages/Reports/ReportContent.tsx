@@ -289,7 +289,7 @@ export function ReportContent({
                 },
               ]}
               rows={stockRows}
-              rowKey={(row) => row.productId}
+              rowKey={(row) => row.key}
               footerRows={[
                 {
                   cells: [

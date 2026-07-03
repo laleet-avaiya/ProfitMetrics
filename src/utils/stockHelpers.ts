@@ -1,6 +1,7 @@
 import { firestoreService } from '../services/firestore';
 import type { ProductStock } from '../types';
 import { nowUtc } from './firestoreDates';
+import { stockKey } from './variantHelpers';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -10,6 +11,8 @@ type StockPatch = Partial<
   Pick<
     ProductStock,
     | 'productName'
+    | 'variantId'
+    | 'variantLabel'
     | 'quantityOnHand'
     | 'avgPurchasePrice'
     | 'avgSellingPrice'
@@ -22,13 +25,13 @@ type StockPatch = Partial<
 /** Always include companyId so Firestore rules and legacy docs stay valid. */
 async function patchStock(
   companyId: string,
-  productId: string,
+  key: string,
   userId: string,
   patch: StockPatch
 ): Promise<void> {
   await firestoreService.stock.update(
     companyId,
-    productId,
+    key,
     {
       companyId,
       ...patch,
@@ -58,6 +61,8 @@ function buildStockRecord(
   quantityOnHand: number,
   avgPurchasePrice: number,
   avgSellingPrice: number,
+  variantId?: string,
+  variantLabel?: string,
   existing?: ProductStock
 ): ProductStock {
   const now = nowUtc();
@@ -65,9 +70,11 @@ function buildStockRecord(
   const avgPurchase = roundMoney(Math.max(0, avgPurchasePrice));
   const avgSelling = roundMoney(Math.max(0, avgSellingPrice));
   return {
-    id: productId,
+    id: stockKey(productId, variantId),
     companyId,
     productId,
+    variantId: variantId || undefined,
+    variantLabel: variantLabel || undefined,
     productName,
     quantityOnHand: qty,
     avgPurchasePrice: avgPurchase,
@@ -89,17 +96,20 @@ export async function receiveStock(
   quantity: number,
   purchasePrice: number,
   sellingPrice: number,
-  userId: string
+  userId: string,
+  variantId?: string,
+  variantLabel?: string
 ): Promise<ProductStock> {
+  const key = stockKey(productId, variantId);
   if (quantity <= 0) {
-    const existing = await firestoreService.stock.getByProductId(companyId, productId);
+    const existing = await firestoreService.stock.getByProductId(companyId, key);
     if (existing) return existing;
-    const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0);
+    const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0, variantId, variantLabel);
     await firestoreService.stock.create(companyId, empty, userId);
     return empty;
   }
 
-  const existing = await firestoreService.stock.getByProductId(companyId, productId);
+  const existing = await firestoreService.stock.getByProductId(companyId, key);
   const now = nowUtc();
 
   if (!existing) {
@@ -109,7 +119,9 @@ export async function receiveStock(
       productName,
       quantity,
       purchasePrice,
-      sellingPrice
+      sellingPrice,
+      variantId,
+      variantLabel
     );
     created.lastReceivedAt = now;
     await firestoreService.stock.create(companyId, created, userId);
@@ -130,8 +142,10 @@ export async function receiveStock(
     sellingPrice
   );
 
-  await patchStock(companyId, productId, userId, {
+  await patchStock(companyId, key, userId, {
     productName,
+    variantId: variantId || undefined,
+    variantLabel: variantLabel || existing.variantLabel || undefined,
     quantityOnHand: newQty,
     avgPurchasePrice: newAvgPurchase,
     avgSellingPrice: newAvgSelling,
@@ -158,17 +172,19 @@ export async function deductStock(
   companyId: string,
   productId: string,
   quantity: number,
-  userId: string
+  userId: string,
+  variantId?: string
 ): Promise<{ ok: true; stock: ProductStock } | { ok: false; available: number }> {
+  const key = stockKey(productId, variantId);
   if (quantity <= 0) {
-    const existing = await firestoreService.stock.getByProductId(companyId, productId);
+    const existing = await firestoreService.stock.getByProductId(companyId, key);
     if (!existing) {
-      return { ok: true, stock: buildStockRecord(companyId, productId, '', 0, 0, 0) };
+      return { ok: true, stock: buildStockRecord(companyId, productId, '', 0, 0, 0, variantId) };
     }
     return { ok: true, stock: existing };
   }
 
-  const existing = await firestoreService.stock.getByProductId(companyId, productId);
+  const existing = await firestoreService.stock.getByProductId(companyId, key);
   const available = existing?.quantityOnHand ?? 0;
 
   if (available < quantity) {
@@ -179,7 +195,7 @@ export async function deductStock(
   const avgPurchase = existing!.avgPurchasePrice;
   const updatedAt = nowUtc();
 
-  await patchStock(companyId, productId, userId, {
+  await patchStock(companyId, key, userId, {
     productName: existing!.productName,
     quantityOnHand: newQty,
     totalValue: roundMoney(newQty * avgPurchase),
@@ -204,19 +220,31 @@ export async function restoreStock(
   productId: string,
   productName: string,
   quantity: number,
-  userId: string
+  userId: string,
+  variantId?: string,
+  variantLabel?: string
 ): Promise<ProductStock> {
+  const key = stockKey(productId, variantId);
   if (quantity <= 0) {
-    const existing = await firestoreService.stock.getByProductId(companyId, productId);
+    const existing = await firestoreService.stock.getByProductId(companyId, key);
     if (existing) return existing;
-    const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0);
+    const empty = buildStockRecord(companyId, productId, productName, 0, 0, 0, variantId, variantLabel);
     await firestoreService.stock.create(companyId, empty, userId);
     return empty;
   }
 
-  const existing = await firestoreService.stock.getByProductId(companyId, productId);
+  const existing = await firestoreService.stock.getByProductId(companyId, key);
   if (!existing) {
-    const created = buildStockRecord(companyId, productId, productName, quantity, 0, 0);
+    const created = buildStockRecord(
+      companyId,
+      productId,
+      productName,
+      quantity,
+      0,
+      0,
+      variantId,
+      variantLabel
+    );
     await firestoreService.stock.create(companyId, created, userId);
     return created;
   }
@@ -224,7 +252,7 @@ export async function restoreStock(
   const newQty = existing.quantityOnHand + quantity;
   const updatedAt = nowUtc();
 
-  await patchStock(companyId, productId, userId, {
+  await patchStock(companyId, key, userId, {
     productName,
     quantityOnHand: newQty,
     totalValue: roundMoney(newQty * existing.avgPurchasePrice),
@@ -241,6 +269,7 @@ export async function restoreStock(
   };
 }
 
+/** Index stock records by their stock key (productId, or productId + variantId). */
 export function getStockMap(stockList: ProductStock[]): Map<string, ProductStock> {
-  return new Map(stockList.map((s) => [s.productId, s]));
+  return new Map(stockList.map((s) => [stockKey(s.productId, s.variantId), s]));
 }

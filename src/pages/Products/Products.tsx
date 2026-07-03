@@ -51,7 +51,11 @@ export function Products() {
   const { summary: marketplaceSummary } = useCompanyMarketplaces();
 
   const emptyData = useMemo(
-    () => ({ products: [] as Product[], stockMap: new Map<string, ProductStock>() }),
+    () => ({
+      products: [] as Product[],
+      stockMap: new Map<string, ProductStock>(),
+      stockTotals: new Map<string, number>(),
+    }),
     []
   );
 
@@ -63,14 +67,19 @@ export function Products() {
         firestoreService.products.getAll(companyId),
         firestoreService.stock.getAll(companyId),
       ]);
+      const stockTotals = new Map<string, number>();
+      for (const s of stockList) {
+        stockTotals.set(s.productId, (stockTotals.get(s.productId) ?? 0) + s.quantityOnHand);
+      }
       return {
         products: list.filter(notDeleted),
         stockMap: getStockMap(stockList),
+        stockTotals,
       };
     },
   });
 
-  const { products, stockMap } = data;
+  const { products, stockMap, stockTotals } = data;
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -189,6 +198,8 @@ export function Products() {
                     {filtered.map((product) => {
                       const avgMargin = averageListingMargin(product);
                       const stock = stockMap.get(product.id);
+                      const variantCount = product.variants?.length ?? 0;
+                      const onHand = variantCount > 0 ? stockTotals.get(product.id) ?? 0 : stock?.quantityOnHand ?? 0;
 
                       return (
                         <tr
@@ -213,7 +224,12 @@ export function Products() {
                             {product.platformListings.map((l) => l.platform).join(', ') || '—'}
                           </td>
                           <td className={`${tableCellClass} text-right tabular-nums font-medium`}>
-                            {stock?.quantityOnHand ?? 0}
+                            {onHand}
+                            {variantCount > 0 ? (
+                              <span className="ml-1.5 text-[11px] font-normal text-gray-400 dark:text-gray-500">
+                                {variantCount} var
+                              </span>
+                            ) : null}
                           </td>
                           <td className={`${tableCellClass} text-right tabular-nums`}>
                             {avgMargin != null ? (

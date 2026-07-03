@@ -4,11 +4,20 @@ import type { Sale } from '../types';
 import { SaleStatus } from '../types';
 import { deductStock, restoreStock } from './stockHelpers';
 import { getSaleLines } from './saleLines';
+import { stockKey } from './variantHelpers';
 
-/** How many units should be deducted from stock for this sale state, per product. */
-export function effectiveStockDeductions(sale: Sale): Map<string, number> {
+interface StockLineInfo {
+  productId: string;
+  variantId?: string;
+  variantLabel?: string;
+  productName: string;
+  qty: number;
+}
+
+/** How many units should be deducted from stock for this sale state, per stock key. */
+export function effectiveStockDeductions(sale: Sale): Map<string, StockLineInfo> {
   const status = normalizeSaleStatus(sale.status);
-  const map = new Map<string, number>();
+  const map = new Map<string, StockLineInfo>();
 
   if (status === SaleStatus.CANCELLED || status === SaleStatus.RETURNED) {
     return map;
@@ -18,33 +27,47 @@ export function effectiveStockDeductions(sale: Sale): Map<string, number> {
     if (!line.productId) continue;
     const qty = Math.max(0, line.quantity);
     if (qty <= 0) continue;
-    map.set(line.productId, (map.get(line.productId) ?? 0) + qty);
+    const key = stockKey(line.productId, line.variantId);
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      map.set(key, {
+        productId: line.productId,
+        variantId: line.variantId,
+        variantLabel: line.variantLabel,
+        productName: line.productName,
+        qty,
+      });
+    }
   }
 
   return map;
 }
 
-function deductionDelta(
-  previous?: Sale | null,
-  next?: Sale | null
-): Map<string, { delta: number; productName: string }> {
-  const prev = previous ? effectiveStockDeductions(previous) : new Map<string, number>();
-  const curr = next ? effectiveStockDeductions(next) : new Map<string, number>();
-  const productNames = new Map<string, string>();
+interface StockDelta extends Omit<StockLineInfo, 'qty'> {
+  delta: number;
+}
 
-  for (const line of getSaleLines(next ?? previous!)) {
-    productNames.set(line.productId, line.productName);
-  }
+function deductionDelta(previous?: Sale | null, next?: Sale | null): Map<string, StockDelta> {
+  const prev = previous ? effectiveStockDeductions(previous) : new Map<string, StockLineInfo>();
+  const curr = next ? effectiveStockDeductions(next) : new Map<string, StockLineInfo>();
 
-  const ids = new Set([...prev.keys(), ...curr.keys()]);
-  const result = new Map<string, { delta: number; productName: string }>();
+  const keys = new Set([...prev.keys(), ...curr.keys()]);
+  const result = new Map<string, StockDelta>();
 
-  for (const productId of ids) {
-    const delta = (curr.get(productId) ?? 0) - (prev.get(productId) ?? 0);
+  for (const key of keys) {
+    const currInfo = curr.get(key);
+    const prevInfo = prev.get(key);
+    const delta = (currInfo?.qty ?? 0) - (prevInfo?.qty ?? 0);
     if (delta !== 0) {
-      result.set(productId, {
+      const info = currInfo ?? prevInfo!;
+      result.set(key, {
+        productId: info.productId,
+        variantId: info.variantId,
+        variantLabel: info.variantLabel,
+        productName: info.productName,
         delta,
-        productName: productNames.get(productId) ?? 'Product',
       });
     }
   }
@@ -61,14 +84,15 @@ export async function syncSaleStock(
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
 
-  for (const [productId, { delta, productName }] of changes) {
+  for (const [, { productId, variantId, variantLabel, productName, delta }] of changes) {
+    const label = variantLabel ? `${productName} (${variantLabel})` : productName;
     if (delta > 0) {
-      const result = await deductStock(companyId, productId, delta, userId);
+      const result = await deductStock(companyId, productId, delta, userId, variantId);
       if (!result.ok) {
-        return { ok: false, available: result.available, needed: delta, productName };
+        return { ok: false, available: result.available, needed: delta, productName: label };
       }
     } else if (delta < 0) {
-      await restoreStock(companyId, productId, productName, -delta, userId);
+      await restoreStock(companyId, productId, productName, -delta, userId, variantId, variantLabel);
     }
   }
 
@@ -83,13 +107,14 @@ export async function checkSaleStock(
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
 
-  for (const [productId, { delta, productName }] of changes) {
+  for (const [key, { productName, variantLabel, delta }] of changes) {
     if (delta <= 0) continue;
 
-    const existing = await firestoreService.stock.getByProductId(companyId, productId);
+    const existing = await firestoreService.stock.getByProductId(companyId, key);
     const available = existing?.quantityOnHand ?? 0;
     if (available < delta) {
-      return { ok: false, available, needed: delta, productName };
+      const label = variantLabel ? `${productName} (${variantLabel})` : productName;
+      return { ok: false, available, needed: delta, productName: label };
     }
   }
 
@@ -127,8 +152,9 @@ export async function restoreSaleStock(
   sale: Sale,
   userId: string
 ): Promise<void> {
-  for (const [productId, qty] of effectiveStockDeductions(sale)) {
-    const line = getSaleLines(sale).find((l) => l.productId === productId);
-    await restoreStock(companyId, productId, line?.productName ?? sale.productName, qty, userId);
+  for (const [, { productId, variantId, variantLabel, productName, qty }] of effectiveStockDeductions(
+    sale
+  )) {
+    await restoreStock(companyId, productId, productName, qty, userId, variantId, variantLabel);
   }
 }

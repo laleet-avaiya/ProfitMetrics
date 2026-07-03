@@ -39,7 +39,7 @@ interface SaleLineEditorProps {
   products: Product[];
   currency: string;
   canRemove: boolean;
-  errors?: { productId?: string; platformListingId?: string };
+  errors?: { productId?: string; platformListingId?: string; variantId?: string };
   onChange: (patch: Partial<SaleLineFormState>) => void;
   onEconomicsChange: (patch: Partial<SaleFormEconomics>) => void;
   onRemove: () => void;
@@ -83,6 +83,16 @@ export function SaleLineEditor({
 
   const showListingSelect = platformListings.length > 1;
 
+  const variantOptions = useMemo(() => {
+    const variants = selectedProduct?.variants ?? [];
+    if (variants.length === 0) return [];
+    return [
+      { value: '', label: 'Select variant…' },
+      ...variants.map((v) => ({ value: v.id, label: v.label })),
+    ];
+  }, [selectedProduct]);
+  const hasVariants = variantOptions.length > 0;
+
   const linePreview = useMemo(() => {
     const e = line.economics;
     const taxOverride =
@@ -120,16 +130,30 @@ export function SaleLineEditor({
   const handleProductChange = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) {
-      onChange({ productId, platformListingId: '' });
+      onChange({ productId, platformListingId: '', variantId: '', variantLabel: '' });
       return;
     }
     const listings = getListingsForPlatform(product, platform);
     const listing = listings.length === 1 ? listings[0] : null;
     onChange({
       productId,
+      variantId: '',
+      variantLabel: '',
       platformListingId: listing?.id ?? '',
       economics: listing ? economicsFromListing(listing) : line.economics,
     });
+  };
+
+  const handleVariantChange = (variantId: string) => {
+    const variant = selectedProduct?.variants?.find((v) => v.id === variantId);
+    if (!variant) {
+      onChange({ variantId: '', variantLabel: '' });
+      return;
+    }
+    const nextEconomics = { ...line.economics };
+    if (variant.purchasePrice != null) nextEconomics.purchasePrice = variant.purchasePrice;
+    if (variant.sellingPrice != null) nextEconomics.sellingPrice = variant.sellingPrice;
+    onChange({ variantId: variant.id, variantLabel: variant.label, economics: nextEconomics });
   };
 
   const handleListingChange = (listingId: string) => {
@@ -356,6 +380,21 @@ export function SaleLineEditor({
                 />
               </div>
             ) : null}
+            {hasVariants ? (
+              <div className="mt-1">
+                <SearchableSelect
+                  options={variantOptions}
+                  value={line.variantId}
+                  onChange={(e) => handleVariantChange(e.target.value)}
+                  disabled={!selectedProduct}
+                  placeholder="Variant…"
+                  controlClassName={`${selectControlClass} h-8 px-2 ${errors?.variantId ? 'border-red-500' : ''}`}
+                />
+                {errors?.variantId ? (
+                  <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">{errors.variantId}</p>
+                ) : null}
+              </div>
+            ) : null}
           </td>
           <td className={`${tableCellClass} w-16`}>
             <input
@@ -513,6 +552,18 @@ export function SaleLineEditor({
             options={[{ value: '', label: 'Select listing…' }, ...listingOptions]}
             onChange={(e) => handleListingChange(e.target.value)}
             error={errors?.platformListingId}
+            disabled={!selectedProduct}
+            required
+          />
+        ) : null}
+
+        {hasVariants ? (
+          <Select
+            label="Variant"
+            value={line.variantId}
+            options={variantOptions}
+            onChange={(e) => handleVariantChange(e.target.value)}
+            error={errors?.variantId}
             disabled={!selectedProduct}
             required
           />

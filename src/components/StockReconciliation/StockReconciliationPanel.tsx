@@ -218,8 +218,15 @@ export function StockReconciliationPanel({
             </thead>
             <tbody className="divide-y divide-amber-200/60 dark:divide-amber-800/60">
               {mismatchRows.map((row) => (
-                <tr key={row.productId}>
-                  <td className={tableCellClass}>{row.productName}</td>
+                <tr key={row.key}>
+                  <td className={tableCellClass}>
+                    {row.productName}
+                    {row.variantLabel ? (
+                      <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        {row.variantLabel}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className={`${tableCellClass} text-right tabular-nums`}>{row.receivedQty}</td>
                   <td className={`${tableCellClass} text-right tabular-nums`}>{row.soldQty}</td>
                   <td className={`${tableCellClass} text-right tabular-nums font-medium`}>

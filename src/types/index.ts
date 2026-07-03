@@ -57,6 +57,41 @@ export interface ProductPlatformListing {
   notes?: string;
 }
 
+/** An option axis for variants, e.g. { name: "Color", values: ["Red", "Blue"] }. */
+export interface ProductVariantOption {
+  id: string;
+  /** Display name of the axis, e.g. "Color", "Size" */
+  name: string;
+  /** Allowed values for this axis, e.g. ["Red", "Blue"] */
+  values: string[];
+}
+
+/** A single selected value for one option axis on a variant. */
+export interface ProductVariantOptionValue {
+  optionId: string;
+  value: string;
+}
+
+/**
+ * A concrete variant = one combination across all option axes.
+ * Each variant tracks its own stock (keyed by productId + variantId) and can
+ * override the product's default pricing.
+ */
+export interface ProductVariant {
+  id: string;
+  /** Denormalized human label, e.g. "Red / M" */
+  label: string;
+  /** The specific value chosen for each option axis */
+  optionValues: ProductVariantOptionValue[];
+  /** Optional per-variant SKU */
+  sku?: string;
+  /** Optional per-variant purchase price override */
+  purchasePrice?: number;
+  /** Optional per-variant selling price override */
+  sellingPrice?: number;
+  status?: 'active' | 'archived';
+}
+
 export interface Product {
   id: string;
   companyId: string;
@@ -70,6 +105,10 @@ export interface Product {
   imageUrl?: string;
   status: 'active' | 'archived';
   platformListings: ProductPlatformListing[];
+  /** Option axes for variants (Color, Size…). Empty/undefined = no variants. */
+  variantOptions?: ProductVariantOption[];
+  /** Generated variant combinations. Empty/undefined = single-SKU product. */
+  variants?: ProductVariant[];
   /** Reorder point — alert when on-hand quantity is at or below this (0/undefined = no alert) */
   lowStockThreshold?: number;
   createdBy?: string;
@@ -129,6 +168,10 @@ export interface SaleLine {
   id: string;
   productId: string;
   productName: string;
+  /** Variant selected for this line, if the product has variants */
+  variantId?: string;
+  /** Denormalized variant label snapshot, e.g. "Red / M" */
+  variantLabel?: string;
   /** HSN / SAC code snapshot from the product at time of sale */
   hsnCode?: string;
   platformListingId?: string;
@@ -277,11 +320,19 @@ export interface Expense {
 
 // ─── Inventory stock (separate from Product catalog) ────────────────────────
 
-/** Per-product inventory — one record per product per company. */
+/**
+ * Per-product (or per-variant) inventory. One record per stock key, where the
+ * stock key is the productId for single-SKU products or productId + variantId
+ * for variant products. `id` equals that stock key.
+ */
 export interface ProductStock {
   id: string;
   companyId: string;
   productId: string;
+  /** Set when this record tracks a specific product variant */
+  variantId?: string;
+  /** Denormalized variant label for display, e.g. "Red / M" */
+  variantLabel?: string;
   /** Denormalized for display */
   productName: string;
   quantityOnHand: number;
@@ -314,6 +365,10 @@ export interface StockMovement {
   id: string;
   companyId: string;
   productId: string;
+  /** Set when the movement applies to a specific variant */
+  variantId?: string;
+  /** Denormalized variant label for display */
+  variantLabel?: string;
   /** Denormalized for display / history if product is renamed */
   productName: string;
   type: StockMovementType;
@@ -359,6 +414,10 @@ export interface PurchaseOrderLine {
   id: string;
   productId: string;
   productName: string;
+  /** Variant selected for this line, if the product has variants */
+  variantId?: string;
+  /** Denormalized variant label snapshot, e.g. "Red / M" */
+  variantLabel?: string;
   quantityOrdered: number;
   quantityReceived: number;
   /** Unit purchase price */
@@ -460,6 +519,10 @@ export interface InvoiceLine {
   id: string;
   productId: string;
   productName: string;
+  /** Variant selected for this line, if the product has variants */
+  variantId?: string;
+  /** Denormalized variant label snapshot, e.g. "Red / M" */
+  variantLabel?: string;
   /** HSN / SAC code snapshot from the product at time of invoicing */
   hsnCode?: string;
   quantity: number;

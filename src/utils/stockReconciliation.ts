@@ -4,6 +4,7 @@ import { InvoiceStatus, PurchaseOrderStatus } from '../types';
 import { shouldApplyInvoiceStock } from './invoiceHelpers';
 import { effectiveStockDeductions } from './saleStock';
 import { nowUtc } from './firestoreDates';
+import { stockKey } from './variantHelpers';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -13,34 +14,69 @@ function isActiveRecord<T extends { deleted?: boolean }>(record: T): boolean {
   return record.deleted !== true;
 }
 
-function addToMap(map: Map<string, number>, productId: string, qty: number): void {
-  if (!productId || qty <= 0) return;
-  map.set(productId, (map.get(productId) ?? 0) + qty);
+interface KeyMeta {
+  productId: string;
+  variantId?: string;
+  variantLabel?: string;
+  productName: string;
 }
 
-function receiptsByProduct(purchases: PurchaseOrder[]): Map<string, number> {
+function addToMap(map: Map<string, number>, key: string, qty: number): void {
+  if (!key || qty <= 0) return;
+  map.set(key, (map.get(key) ?? 0) + qty);
+}
+
+function recordMeta(meta: Map<string, KeyMeta>, info: KeyMeta): void {
+  const key = stockKey(info.productId, info.variantId);
+  if (!key) return;
+  const existing = meta.get(key);
+  if (!existing) {
+    meta.set(key, info);
+  } else {
+    // Prefer a filled-in name/label if the earlier source lacked one.
+    if (!existing.variantLabel && info.variantLabel) existing.variantLabel = info.variantLabel;
+    if ((!existing.productName || existing.productName === 'Unknown product') && info.productName) {
+      existing.productName = info.productName;
+    }
+  }
+}
+
+function receiptsByProduct(purchases: PurchaseOrder[], meta: Map<string, KeyMeta>): Map<string, number> {
   const map = new Map<string, number>();
   for (const purchase of purchases) {
     if (!isActiveRecord(purchase) || purchase.status === PurchaseOrderStatus.CANCELLED) continue;
     for (const line of purchase.lines) {
-      addToMap(map, line.productId, line.quantityReceived);
+      const key = stockKey(line.productId, line.variantId);
+      addToMap(map, key, line.quantityReceived);
+      recordMeta(meta, {
+        productId: line.productId,
+        variantId: line.variantId,
+        variantLabel: line.variantLabel,
+        productName: line.productName,
+      });
     }
   }
   return map;
 }
 
-function marketplaceOutboundByProduct(sales: Sale[]): Map<string, number> {
+function marketplaceOutboundByProduct(sales: Sale[], meta: Map<string, KeyMeta>): Map<string, number> {
   const map = new Map<string, number>();
   for (const sale of sales) {
     if (!isActiveRecord(sale)) continue;
-    for (const [productId, qty] of effectiveStockDeductions(sale)) {
-      addToMap(map, productId, qty);
+    for (const [key, info] of effectiveStockDeductions(sale)) {
+      addToMap(map, key, info.qty);
+      recordMeta(meta, {
+        productId: info.productId,
+        variantId: info.variantId,
+        variantLabel: info.variantLabel,
+        productName: info.productName,
+      });
     }
   }
   return map;
 }
 
-function invoiceOutboundByProduct(invoices: Invoice[]): Map<string, number> {
+function invoiceOutboundByProduct(invoices: Invoice[], meta: Map<string, KeyMeta>): Map<string, number> {
   const map = new Map<string, number>();
   for (const invoice of invoices) {
     if (
@@ -51,14 +87,25 @@ function invoiceOutboundByProduct(invoices: Invoice[]): Map<string, number> {
       continue;
     }
     for (const line of invoice.lines) {
-      addToMap(map, line.productId, line.quantity);
+      const key = stockKey(line.productId, line.variantId);
+      addToMap(map, key, line.quantity);
+      recordMeta(meta, {
+        productId: line.productId,
+        variantId: line.variantId,
+        variantLabel: line.variantLabel,
+        productName: line.productName,
+      });
     }
   }
   return map;
 }
 
 export interface StockReconciliationRow {
+  /** Stock key: productId, or productId + variantId */
+  key: string;
   productId: string;
+  variantId?: string;
+  variantLabel?: string;
   productName: string;
   receivedQty: number;
   marketplaceSoldQty: number;
@@ -104,47 +151,70 @@ export function computeStockReconciliation(input: {
   sales: Sale[];
   invoices: Invoice[];
 }): StockReconciliationSummary {
-  const productNames = new Map(input.products.map((p) => [p.id, p.name]));
-  const stockByProduct = new Map(input.stock.map((s) => [s.productId, s]));
-  const received = receiptsByProduct(input.purchases);
-  const marketplaceSold = marketplaceOutboundByProduct(input.sales);
-  const offlineSold = invoiceOutboundByProduct(input.invoices);
+  const meta = new Map<string, KeyMeta>();
 
-  const productIds = new Set<string>([
-    ...productNames.keys(),
+  // Seed metadata from the product catalog: one key per variant, or the
+  // product id itself for single-SKU products.
+  for (const product of input.products) {
+    if (product.variants && product.variants.length > 0) {
+      for (const variant of product.variants) {
+        recordMeta(meta, {
+          productId: product.id,
+          variantId: variant.id,
+          variantLabel: variant.label,
+          productName: product.name,
+        });
+      }
+    } else {
+      recordMeta(meta, { productId: product.id, productName: product.name });
+    }
+  }
+
+  const stockByKey = new Map(input.stock.map((s) => [stockKey(s.productId, s.variantId), s]));
+  for (const s of input.stock) {
+    recordMeta(meta, {
+      productId: s.productId,
+      variantId: s.variantId,
+      variantLabel: s.variantLabel,
+      productName: s.productName,
+    });
+  }
+
+  const received = receiptsByProduct(input.purchases, meta);
+  const marketplaceSold = marketplaceOutboundByProduct(input.sales, meta);
+  const offlineSold = invoiceOutboundByProduct(input.invoices, meta);
+
+  const keys = new Set<string>([
+    ...meta.keys(),
     ...received.keys(),
     ...marketplaceSold.keys(),
     ...offlineSold.keys(),
-    ...stockByProduct.keys(),
+    ...stockByKey.keys(),
   ]);
 
   const rows: StockReconciliationRow[] = [];
 
-  for (const productId of productIds) {
-    const receivedQty = received.get(productId) ?? 0;
-    const marketplaceSoldQty = marketplaceSold.get(productId) ?? 0;
-    const offlineSoldQty = offlineSold.get(productId) ?? 0;
+  for (const key of keys) {
+    const receivedQty = received.get(key) ?? 0;
+    const marketplaceSoldQty = marketplaceSold.get(key) ?? 0;
+    const offlineSoldQty = offlineSold.get(key) ?? 0;
     const soldQty = marketplaceSoldQty + offlineSoldQty;
     const expectedOnHand = receivedQty - soldQty;
-    const recordedOnHand = stockByProduct.get(productId)?.quantityOnHand ?? 0;
+    const recordedOnHand = stockByKey.get(key)?.quantityOnHand ?? 0;
     const difference = recordedOnHand - expectedOnHand;
     const oversoldBy = Math.max(0, soldQty - receivedQty);
+    const info = meta.get(key);
 
-    if (
-      receivedQty === 0 &&
-      soldQty === 0 &&
-      recordedOnHand === 0 &&
-      !productNames.has(productId)
-    ) {
+    if (receivedQty === 0 && soldQty === 0 && recordedOnHand === 0 && !info) {
       continue;
     }
 
     rows.push({
-      productId,
-      productName:
-        productNames.get(productId) ??
-        stockByProduct.get(productId)?.productName ??
-        'Unknown product',
+      key,
+      productId: info?.productId ?? stockByKey.get(key)?.productId ?? key,
+      variantId: info?.variantId ?? stockByKey.get(key)?.variantId,
+      variantLabel: info?.variantLabel ?? stockByKey.get(key)?.variantLabel,
+      productName: info?.productName ?? stockByKey.get(key)?.productName ?? 'Unknown product',
       receivedQty,
       marketplaceSoldQty,
       offlineSoldQty,
@@ -156,10 +226,12 @@ export function computeStockReconciliation(input: {
     });
   }
 
+  const rowLabel = (row: StockReconciliationRow) =>
+    row.variantLabel ? `${row.productName} ${row.variantLabel}` : row.productName;
+
   rows.sort(
     (a, b) =>
-      Math.abs(b.difference) - Math.abs(a.difference) ||
-      a.productName.localeCompare(b.productName)
+      Math.abs(b.difference) - Math.abs(a.difference) || rowLabel(a).localeCompare(rowLabel(b))
   );
 
   const { pendingInvoiceCount, pendingSaleCount } = countPendingStockApplications(
@@ -252,22 +324,25 @@ export async function applyStockReconciliation(
   for (const row of summary.rows) {
     const targetQty = Math.max(0, row.expectedOnHand);
     if (row.oversoldBy > 0) {
-      oversoldProducts.push(row.productName);
+      oversoldProducts.push(row.variantLabel ? `${row.productName} (${row.variantLabel})` : row.productName);
     }
 
-    const existing = await firestoreService.stock.getByProductId(companyId, row.productId);
+    const label = row.variantLabel ? `${row.productName} (${row.variantLabel})` : row.productName;
+    const existing = await firestoreService.stock.getByProductId(companyId, row.key);
 
     if (existing) {
       if (existing.quantityOnHand === targetQty) continue;
       try {
         await firestoreService.stock.update(
           companyId,
-          row.productId,
+          row.key,
           {
             companyId,
             quantityOnHand: targetQty,
             totalValue: roundMoney(targetQty * existing.avgPurchasePrice),
             productName: row.productName,
+            variantId: row.variantId || undefined,
+            variantLabel: row.variantLabel || undefined,
             updatedAt: now,
           },
           userId
@@ -275,16 +350,18 @@ export async function applyStockReconciliation(
         updatedProducts += 1;
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'Unknown error';
-        throw new Error(`Could not update stock for ${row.productName}: ${reason}`);
+        throw new Error(`Could not update stock for ${label}: ${reason}`);
       }
     } else if (targetQty > 0) {
       try {
         await firestoreService.stock.create(
           companyId,
           {
-            id: row.productId,
+            id: row.key,
             companyId,
             productId: row.productId,
+            variantId: row.variantId || undefined,
+            variantLabel: row.variantLabel || undefined,
             productName: row.productName,
             quantityOnHand: targetQty,
             avgPurchasePrice: 0,
@@ -298,7 +375,7 @@ export async function applyStockReconciliation(
         updatedProducts += 1;
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'Unknown error';
-        throw new Error(`Could not create stock for ${row.productName}: ${reason}`);
+        throw new Error(`Could not create stock for ${label}: ${reason}`);
       }
     }
   }

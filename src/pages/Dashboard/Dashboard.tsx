@@ -585,13 +585,18 @@ export function Dashboard() {
                   {lowStockAlerts.map((row) => {
                     const out = row.quantityOnHand <= 0;
                     return (
-                      <tr key={row.productId} className="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
+                      <tr key={row.variantId ? `${row.productId}__${row.variantId}` : row.productId} className="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
                         <td className="px-3 py-2">
                           <Link
                             to={`/products/${row.productId}`}
                             className="font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
                           >
                             {row.productName}
+                            {row.variantLabel ? (
+                              <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-gray-400">
+                                {row.variantLabel}
+                              </span>
+                            ) : null}
                           </Link>
                           {row.sku ? (
                             <span className="ml-2 text-xs text-gray-400 dark:text-gray-500 font-mono">

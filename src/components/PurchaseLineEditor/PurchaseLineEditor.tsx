@@ -35,6 +35,7 @@ interface PurchaseLineEditorProps {
   canRemove: boolean;
   onChange: (patch: Partial<PurchaseLineFormState>) => void;
   onProductSelect: (productId: string) => void;
+  onVariantSelect: (variantId: string) => void;
   onRemove: () => void;
   layout?: 'card' | 'table';
 }
@@ -47,6 +48,7 @@ export function PurchaseLineEditor({
   canRemove,
   onChange,
   onProductSelect,
+  onVariantSelect,
   onRemove,
   layout = 'card',
 }: PurchaseLineEditorProps) {
@@ -60,6 +62,17 @@ export function PurchaseLineEditor({
     ],
     [products]
   );
+
+  const selectedProductForVariants = products.find((p) => p.id === line.productId);
+  const variantOptions = useMemo(() => {
+    const variants = selectedProductForVariants?.variants ?? [];
+    if (variants.length === 0) return [];
+    return [
+      { value: '', label: 'Select variant…' },
+      ...variants.map((v) => ({ value: v.id, label: v.label })),
+    ];
+  }, [selectedProductForVariants]);
+  const hasVariants = variantOptions.length > 0;
 
   const lineTotal = useMemo(() => {
     const qty = parseQty(line.quantityOrdered);
@@ -97,6 +110,17 @@ export function PurchaseLineEditor({
               placeholder="Product…"
               controlClassName={`${selectControlClass} h-8 px-2`}
             />
+            {hasVariants ? (
+              <div className="mt-1">
+                <SearchableSelect
+                  options={variantOptions}
+                  value={line.variantId}
+                  onChange={(e) => onVariantSelect(e.target.value)}
+                  placeholder="Variant…"
+                  controlClassName={`${selectControlClass} h-8 px-2`}
+                />
+              </div>
+            ) : null}
           </td>
           <td className={`${tableCellClass} w-16`}>
             <input
@@ -222,6 +246,14 @@ export function PurchaseLineEditor({
           onChange={(e) => onProductSelect(e.target.value)}
           options={productOptions}
         />
+        {hasVariants ? (
+          <Select
+            label="Variant"
+            value={line.variantId}
+            onChange={(e) => onVariantSelect(e.target.value)}
+            options={variantOptions}
+          />
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Qty ordered"

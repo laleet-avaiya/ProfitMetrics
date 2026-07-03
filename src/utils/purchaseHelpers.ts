@@ -16,6 +16,8 @@ function roundMoney(value: number): number {
 export interface PurchaseLineFormState {
   id: string;
   productId: string;
+  variantId: string;
+  variantLabel: string;
   quantityOrdered: string;
   quantityReceived: string;
   purchasePrice: string;
@@ -38,6 +40,8 @@ export function emptyPurchaseLineForm(): PurchaseLineFormState {
   return {
     id: createListingId(),
     productId: '',
+    variantId: '',
+    variantLabel: '',
     quantityOrdered: '1',
     quantityReceived: '0',
     purchasePrice: '',
@@ -118,6 +122,8 @@ function lineFromForm(
     id: line.id,
     productId: line.productId,
     productName,
+    variantId: line.variantId || undefined,
+    variantLabel: line.variantLabel || undefined,
     quantityOrdered,
     quantityReceived,
     purchasePrice,
@@ -256,6 +262,8 @@ export function purchaseToForm(purchase: PurchaseOrder): PurchaseFormState {
     lines: purchase.lines.map((l) => ({
       id: l.id,
       productId: l.productId,
+      variantId: l.variantId ?? '',
+      variantLabel: l.variantLabel ?? '',
       quantityOrdered: String(l.quantityOrdered),
       quantityReceived: String(l.quantityReceived),
       purchasePrice: String(l.purchasePrice),

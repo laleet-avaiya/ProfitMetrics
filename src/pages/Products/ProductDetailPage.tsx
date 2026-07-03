@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, History, Layers, Package, Pencil, Tag, Warehouse } from 'lucide-react';
+import { ExternalLink, History, Layers, Package, Pencil, Shapes, Tag, Warehouse } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
@@ -37,11 +37,19 @@ export function ProductDetailPage() {
   });
 
   const [stock, setStock] = useState<ProductStock | null>(null);
+  const [variantStocks, setVariantStocks] = useState<ProductStock[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
 
   useEffect(() => {
     if (!company || !productId) return;
-    firestoreService.stock.getByProductId(company.id, productId).then(setStock);
+    firestoreService.stock
+      .getAll(company.id)
+      .then((all) => {
+        const forProduct = all.filter((s) => !s.deleted && s.productId === productId);
+        setStock(forProduct.find((s) => !s.variantId) ?? null);
+        setVariantStocks(forProduct.filter((s) => s.variantId));
+      })
+      .catch((err) => console.error('Failed to load stock:', err));
     firestoreService.stockMovements
       .listByProduct(company.id, productId)
       .then(setMovements)
@@ -49,6 +57,18 @@ export function ProductDetailPage() {
   }, [company, productId]);
 
   const listings = product?.platformListings ?? [];
+  const variants = product?.variants ?? [];
+  const hasVariants = variants.length > 0;
+  const variantStockByVariantId = useMemo(
+    () => new Map(variantStocks.map((s) => [s.variantId!, s])),
+    [variantStocks]
+  );
+  const totalOnHand = hasVariants
+    ? variantStocks.reduce((sum, s) => sum + s.quantityOnHand, 0)
+    : stock?.quantityOnHand ?? 0;
+  const totalStockValue = hasVariants
+    ? variantStocks.reduce((sum, s) => sum + s.totalValue, 0)
+    : stock?.totalValue ?? 0;
 
   const persistAttachments = async (attachments: NonNullable<typeof product>['attachments']) => {
     if (!company || !product || !user) return;
@@ -71,12 +91,14 @@ export function ProductDetailPage() {
     const items: DetailStatItem[] = [
       {
         label: 'Stock on hand',
-        value: String(stock?.quantityOnHand ?? 0),
-        subtext: stock
-          ? `Avg cost ${formatMoney(stock.avgPurchasePrice, currency)}`
-          : 'No stock received yet',
+        value: String(totalOnHand),
+        subtext: hasVariants
+          ? `Across ${variants.length} variant${variants.length === 1 ? '' : 's'}`
+          : stock
+            ? `Avg cost ${formatMoney(stock.avgPurchasePrice, currency)}`
+            : 'No stock received yet',
         icon: Warehouse,
-        tone: (stock?.quantityOnHand ?? 0) > 0 ? 'emerald' : 'slate',
+        tone: totalOnHand > 0 ? 'emerald' : 'slate',
       },
     ];
     if (bestPreview && bestListing) {
@@ -100,7 +122,7 @@ export function ProductDetailPage() {
       );
     }
     return items;
-  }, [stock, bestPreview, bestListing, currency]);
+  }, [stock, bestPreview, bestListing, currency, totalOnHand, hasVariants, variants.length]);
 
   return (
     <EntityDetailShell
@@ -151,7 +173,69 @@ export function ProductDetailPage() {
         <>
           <DetailStatStrip stats={statItems} />
 
-          {stock && stock.quantityOnHand > 0 ? (
+          {hasVariants ? (
+            <DetailSection
+              icon={Shapes}
+              iconTone="violet"
+              title="Variants"
+              description={`${variants.length} variant${variants.length === 1 ? '' : 's'} — stock tracked separately per variant.`}
+            >
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                      <th className="px-3 py-2">Variant</th>
+                      <th className="px-3 py-2">SKU</th>
+                      <th className="px-3 py-2 text-right">Purchase</th>
+                      <th className="px-3 py-2 text-right">Selling</th>
+                      <th className="px-3 py-2 text-right">On hand</th>
+                      <th className="px-3 py-2 text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700/70">
+                    {variants.map((variant) => {
+                      const vStock = variantStockByVariantId.get(variant.id);
+                      const purchase = variant.purchasePrice ?? listings[0]?.purchasePrice;
+                      const selling = variant.sellingPrice ?? listings[0]?.sellingPrice;
+                      return (
+                        <tr key={variant.id}>
+                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
+                            {variant.label}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                            {variant.sku ?? '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {purchase != null ? formatMoney(purchase, currency) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {selling != null ? formatMoney(selling, currency) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium">
+                            {vStock?.quantityOnHand ?? 0}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {formatMoney(vStock?.totalValue ?? 0, currency)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-gray-200 dark:border-gray-700 font-semibold">
+                      <td className="px-3 py-2" colSpan={4}>
+                        Total
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{totalOnHand}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {formatMoney(totalStockValue, currency)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </DetailSection>
+          ) : stock && stock.quantityOnHand > 0 ? (
             <DetailSection
               icon={Warehouse}
               iconTone="emerald"
@@ -195,6 +279,11 @@ export function ProductDetailPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
                           {m.reason}
+                          {m.variantLabel ? (
+                            <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-gray-400">
+                              · {m.variantLabel}
+                            </span>
+                          ) : null}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           {formatDateLocalSafe(m.createdAt)} · {m.previousQty} → {m.newQty}
