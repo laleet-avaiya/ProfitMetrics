@@ -6,6 +6,7 @@ export function printLinesFromInvoice(invoice: Invoice): SalesDocumentPrintLine[
   return invoice.lines.map((line) => ({
     productName: line.productName,
     description: 'ITEM',
+    hsnCode: line.hsnCode,
     quantity: line.quantity,
     unitPrice: line.unitPrice,
     lineSubtotal: line.lineSubtotal,
@@ -22,6 +23,7 @@ export function printLinesFromSale(sale: Sale): SalesDocumentPrintLine[] {
     return {
       productName: line.productName,
       description: 'ITEM',
+      hsnCode: line.hsnCode,
       quantity: line.quantity,
       unitPrice: line.economics.sellingPrice,
       lineSubtotal: lineTotal - taxAmount,

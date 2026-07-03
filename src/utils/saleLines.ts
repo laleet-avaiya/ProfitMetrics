@@ -138,7 +138,14 @@ export function saleShipping(sale: Sale): number {
 /** Per-line revenue and profit for product reports (group delivery allocated by revenue share). */
 export function getSaleLineMetrics(
   sale: Sale
-): Array<{ productId: string; productName: string; revenue: number; profit: number }> {
+): Array<{
+  productId: string;
+  productName: string;
+  quantity: number;
+  cogs: number;
+  revenue: number;
+  profit: number;
+}> {
   const lines = getSaleLines(sale);
   const orderProfit = sale.profit;
   const orderRevenue = sale.grossRevenue;
@@ -179,9 +186,14 @@ export function getSaleLineMetrics(
       profit = orderProfit;
     }
 
+    const qty = Math.max(1, line.quantity);
+    const cogs = roundMoney(Math.max(0, line.economics.purchasePrice) * qty);
+
     return {
       productId: line.productId,
       productName: line.productName,
+      quantity: qty,
+      cogs,
       revenue: result.grossRevenue,
       profit,
     };

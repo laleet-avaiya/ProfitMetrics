@@ -1,10 +1,11 @@
-import type { Customer, Invoice, InvoiceLine, Product } from '../types';
+import type { Customer, Invoice, InvoiceLine, Product, SaleStatus } from '../types';
 import {
   InvoiceStatus,
   PurchasePaymentStatus,
   TaxMode,
   TaxType,
 } from '../types';
+import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { derivePaymentStatus } from './purchaseHelpers';
 import { computeTaxAmount } from './profit';
 import { createListingId } from './productDefaults';
@@ -17,12 +18,23 @@ function roundMoney(value: number): number {
 export interface InvoiceLineFormState {
   id: string;
   productId: string;
+  /** Free-text item name used when the line is a custom (non-catalog) entry */
+  productName: string;
+  /** HSN / SAC code snapshot — auto-filled from the product, editable */
+  hsnCode: string;
+  /** When true, the line is a free-text item with no linked catalog product */
+  isCustom: boolean;
   quantity: string;
   unitPrice: string;
   purchasePrice: string;
   taxType: TaxType;
   taxPercentage: string;
   taxMode: TaxMode;
+}
+
+/** A line is ready to save when it has a catalog product or a custom name. */
+export function isInvoiceLineFilled(line: InvoiceLineFormState): boolean {
+  return line.isCustom ? line.productName.trim().length > 0 : Boolean(line.productId);
 }
 
 export interface InvoiceCustomerFormState {
@@ -40,6 +52,9 @@ export interface InvoiceFormState {
   invoiceDate: string;
   dueDate: string;
   status: InvoiceStatus;
+  deliveryStatus: SaleStatus;
+  trackingId: string;
+  carrier: string;
   customer: InvoiceCustomerFormState;
   notes: string;
   lines: InvoiceLineFormState[];
@@ -49,6 +64,9 @@ export function emptyInvoiceLineForm(): InvoiceLineFormState {
   return {
     id: createListingId(),
     productId: '',
+    productName: '',
+    hsnCode: '',
+    isCustom: false,
     quantity: '1',
     unitPrice: '',
     purchasePrice: '',
@@ -76,6 +94,9 @@ export function emptyInvoiceForm(): InvoiceFormState {
     invoiceDate: utcToLocalDateInput(new Date()),
     dueDate: '',
     status: InvoiceStatus.SENT,
+    deliveryStatus: normalizeSaleStatus(undefined),
+    trackingId: '',
+    carrier: '',
     customer: emptyInvoiceCustomerForm(),
     notes: '',
     lines: [emptyInvoiceLineForm()],
@@ -113,7 +134,11 @@ export function computeInvoiceLineTotals(
   };
 }
 
-function lineFromForm(line: InvoiceLineFormState, productName: string): InvoiceLine {
+function lineFromForm(
+  line: InvoiceLineFormState,
+  productName: string,
+  hsnCode?: string
+): InvoiceLine {
   const quantity = Math.max(1, parseQty(line.quantity) || 1);
   const unitPrice = parsePrice(line.unitPrice);
   const purchasePrice = parsePrice(line.purchasePrice);
@@ -127,10 +152,13 @@ function lineFromForm(line: InvoiceLineFormState, productName: string): InvoiceL
   );
   const tracksTax = line.taxType !== TaxType.NONE && taxPercentage > 0;
 
+  const resolvedHsn = (hsnCode ?? line.hsnCode ?? '').trim();
+
   return {
     id: line.id,
-    productId: line.productId,
+    productId: line.isCustom ? '' : line.productId,
     productName,
+    hsnCode: resolvedHsn || undefined,
     quantity,
     unitPrice,
     purchasePrice,
@@ -158,6 +186,9 @@ export function invoiceToForm(invoice: Invoice): InvoiceFormState {
     invoiceDate: utcToLocalDateInput(invoice.invoiceDate),
     dueDate: invoice.dueDate ? utcToLocalDateInput(invoice.dueDate) : '',
     status: invoice.status,
+    deliveryStatus: normalizeSaleStatus(invoice.deliveryStatus),
+    trackingId: invoice.trackingId ?? '',
+    carrier: invoice.carrier ?? '',
     customer: {
       mode: 'existing',
       customerId: invoice.customerId ?? '',
@@ -172,6 +203,9 @@ export function invoiceToForm(invoice: Invoice): InvoiceFormState {
     lines: invoice.lines.map((l) => ({
       id: l.id,
       productId: l.productId,
+      productName: l.productName ?? '',
+      hsnCode: l.hsnCode ?? '',
+      isCustom: !l.productId,
       quantity: String(l.quantity),
       unitPrice: String(l.unitPrice),
       purchasePrice: String(l.purchasePrice),
@@ -192,10 +226,11 @@ export function buildInvoiceFromForm(
 ): Invoice {
   const now = nowUtc();
   const lines = form.lines
-    .filter((l) => l.productId)
+    .filter(isInvoiceLineFilled)
     .map((l) => {
+      if (l.isCustom) return lineFromForm(l, l.productName.trim() || 'Custom item');
       const product = products.find((p) => p.id === l.productId);
-      return lineFromForm(l, product?.name ?? 'Unknown product');
+      return lineFromForm(l, product?.name ?? 'Unknown product', product?.hsnCode ?? l.hsnCode);
     });
 
   const subtotal = roundMoney(lines.reduce((s, l) => s + l.lineSubtotal, 0));
@@ -226,6 +261,9 @@ export function buildInvoiceFromForm(
     customerName: customer?.name,
     status,
     paymentStatus,
+    deliveryStatus: normalizeSaleStatus(form.deliveryStatus),
+    trackingId: form.trackingId.trim() || undefined,
+    carrier: form.carrier.trim() || undefined,
     lines,
     subtotal,
     taxAmount,
@@ -243,10 +281,11 @@ export function buildInvoiceFromForm(
 
 export function computeInvoicePreview(form: InvoiceFormState, products: Product[]) {
   const lines = form.lines
-    .filter((l) => l.productId)
+    .filter(isInvoiceLineFilled)
     .map((l) => {
+      if (l.isCustom) return lineFromForm(l, l.productName.trim() || 'Custom item');
       const product = products.find((p) => p.id === l.productId);
-      return lineFromForm(l, product?.name ?? '');
+      return lineFromForm(l, product?.name ?? '', product?.hsnCode ?? l.hsnCode);
     });
 
   const subtotal = roundMoney(lines.reduce((s, l) => s + l.lineSubtotal, 0));

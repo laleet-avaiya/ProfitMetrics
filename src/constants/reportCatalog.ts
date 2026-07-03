@@ -1,5 +1,6 @@
 export const ReportId = {
   PROFIT_LOSS: 'profit-loss',
+  GROSS_PROFIT: 'gross-profit',
   SALES_BY_PRODUCT: 'sales-by-product',
   SALES_BY_PLATFORM: 'sales-by-platform',
   EXPENSE_BREAKDOWN: 'expense-breakdown',
@@ -7,6 +8,7 @@ export const ReportId = {
   TREND: 'trend',
   STOCK_ON_HAND: 'stock-on-hand',
   PURCHASE_ORDERS: 'purchase-orders',
+  PURCHASE_TREND: 'purchase-trend',
 } as const;
 
 export type ReportId = (typeof ReportId)[keyof typeof ReportId];
@@ -24,9 +26,14 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     description: 'Online sales, offline invoices, order profit, operating expenses, and net profit.',
   },
   {
+    id: ReportId.GROSS_PROFIT,
+    title: 'Gross profit',
+    description: 'Revenue minus cost of goods sold (COGS) and gross margin, split by online and offline.',
+  },
+  {
     id: ReportId.SALES_BY_PRODUCT,
-    title: 'Sales by product',
-    description: 'Revenue, profit, and margin per product from online orders and offline invoices.',
+    title: 'Product-wise profit',
+    description: 'Units, COGS, revenue, profit, and margin per product from online orders and offline invoices.',
   },
   {
     id: ReportId.SALES_BY_PLATFORM,
@@ -57,6 +64,11 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     id: ReportId.PURCHASE_ORDERS,
     title: 'Purchase orders',
     description: 'PO totals, receipt status, and payment status (paid, partial, unpaid) by order date.',
+  },
+  {
+    id: ReportId.PURCHASE_TREND,
+    title: 'Purchases (month / year)',
+    description: 'Purchase totals, paid, and balance due grouped by month or year.',
   },
 ];
 

@@ -77,6 +77,7 @@ export async function applyInvoiceStock(
   }
 
   for (const line of invoice.lines) {
+    if (!line.productId) continue;
     const result = await deductStock(companyId, line.productId, line.quantity, userId);
     if (!result.ok) {
       return { ok: false, productName: line.productName, available: result.available, needed: line.quantity };
@@ -121,6 +122,7 @@ export async function restoreInvoiceStock(
   if (!invoice.stockApplied) return;
 
   for (const line of invoice.lines) {
+    if (!line.productId) continue;
     await restoreStock(companyId, line.productId, line.productName, line.quantity, userId);
   }
 

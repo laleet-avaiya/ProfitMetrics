@@ -61,6 +61,9 @@ export function ProfessionalInvoicePrint({
     company.bankAccountNumber ||
     company.bankSwift;
 
+  const showHsn = lines.some((line) => Boolean(line.hsnCode));
+  const totalLabelColSpan = showHsn ? 6 : 5;
+
   const tableTotals = lines.reduce(
     (acc, line) => ({
       taxable: acc.taxable + line.lineSubtotal,
@@ -114,6 +117,9 @@ export function ProfessionalInvoicePrint({
             <tr className="bg-gray-100">
               <th className="border border-black px-1 py-1.5 text-center w-8">#</th>
               <th className="border border-black px-1 py-1.5 text-left min-w-[120px]">Part / item</th>
+              {showHsn ? (
+                <th className="border border-black px-1 py-1.5 text-left w-16">HSN / SAC</th>
+              ) : null}
               <th className="border border-black px-1 py-1.5 text-left w-16">Type</th>
               <th className="border border-black px-1 py-1.5 text-right w-12">Qty</th>
               <th className="border border-black px-1 py-1.5 text-right whitespace-nowrap">
@@ -135,6 +141,11 @@ export function ProfessionalInvoicePrint({
               <tr key={`${line.productName}-${index}`}>
                 <td className="border border-black px-1 py-1 text-center tabular-nums">{index + 1}</td>
                 <td className="border border-black px-1 py-1">{line.productName}</td>
+                {showHsn ? (
+                  <td className="border border-black px-1 py-1 tabular-nums">
+                    {line.hsnCode ?? '—'}
+                  </td>
+                ) : null}
                 <td className="border border-black px-1 py-1 uppercase text-[9px]">
                   {line.description ?? 'ITEM'}
                 </td>
@@ -154,7 +165,7 @@ export function ProfessionalInvoicePrint({
               </tr>
             ))}
             <tr className="font-bold bg-gray-50">
-              <td colSpan={5} className="border border-black px-1 py-1.5 text-right uppercase">
+              <td colSpan={totalLabelColSpan} className="border border-black px-1 py-1.5 text-right uppercase">
                 Total
               </td>
               <td className="border border-black px-1 py-1.5 text-right tabular-nums">

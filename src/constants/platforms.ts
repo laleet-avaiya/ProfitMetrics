@@ -10,6 +10,9 @@ export const DEFAULT_MARKETPLACES = [
   'Etsy',
   'Walmart',
   'Daraz',
+  'WhatsApp',
+  'Instagram',
+  'Facebook',
 ] as const;
 
 /** Reserved option in product platform listings for free-text names. */

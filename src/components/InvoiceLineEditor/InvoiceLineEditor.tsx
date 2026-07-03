@@ -65,6 +65,15 @@ export function InvoiceLineEditor({
   }, [line.quantity, line.unitPrice]);
 
   const selectedProduct = products.find((p) => p.id === line.productId);
+  const filled = line.isCustom ? line.productName.trim().length > 0 : Boolean(line.productId);
+
+  const setMode = (isCustom: boolean) => {
+    if (isCustom === line.isCustom) return;
+    onChange(isCustom ? { isCustom: true, productId: '' } : { isCustom: false, productName: '' });
+  };
+
+  const modeToggleClass =
+    'text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline';
 
   const taxFields =
     line.taxType !== TaxType.NONE ? (
@@ -87,13 +96,30 @@ export function InvoiceLineEditor({
         <tr className="border-t border-gray-100 dark:border-gray-700/80 hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
           <td className={`${tableCellClass} w-8 text-xs text-gray-500 tabular-nums`}>{index + 1}</td>
           <td className={`${tableCellClass} min-w-[10rem] max-w-[14rem]`}>
-            <SearchableSelect
-              options={productOptions}
-              value={line.productId}
-              onChange={(e) => onProductSelect(e.target.value)}
-              placeholder="Product…"
-              controlClassName={`${selectControlClass} h-8 px-2`}
-            />
+            {line.isCustom ? (
+              <input
+                type="text"
+                value={line.productName}
+                onChange={(e) => onChange({ productName: e.target.value })}
+                placeholder="Custom item name…"
+                className={tableInputControlClass}
+              />
+            ) : (
+              <SearchableSelect
+                options={productOptions}
+                value={line.productId}
+                onChange={(e) => onProductSelect(e.target.value)}
+                placeholder="Product…"
+                controlClassName={`${selectControlClass} h-8 px-2`}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => setMode(!line.isCustom)}
+              className={`mt-1 ${modeToggleClass}`}
+            >
+              {line.isCustom ? 'Pick from catalog' : 'Enter custom item'}
+            </button>
           </td>
           <td className={`${tableCellClass} w-16`}>
             <input
@@ -126,7 +152,7 @@ export function InvoiceLineEditor({
             />
           </td>
           <td className={`${tableCellClass} w-24 text-right text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300`}>
-            {line.productId ? formatMoney(lineTotal, currency) : '—'}
+            {filled ? formatMoney(lineTotal, currency) : '—'}
           </td>
           <td className={`${tableCellClass} w-20`}>
             <div className="flex items-center justify-end gap-0.5">
@@ -147,9 +173,15 @@ export function InvoiceLineEditor({
           <td colSpan={7} className="px-3 pb-3 pt-1">
             <div className="rounded-lg border border-gray-200/80 dark:border-gray-700/70 bg-white dark:bg-gray-800/40 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
-                Tax details
+                Item &amp; tax details
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-start">
+                <Input
+                  label="HSN / SAC code"
+                  value={line.hsnCode}
+                  onChange={(e) => onChange({ hsnCode: e.target.value })}
+                  placeholder="Optional"
+                />
                 <Select
                   label="Tax type"
                   value={line.taxType}
@@ -192,9 +224,11 @@ export function InvoiceLineEditor({
             Line {index + 1}
           </p>
           <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {selectedProduct?.name ?? 'Choose a product'}
+            {line.isCustom
+              ? line.productName.trim() || 'Custom item'
+              : (selectedProduct?.name ?? 'Choose a product')}
           </p>
-          {line.productId ? (
+          {filled ? (
             <p className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400 mt-0.5">
               {formatMoney(lineTotal, currency)} line total
             </p>
@@ -213,12 +247,33 @@ export function InvoiceLineEditor({
       </div>
 
       <div className="p-3 space-y-3">
-        <Select
-          label="Product"
-          value={line.productId}
-          onChange={(e) => onProductSelect(e.target.value)}
-          options={productOptions}
-        />
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              {line.isCustom ? 'Custom item' : 'Product'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMode(!line.isCustom)}
+              className={modeToggleClass}
+            >
+              {line.isCustom ? 'Pick from catalog' : 'Enter custom item'}
+            </button>
+          </div>
+          {line.isCustom ? (
+            <Input
+              value={line.productName}
+              onChange={(e) => onChange({ productName: e.target.value })}
+              placeholder="e.g. Custom tailoring service"
+            />
+          ) : (
+            <Select
+              value={line.productId}
+              onChange={(e) => onProductSelect(e.target.value)}
+              options={productOptions}
+            />
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Qty"
@@ -248,6 +303,12 @@ export function InvoiceLineEditor({
             value={line.taxType}
             onChange={(e) => onChange({ taxType: e.target.value as TaxType })}
             options={taxTypeOptions}
+          />
+          <Input
+            label="HSN / SAC code"
+            value={line.hsnCode}
+            onChange={(e) => onChange({ hsnCode: e.target.value })}
+            placeholder="Optional"
           />
         </div>
         {taxFields}

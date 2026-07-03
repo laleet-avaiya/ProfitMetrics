@@ -64,10 +64,14 @@ export interface Product {
   sku?: string;
   description?: string;
   category?: string;
+  /** HSN / SAC tax classification code (GST) — optional, printed on invoices */
+  hsnCode?: string;
   /** Base64 or URL — optional */
   imageUrl?: string;
   status: 'active' | 'archived';
   platformListings: ProductPlatformListing[];
+  /** Reorder point — alert when on-hand quantity is at or below this (0/undefined = no alert) */
+  lowStockThreshold?: number;
   createdBy?: string;
   updatedBy?: string;
   createdAt: Date;
@@ -125,6 +129,8 @@ export interface SaleLine {
   id: string;
   productId: string;
   productName: string;
+  /** HSN / SAC code snapshot from the product at time of sale */
+  hsnCode?: string;
   platformListingId?: string;
   quantity: number;
   /** Per-line economics snapshot */
@@ -295,6 +301,38 @@ export interface ProductStock {
   deletedBy?: string;
 }
 
+/** Kinds of manual/automatic inventory movements recorded for audit. */
+export const StockMovementType = {
+  /** Manual on-hand correction from the product screen */
+  ADJUSTMENT: 'adjustment',
+} as const;
+
+export type StockMovementType = (typeof StockMovementType)[keyof typeof StockMovementType];
+
+/** Append-only log of a stock quantity change — one record per adjustment. */
+export interface StockMovement {
+  id: string;
+  companyId: string;
+  productId: string;
+  /** Denormalized for display / history if product is renamed */
+  productName: string;
+  type: StockMovementType;
+  /** Signed change in units (newQty − previousQty) */
+  delta: number;
+  previousQty: number;
+  newQty: number;
+  /** Why the adjustment was made (recount, damage, correction…) */
+  reason: string;
+  note?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deleted?: boolean;
+  deletedAt?: Date;
+  deletedBy?: string;
+}
+
 // ─── Purchase orders ─────────────────────────────────────────────────────────
 
 export const PurchaseOrderStatus = {
@@ -422,6 +460,8 @@ export interface InvoiceLine {
   id: string;
   productId: string;
   productName: string;
+  /** HSN / SAC code snapshot from the product at time of invoicing */
+  hsnCode?: string;
   quantity: number;
   /** Unit selling price */
   unitPrice: number;
@@ -445,6 +485,12 @@ export interface Invoice {
   customerName?: string;
   status: InvoiceStatus;
   paymentStatus: PurchasePaymentStatus;
+  /** Delivery / fulfillment status: pending · shipped · delivered · returned · cancelled */
+  deliveryStatus?: SaleStatus;
+  /** Carrier / courier tracking number for delivery */
+  trackingId?: string;
+  /** Carrier / courier name (e.g. Aramex, DHL) */
+  carrier?: string;
   lines: InvoiceLine[];
   subtotal: number;
   taxAmount: number;

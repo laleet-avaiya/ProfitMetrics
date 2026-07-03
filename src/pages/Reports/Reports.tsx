@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart3,
+  CalendarRange,
   ClipboardList,
+  Coins,
   Download,
   Layers,
   LineChart,
@@ -35,6 +37,7 @@ const DEFAULT_REPORT_ID = ReportId.PROFIT_LOSS;
 
 const REPORT_ICONS: Record<ReportIdType, LucideIcon> = {
   [ReportId.PROFIT_LOSS]: BarChart3,
+  [ReportId.GROSS_PROFIT]: Coins,
   [ReportId.SALES_BY_PRODUCT]: Layers,
   [ReportId.SALES_BY_PLATFORM]: Store,
   [ReportId.EXPENSE_BREAKDOWN]: PieChart,
@@ -42,10 +45,12 @@ const REPORT_ICONS: Record<ReportIdType, LucideIcon> = {
   [ReportId.TREND]: LineChart,
   [ReportId.STOCK_ON_HAND]: Warehouse,
   [ReportId.PURCHASE_ORDERS]: ClipboardList,
+  [ReportId.PURCHASE_TREND]: CalendarRange,
 };
 
 const REPORT_TAB_LABELS: Record<ReportIdType, string> = {
   [ReportId.PROFIT_LOSS]: 'P&L',
+  [ReportId.GROSS_PROFIT]: 'Gross profit',
   [ReportId.SALES_BY_PRODUCT]: 'By product',
   [ReportId.SALES_BY_PLATFORM]: 'By channel',
   [ReportId.EXPENSE_BREAKDOWN]: 'Expenses',
@@ -53,6 +58,7 @@ const REPORT_TAB_LABELS: Record<ReportIdType, string> = {
   [ReportId.TREND]: 'Trend',
   [ReportId.STOCK_ON_HAND]: 'Stock',
   [ReportId.PURCHASE_ORDERS]: 'Purchases',
+  [ReportId.PURCHASE_TREND]: 'Purchase trend',
 };
 
 export function Reports() {

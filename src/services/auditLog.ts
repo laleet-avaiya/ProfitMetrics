@@ -16,6 +16,7 @@ export type AuditAction =
   | 'vendor.deleted'
   | 'purchase.deleted'
   | 'stock.deleted'
+  | 'stock.adjusted'
   | 'customer.deleted'
   | 'payment.deleted'
   | 'team.member_removed'

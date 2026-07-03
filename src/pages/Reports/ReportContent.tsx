@@ -17,8 +17,10 @@ import {
   computeByExpenseCategory,
   computeByPlatform,
   computeByProduct,
+  computeGrossProfit,
   computePurchaseReportRows,
   computePurchaseReportSummary,
+  computePurchaseTrend,
   computeStockReport,
   computeStockSummary,
   computeTaxLedger,
@@ -26,6 +28,7 @@ import {
   filterOperatingExpenses,
   buildProfitLossStatement,
   type ProfitLossBasis,
+  type PurchaseTrendGranularity,
   type TrendGranularity,
 } from '../../utils/reports';
 
@@ -139,6 +142,8 @@ export function ReportContent({
   onPlBasisChange,
 }: ReportContentProps) {
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('daily');
+  const [purchaseTrendGranularity, setPurchaseTrendGranularity] =
+    useState<PurchaseTrendGranularity>('monthly');
   const isStockReport = reportId === ReportId.STOCK_ON_HAND;
 
   const skuMap = useMemo(
@@ -156,6 +161,10 @@ export function ReportContent({
 
   const byProduct = useMemo(
     () => computeByProduct(filteredSales, filteredInvoices),
+    [filteredSales, filteredInvoices]
+  );
+  const grossProfit = useMemo(
+    () => computeGrossProfit(filteredSales, filteredInvoices),
     [filteredSales, filteredInvoices]
   );
   const byPlatform = useMemo(
@@ -182,6 +191,10 @@ export function ReportContent({
   const purchaseSummary = useMemo(
     () => computePurchaseReportSummary(filteredPurchases),
     [filteredPurchases]
+  );
+  const purchaseTrend = useMemo(
+    () => computePurchaseTrend(filteredPurchases, purchaseTrendGranularity),
+    [filteredPurchases, purchaseTrendGranularity]
   );
 
   const operatingExpenseTotal = useMemo(
@@ -400,16 +413,166 @@ export function ReportContent({
       );
     }
 
+    case ReportId.GROSS_PROFIT: {
+      const grossLines = [
+        { label: 'Revenue — online sales', value: grossProfit.onlineRevenue, emphasize: false },
+        ...(grossProfit.offlineRevenue > 0
+          ? [{ label: 'Revenue — offline invoices', value: grossProfit.offlineRevenue, emphasize: false }]
+          : []),
+        { label: 'Gross revenue', value: grossProfit.grossRevenue, emphasize: true },
+        { label: 'COGS — online sales', value: -grossProfit.onlineCogs, emphasize: false },
+        ...(grossProfit.offlineCogs > 0
+          ? [{ label: 'COGS — offline invoices', value: -grossProfit.offlineCogs, emphasize: false }]
+          : []),
+        { label: 'Total COGS', value: -grossProfit.totalCogs, emphasize: true },
+        { label: 'Gross profit', value: grossProfit.grossProfit, emphasize: true },
+      ];
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Gross revenue', value: formatMoney(grossProfit.grossRevenue, currency) },
+              { label: 'Cost of goods (COGS)', value: formatMoney(grossProfit.totalCogs, currency) },
+              {
+                label: 'Gross profit',
+                value: formatMoney(grossProfit.grossProfit, currency),
+                valueClass: profitClass(grossProfit.grossProfit),
+              },
+              {
+                label: 'Gross margin',
+                value: formatPercent(grossProfit.grossMarginPercent),
+                valueClass: profitClass(grossProfit.grossProfit),
+              },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
+                <p
+                  className={`mt-0.5 text-base font-semibold tabular-nums ${stat.valueClass ?? 'text-gray-900 dark:text-white'}`}
+                >
+                  {stat.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <ReportSection
+            title="Gross profit"
+            description="Revenue minus cost of goods sold — before shipping, platform fees, tax, and operating expenses."
+          >
+            <SpreadsheetTable
+              columns={[
+                {
+                  key: 'label',
+                  header: 'Line item',
+                  render: (line) => (
+                    <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
+                  ),
+                },
+                {
+                  key: 'amount',
+                  header: 'Amount',
+                  align: 'right',
+                  className: 'font-medium',
+                  render: (line) => (
+                    <span className={profitClass(line.value)}>
+                      {line.value < 0 ? '−' : ''}
+                      {formatMoney(Math.abs(line.value), currency)}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={grossLines}
+              rowKey={(line) => line.label}
+              footerRows={[
+                {
+                  cells: ['Gross margin', formatPercent(grossProfit.grossMarginPercent)],
+                },
+              ]}
+            />
+          </ReportSection>
+
+          {grossProfit.offlineRevenue > 0 ? (
+            <ReportSection
+              title="Gross profit by channel"
+              description="Online orders vs offline invoices."
+            >
+              <SpreadsheetTable
+                columns={[
+                  { key: 'channel', header: 'Channel', render: (row) => row.channel },
+                  {
+                    key: 'revenue',
+                    header: 'Revenue',
+                    align: 'right',
+                    render: (row) => formatMoney(row.revenue, currency),
+                  },
+                  {
+                    key: 'cogs',
+                    header: 'COGS',
+                    align: 'right',
+                    render: (row) => formatMoney(row.cogs, currency),
+                  },
+                  {
+                    key: 'gp',
+                    header: 'Gross profit',
+                    align: 'right',
+                    className: 'font-medium',
+                    render: (row) => (
+                      <span className={profitClass(row.gp)}>{formatMoney(row.gp, currency)}</span>
+                    ),
+                  },
+                  {
+                    key: 'margin',
+                    header: 'Margin',
+                    align: 'right',
+                    render: (row) => (
+                      <span className={profitClass(row.gp)}>{formatPercent(row.margin)}</span>
+                    ),
+                  },
+                ]}
+                rows={[
+                  {
+                    channel: 'Online sales',
+                    revenue: grossProfit.onlineRevenue,
+                    cogs: grossProfit.onlineCogs,
+                    gp: grossProfit.onlineGrossProfit,
+                    margin: grossProfit.onlineMarginPercent,
+                  },
+                  {
+                    channel: 'Offline invoices',
+                    revenue: grossProfit.offlineRevenue,
+                    cogs: grossProfit.offlineCogs,
+                    gp: grossProfit.offlineGrossProfit,
+                    margin: grossProfit.offlineMarginPercent,
+                  },
+                ]}
+                rowKey={(row) => row.channel}
+              />
+            </ReportSection>
+          ) : null}
+        </div>
+      );
+    }
+
     case ReportId.SALES_BY_PRODUCT:
       return (
         <ReportSection
-          title="Sales by product"
-          description="Online orders and offline invoice line items combined."
+          title="Product-wise profit"
+          description="Units, cost, revenue, and profit per product — online orders and offline invoices combined."
         >
           <SpreadsheetTable
             columns={[
               { key: 'product', header: 'Product', render: (row) => row.productName },
-              { key: 'lines', header: 'Lines', align: 'right', render: (row) => row.saleCount },
+              { key: 'units', header: 'Units', align: 'right', render: (row) => row.unitsSold },
+              {
+                key: 'cogs',
+                header: 'COGS',
+                align: 'right',
+                render: (row) => formatMoney(row.cogs, currency),
+              },
               {
                 key: 'revenue',
                 header: 'Revenue',
@@ -751,6 +914,92 @@ export function ReportContent({
           </ReportSection>
         </div>
       );
+
+    case ReportId.PURCHASE_TREND: {
+      const purchaseTrendTotals = purchaseTrend.reduce(
+        (acc, row) => ({
+          count: acc.count + row.count,
+          totalValue: acc.totalValue + row.totalValue,
+          totalPaid: acc.totalPaid + row.totalPaid,
+          balanceDue: acc.balanceDue + row.balanceDue,
+        }),
+        { count: 0, totalValue: 0, totalPaid: 0, balanceDue: 0 }
+      );
+
+      return (
+        <ReportSection
+          title="Purchases by period"
+          description="Purchase orders grouped by month or year (by purchase date). Excludes cancelled POs."
+        >
+          <div className="flex gap-2 mb-4">
+            {(['monthly', 'yearly'] as PurchaseTrendGranularity[]).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setPurchaseTrendGranularity(g)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  purchaseTrendGranularity === g
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {g === 'monthly' ? 'Monthly' : 'Yearly'}
+              </button>
+            ))}
+          </div>
+
+          {purchaseTrend.length === 0 ? (
+            <EmptyReport message="No purchase orders in this period." />
+          ) : (
+            <SpreadsheetTable
+              columns={[
+                { key: 'period', header: 'Period', render: (row) => row.label },
+                { key: 'count', header: 'POs', align: 'right', render: (row) => row.count },
+                {
+                  key: 'total',
+                  header: 'Total value',
+                  align: 'right',
+                  className: 'font-medium',
+                  render: (row) => formatMoney(row.totalValue, currency),
+                },
+                {
+                  key: 'paid',
+                  header: 'Paid',
+                  align: 'right',
+                  render: (row) => formatMoney(row.totalPaid, currency),
+                },
+                {
+                  key: 'balance',
+                  header: 'Balance due',
+                  align: 'right',
+                  render: (row) =>
+                    row.balanceDue > 0 ? (
+                      <span className="text-rose-600 dark:text-rose-400">
+                        {formatMoney(row.balanceDue, currency)}
+                      </span>
+                    ) : (
+                      '—'
+                    ),
+                },
+              ]}
+              rows={purchaseTrend}
+              rowKey={(row) => row.key}
+              footerRows={[
+                {
+                  cells: [
+                    `${purchaseTrendTotals.count} POs`,
+                    '',
+                    formatMoney(purchaseTrendTotals.totalValue, currency),
+                    formatMoney(purchaseTrendTotals.totalPaid, currency),
+                    formatMoney(purchaseTrendTotals.balanceDue, currency),
+                  ],
+                },
+              ]}
+            />
+          )}
+        </ReportSection>
+      );
+    }
 
     case ReportId.TREND:
       return (

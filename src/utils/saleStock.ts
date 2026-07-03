@@ -15,6 +15,7 @@ export function effectiveStockDeductions(sale: Sale): Map<string, number> {
   }
 
   for (const line of getSaleLines(sale)) {
+    if (!line.productId) continue;
     const qty = Math.max(0, line.quantity);
     if (qty <= 0) continue;
     map.set(line.productId, (map.get(line.productId) ?? 0) + qty);

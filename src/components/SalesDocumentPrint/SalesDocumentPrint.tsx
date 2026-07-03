@@ -6,6 +6,7 @@ import { salesKindLabel } from '../../constants/salesChannels';
 export interface SalesDocumentPrintLine {
   productName: string;
   description?: string;
+  hsnCode?: string;
   quantity: number;
   unitPrice: number;
   lineSubtotal: number;
@@ -53,6 +54,7 @@ export function SalesDocumentPrint({
   currency,
 }: SalesDocumentPrintProps) {
   const docTitle = kind === 'offline' ? 'Tax Invoice' : 'Sales Invoice';
+  const showHsn = lines.some((line) => Boolean(line.hsnCode));
 
   return (
     <div className="print-page mx-auto max-w-[210mm] bg-white text-gray-900 p-6 sm:p-8 print:p-0 print:max-w-none">
@@ -92,6 +94,9 @@ export function SalesDocumentPrint({
           <thead>
             <tr className="bg-gray-100">
               <th className="border border-gray-300 px-2 py-2 text-left">Product</th>
+              {showHsn ? (
+                <th className="border border-gray-300 px-2 py-2 text-left">HSN / SAC</th>
+              ) : null}
               <th className="border border-gray-300 px-2 py-2 text-right">Qty</th>
               <th className="border border-gray-300 px-2 py-2 text-right">Unit price</th>
               <th className="border border-gray-300 px-2 py-2 text-right invoice-print-th-vat-pct">
@@ -105,6 +110,11 @@ export function SalesDocumentPrint({
             {lines.map((line, index) => (
               <tr key={`${line.productName}-${index}`} className="invoice-item-row">
                 <td className="border border-gray-300 px-2 py-2">{line.productName}</td>
+                {showHsn ? (
+                  <td className="border border-gray-300 px-2 py-2 tabular-nums">
+                    {line.hsnCode ?? '—'}
+                  </td>
+                ) : null}
                 <td className="border border-gray-300 px-2 py-2 text-right tabular-nums">
                   {line.quantity}
                 </td>

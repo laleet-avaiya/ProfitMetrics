@@ -338,7 +338,16 @@ export function SaleFormPage() {
     setSaving(true);
     try {
       const productNames = new Map(formProducts.map((p) => [p.id, p.name]));
-      const payload = buildSaleFromForm(form, company.id, productNames, sale ?? undefined);
+      const productHsnCodes = new Map(
+        formProducts.filter((p) => p.hsnCode).map((p) => [p.id, p.hsnCode as string])
+      );
+      const payload = buildSaleFromForm(
+        form,
+        company.id,
+        productNames,
+        sale ?? undefined,
+        productHsnCodes
+      );
 
       if (isEditing && sale) {
         const stockCheck = await checkSaleStock(company.id, payload, sale);

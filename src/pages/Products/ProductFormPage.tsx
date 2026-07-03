@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Layers, Package, Paperclip } from 'lucide-react';
+import { Layers, Package, Paperclip, Warehouse } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
 import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
 import { Input } from '../../components/Input/Input';
+import { Select } from '../../components/Select/Select';
 import { Textarea } from '../../components/Textarea/Textarea';
 import { PlatformListingEditor } from '../../components/PlatformListingEditor/PlatformListingEditor';
 import { FormTabs } from '../../components/ui/FormTabs';
@@ -28,30 +29,47 @@ import { isConfiguredMarketplace } from '../../constants/platforms';
 import { useNotification } from '../../hooks/useNotification';
 import { createListingId, normalizeListings } from '../../utils/productDefaults';
 import { firestoreService } from '../../services/firestore';
-import type { Product, ProductPlatformListing } from '../../types';
+import type { Product, ProductPlatformListing, ProductStock } from '../../types';
 import type { EntityAttachment } from '../../models/attachment';
 import { finalizePendingAttachments } from '../../utils/entityAttachments';
 import { nowUtc } from '../../utils/firestoreDates';
 import { formatMarketplaceSummary } from '../../constants/platforms';
+import { adjustProductStock } from '../../utils/stockAdjustment';
+import { formatMoney } from '../../utils/profit';
+
+const STOCK_ADJUST_REASONS = [
+  { value: '', label: 'Select a reason…' },
+  { value: 'Recount', label: 'Recount / correction' },
+  { value: 'Damaged', label: 'Damaged' },
+  { value: 'Lost or stolen', label: 'Lost or stolen' },
+  { value: 'Returned to supplier', label: 'Returned to supplier' },
+  { value: 'Found stock', label: 'Found stock' },
+  { value: 'Opening balance', label: 'Opening balance' },
+  { value: 'Other', label: 'Other' },
+];
 
 interface FormState {
   name: string;
   sku: string;
+  hsnCode: string;
   description: string;
   category: string;
   status: Product['status'];
+  lowStockThreshold: string;
   platformListings: ProductPlatformListing[];
 }
 
-type ProductFormTab = 'details' | 'platforms' | 'documents';
+type ProductFormTab = 'details' | 'platforms' | 'inventory' | 'documents';
 
 function emptyForm(): FormState {
   return {
     name: '',
     sku: '',
+    hsnCode: '',
     description: '',
     category: '',
     status: 'active',
+    lowStockThreshold: '',
     platformListings: [],
   };
 }
@@ -60,11 +78,21 @@ function productToForm(product: Product): FormState {
   return {
     name: product.name,
     sku: product.sku ?? '',
+    hsnCode: product.hsnCode ?? '',
     description: product.description ?? '',
     category: product.category ?? '',
     status: product.status,
+    lowStockThreshold:
+      product.lowStockThreshold && product.lowStockThreshold > 0
+        ? String(product.lowStockThreshold)
+        : '',
     platformListings: normalizeListings(product.platformListings ?? []),
   };
+}
+
+function parseThreshold(value: string): number | undefined {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 export function ProductFormPage() {
@@ -80,9 +108,13 @@ export function ProductFormPage() {
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<ProductFormTab>('details');
-  const [errors, setErrors] = useState<{ name?: string; listings?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; listings?: string; stock?: string }>({});
   const [attachments, setAttachments] = useState<EntityAttachment[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [stock, setStock] = useState<ProductStock | null>(null);
+  const [stockQty, setStockQty] = useState('0');
+  const [stockReason, setStockReason] = useState('');
+  const [stockNote, setStockNote] = useState('');
 
   useEffect(() => {
     if (!isEditing || !company || !productId) {
@@ -122,6 +154,31 @@ export function ProductFormPage() {
     };
   }, [company, isEditing, productId, notification]);
 
+  useEffect(() => {
+    if (!isEditing || !company || !productId) {
+      setStock(null);
+      setStockQty('0');
+      return;
+    }
+    let cancelled = false;
+    firestoreService.stock
+      .getByProductId(company.id, productId)
+      .then((found) => {
+        if (cancelled) return;
+        setStock(found);
+        setStockQty(String(found?.quantityOnHand ?? 0));
+      })
+      .catch((err) => console.error('Failed to load stock:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [company, isEditing, productId]);
+
+  const currentOnHand = stock?.quantityOnHand ?? 0;
+  const parsedStockQty = Math.max(0, Math.floor(Number(stockQty) || 0));
+  const stockDelta = parsedStockQty - currentOnHand;
+  const stockChanged = isEditing && stockDelta !== 0;
+
   const platformSummary = useMemo(
     () => formatMarketplaceSummary(marketplaces),
     [marketplaces]
@@ -143,6 +200,9 @@ export function ProductFormPage() {
         break;
       }
     }
+    if (stockChanged && !stockReason.trim()) {
+      next.stock = 'Select a reason for the stock adjustment';
+    }
     setErrors(next);
 
     if (next.name) {
@@ -151,6 +211,10 @@ export function ProductFormPage() {
     }
     if (next.listings) {
       setActiveTab('platforms');
+      return false;
+    }
+    if (next.stock) {
+      setActiveTab('inventory');
       return false;
     }
     return true;
@@ -170,13 +234,34 @@ export function ProductFormPage() {
         await firestoreService.products.update(company.id, product.id, {
           name: form.name.trim(),
           sku: form.sku.trim() || undefined,
+          hsnCode: form.hsnCode.trim() || undefined,
           description: form.description.trim() || undefined,
           category: form.category.trim() || undefined,
           status: 'active',
+          lowStockThreshold: parseThreshold(form.lowStockThreshold) ?? 0,
           platformListings: listings,
           attachments,
           updatedAt: now,
         }, user!.uid);
+
+        if (stockChanged) {
+          try {
+            await adjustProductStock({
+              companyId: company.id,
+              productId: product.id,
+              productName: form.name.trim(),
+              newQuantity: parsedStockQty,
+              reason: stockReason,
+              note: stockNote,
+              userId: user!.uid,
+            });
+          } catch (stockErr) {
+            console.error('Failed to adjust stock:', stockErr);
+            notification.error('Product saved, but the stock adjustment failed.');
+            setSaving(false);
+            return;
+          }
+        }
         notification.success('Product updated');
       } else {
         const id = createListingId();
@@ -197,10 +282,14 @@ export function ProductFormPage() {
           companyId: company.id,
           name: form.name.trim(),
           sku: form.sku.trim() || undefined,
+          hsnCode: form.hsnCode.trim() || undefined,
           description: form.description.trim() || undefined,
           category: form.category.trim() || undefined,
           status: 'active',
           platformListings: listings,
+          ...(parseThreshold(form.lowStockThreshold)
+            ? { lowStockThreshold: parseThreshold(form.lowStockThreshold) }
+            : {}),
           ...(uploaded.length > 0 ? { attachments: uploaded } : {}),
           createdAt: now,
           updatedAt: now,
@@ -235,6 +324,9 @@ export function ProductFormPage() {
       icon: Layers,
       badge: form.platformListings.length || undefined,
     },
+    ...(isEditing
+      ? [{ id: 'inventory' as const, label: 'Inventory', icon: Warehouse }]
+      : []),
     {
       id: 'documents' as const,
       label: 'Documents',
@@ -336,6 +428,25 @@ export function ProductFormPage() {
                     onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                     placeholder="e.g. Electronics"
                   />
+                  <Input
+                    label="HSN / SAC code"
+                    value={form.hsnCode}
+                    onChange={(e) => setForm((f) => ({ ...f, hsnCode: e.target.value }))}
+                    placeholder="Optional — for GST invoices"
+                    helperText="Shown on sales & invoices"
+                  />
+                  <Input
+                    label="Low stock alert at"
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={form.lowStockThreshold}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, lowStockThreshold: e.target.value }))
+                    }
+                    placeholder="e.g. 5"
+                    helperText="Alert on the dashboard when on-hand ≤ this. Leave blank to disable."
+                  />
                   <div className="sm:col-span-2 lg:col-span-4">
                     <Textarea
                       label="Description"
@@ -358,6 +469,72 @@ export function ProductFormPage() {
                   currency={currency}
                   error={errors.listings}
                 />
+              ) : null}
+
+              {activeTab === 'inventory' && isEditing ? (
+                <div className="max-w-2xl space-y-4">
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          Current on-hand
+                        </p>
+                        <p className="mt-0.5 text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">
+                          {currentOnHand}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Stock value</p>
+                        <p className="mt-0.5 text-sm font-medium text-gray-700 dark:text-gray-300 tabular-nums">
+                          {formatMoney(stock?.totalValue ?? 0, currency)}
+                        </p>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                          Avg cost {formatMoney(stock?.avgPurchasePrice ?? 0, currency)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Manually correct the on-hand count (e.g. after a stock take). Purchases and
+                    sales still update stock automatically — every manual change is logged.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="New on-hand quantity"
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={stockQty}
+                      onChange={(e) => setStockQty(e.target.value)}
+                      helperText={
+                        stockDelta !== 0
+                          ? `${stockDelta > 0 ? '+' : ''}${stockDelta} vs current`
+                          : 'No change'
+                      }
+                    />
+                    <Select
+                      label="Reason"
+                      value={stockReason}
+                      onChange={(e) => setStockReason(e.target.value)}
+                      options={STOCK_ADJUST_REASONS}
+                      required={stockChanged}
+                      error={errors.stock}
+                      disabled={!stockChanged}
+                    />
+                  </div>
+
+                  <Textarea
+                    label="Note"
+                    optional
+                    value={stockNote}
+                    onChange={(e) => setStockNote(e.target.value)}
+                    placeholder="Optional context for this adjustment…"
+                    rows={2}
+                    disabled={!stockChanged}
+                  />
+                </div>
               ) : null}
 
               {activeTab === 'documents' ? (

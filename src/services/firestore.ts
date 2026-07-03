@@ -21,6 +21,7 @@ import type {
   ProductStock,
   PurchaseOrder,
   Sale,
+  StockMovement,
   Vendor,
 } from '../types';
 import { isNotDeleted } from '../models/softDelete';
@@ -32,6 +33,7 @@ const COLLECTION_EXPENSES = 'expenses';
 const COLLECTION_VENDORS = 'vendors';
 const COLLECTION_PURCHASES = 'purchases';
 const COLLECTION_STOCK = 'stock';
+const COLLECTION_STOCK_MOVEMENTS = 'stockMovements';
 const COLLECTION_CUSTOMERS = 'customers';
 const COLLECTION_INVOICES = 'invoices';
 const COLLECTION_PAYMENTS = 'payments';
@@ -254,6 +256,16 @@ export const firestoreService = {
       update(companyId, COLLECTION_STOCK, id, updates, userId)) as UpdateFn<ProductStock>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_STOCK, id, deletedBy)) as DeleteFn,
+  },
+  stockMovements: {
+    getAll: (companyId: string) =>
+      getAll<StockMovement>(companyId, COLLECTION_STOCK_MOVEMENTS),
+    listByProduct: async (companyId: string, productId: string) => {
+      const all = await getAll<StockMovement>(companyId, COLLECTION_STOCK_MOVEMENTS);
+      return all.filter((m) => m.productId === productId);
+    },
+    create: ((companyId, movement, userId) =>
+      create(companyId, COLLECTION_STOCK_MOVEMENTS, movement, userId)) as CreateFn<StockMovement>,
   },
   customers: {
     get: (companyId: string, id: string) => get<Customer>(companyId, COLLECTION_CUSTOMERS, id),

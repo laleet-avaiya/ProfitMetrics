@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { FileText, Package, Pencil, Printer, UserCircle, Wallet } from 'lucide-react';
+import { FileText, Package, Pencil, Printer, Truck, UserCircle, Wallet } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
 import { DetailSection } from '../../components/DetailPage/DetailSection';
 import { DetailStatStrip } from '../../components/DetailPage/DetailStatStrip';
+import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
 import { Button } from '../../components/Button/Button';
 import { PaymentAmountField } from '../../components/PaymentAmountField/PaymentAmountField';
 import { Input } from '../../components/Input/Input';
@@ -100,6 +101,7 @@ export function InvoiceDetailPage() {
             <DetailMetaChip tone="indigo">{formatDateLocal(invoice.invoiceDate)}</DetailMetaChip>
             <DetailMetaChip tone="gray">{invoiceStatusLabel(invoice.status)}</DetailMetaChip>
             <DetailMetaChip tone="gray">{purchasePaymentStatusLabel(invoice.paymentStatus)}</DetailMetaChip>
+            <SaleStatusBadge status={invoice.deliveryStatus} />
           </DetailMetaRow>
         ) : undefined
       }
@@ -166,6 +168,14 @@ export function InvoiceDetailPage() {
               <Link to={`/customers/${invoice.customerId}`} className={`text-sm ${detailLinkClass}`}>{invoice.customerName} →</Link>
             </DetailSection>
           ) : null}
+
+          <DetailSection icon={Truck} iconTone="indigo" title="Delivery" description="Fulfillment status and courier tracking for this offline order.">
+            <DetailGrid columns={3}>
+              <DetailField label="Delivery status" value={<SaleStatusBadge status={invoice.deliveryStatus} />} />
+              <DetailField label="Carrier" value={invoice.carrier || '—'} />
+              <DetailField label="Tracking ID" value={invoice.trackingId || '—'} />
+            </DetailGrid>
+          </DetailSection>
 
           {!isVoid && (
             <DetailSection icon={Wallet} iconTone="emerald" title="Payments" description="Record customer payments — each appears in the Payments list.">

@@ -364,6 +364,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Stock movement log — append-only history of manual adjustments.
+    match /stockMovements/{docId} {
+      allow read: if canReadCompanyData('products');
+      allow create: if canCreateCompanyData('products');
+      allow update, delete: if false;
+    }
+
     match /sales/{docId} {
       allow read: if canReadCompanyData('sales');
       allow create: if canCreateCompanyData('sales');

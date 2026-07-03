@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   Package,
   Plus,
+  Truck,
   UserCircle,
 } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
@@ -29,8 +30,9 @@ import { FormTabs } from '../../components/ui/FormTabs';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { INVOICE_STATUS_OPTIONS } from '../../constants/invoiceStatuses';
+import { SALE_STATUS_OPTIONS } from '../../constants/saleStatuses';
 import { firestoreService } from '../../services/firestore';
-import type { Customer, Invoice, Product } from '../../types';
+import type { Customer, Invoice, Product, SaleStatus } from '../../types';
 import { InvoiceStatus, TaxMode, TaxType } from '../../types';
 import {
   buildCustomerFromForm,
@@ -44,6 +46,7 @@ import {
   emptyInvoiceLineForm,
   getActiveProducts,
   invoiceToForm,
+  isInvoiceLineFilled,
   shouldApplyInvoiceStock,
   type InvoiceFormState,
 } from '../../utils/invoiceHelpers';
@@ -51,14 +54,13 @@ import { allocateNextInvoiceNumber, previewNextInvoiceNumber } from '../../utils
 import { applyInvoiceStock, invoiceStockFailureMessage, resyncInvoiceStock } from '../../utils/invoiceStock';
 import { formatMoney } from '../../utils/profit';
 import {
-  emptyStateMessageClass,
   tableClass,
   tableHeadCellClass,
   tableHeadRowClass,
   tableWrapClass,
 } from '../../constants/ui';
 
-type InvoiceFormTab = 'invoice' | 'customer' | 'items' | 'notes';
+type InvoiceFormTab = 'invoice' | 'customer' | 'items' | 'delivery' | 'notes';
 
 export function InvoiceFormPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
@@ -159,6 +161,9 @@ export function InvoiceFormPage() {
     if (stock && stock.avgPurchasePrice > 0) purchasePrice = String(stock.avgPurchasePrice);
     updateLine(lineId, {
       productId,
+      isCustom: false,
+      productName: '',
+      hsnCode: product?.hsnCode ?? '',
       unitPrice: listing ? String(listing.sellingPrice) : stock ? String(stock.avgSellingPrice) : '',
       purchasePrice,
       taxType: listing?.taxType ?? TaxType.NONE,
@@ -201,7 +206,8 @@ export function InvoiceFormPage() {
     if (form.customer.mode === 'new' && !form.customer.name.trim()) {
       next.customer = 'Customer name is required';
     }
-    if (form.lines.filter((l) => l.productId).length === 0) next.lines = 'Add at least one product';
+    if (form.lines.filter(isInvoiceLineFilled).length === 0)
+      next.lines = 'Add at least one product or custom item';
     setErrors(next);
 
     if (next.customer) {
@@ -294,7 +300,7 @@ export function InvoiceFormPage() {
   const cancelTo =
     isEditing && invoice ? `/invoices/${invoice.id}` : '/sales?channel=offline';
 
-  const filledLines = form.lines.filter((l) => l.productId).length;
+  const filledLines = form.lines.filter(isInvoiceLineFilled).length;
   const hasCustomer =
     form.customer.mode === 'existing'
       ? Boolean(form.customer.customerId)
@@ -305,6 +311,7 @@ export function InvoiceFormPage() {
     { id: 'invoice' as const, label: 'Invoice', icon: FileText },
     { id: 'customer' as const, label: 'Customer', icon: UserCircle },
     { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
+    { id: 'delivery' as const, label: 'Delivery', icon: Truck },
     { id: 'notes' as const, label: 'Notes', icon: FileText },
   ];
 
@@ -329,27 +336,17 @@ export function InvoiceFormPage() {
               : 'Invoice a customer with line items and tax.'
           }
           actions={
-            activeProducts.length > 0 ? (
-              <FormPageHeaderActions
-                formId="invoice-form"
-                onCancel={() => navigate(cancelTo)}
-                saving={saving}
-                isEditing={isEditing}
-                createLabel="Create sale"
-              />
-            ) : null
+            <FormPageHeaderActions
+              formId="invoice-form"
+              onCancel={() => navigate(cancelTo)}
+              saving={saving}
+              isEditing={isEditing}
+              createLabel="Create sale"
+            />
           }
         />
 
-        {activeProducts.length === 0 ? (
-          <p className={emptyStateMessageClass}>
-            Add products first.{' '}
-            <Link to="/products/new" className="text-indigo-600 hover:underline">
-              Create product
-            </Link>
-          </p>
-        ) : (
-          <FormPageBody id="invoice-form" onSubmit={handleSubmit}>
+        <FormPageBody id="invoice-form" onSubmit={handleSubmit}>
             <InvoiceFormSummaryBar
               subtotal={preview.subtotal}
               taxAmount={preview.taxAmount}
@@ -571,6 +568,39 @@ export function InvoiceFormPage() {
                   </div>
                 ) : null}
 
+                {activeTab === 'delivery' ? (
+                  <div className="space-y-3 max-w-2xl">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Track fulfillment and courier details for this offline order.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        label="Delivery status"
+                        value={form.deliveryStatus}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            deliveryStatus: e.target.value as SaleStatus,
+                          }))
+                        }
+                        options={SALE_STATUS_OPTIONS}
+                      />
+                      <Input
+                        label="Carrier"
+                        value={form.carrier}
+                        onChange={(e) => setForm((p) => ({ ...p, carrier: e.target.value }))}
+                        placeholder="Aramex, DHL, in-house…"
+                      />
+                      <Input
+                        label="Tracking ID"
+                        value={form.trackingId}
+                        onChange={(e) => setForm((p) => ({ ...p, trackingId: e.target.value }))}
+                        placeholder="AWB123456789"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
                 {activeTab === 'notes' ? (
                   <Textarea
                     label="Invoice notes"
@@ -597,7 +627,6 @@ export function InvoiceFormPage() {
               createLabel="Create sale"
             />
           </FormPageBody>
-        )}
       </PageShell>
     </Layout>
   );

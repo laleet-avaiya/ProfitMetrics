@@ -7,8 +7,10 @@ import {
   computeByExpenseCategory,
   computeByPlatform,
   computeByProduct,
+  computeGrossProfit,
   computePurchaseReportRows,
   computePurchaseReportSummary,
+  computePurchaseTrend,
   computeStockReport,
   computeStockSummary,
   computeTaxLedger,
@@ -152,17 +154,43 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
       ];
     }
 
+    case ReportId.GROSS_PROFIT: {
+      const gp = computeGrossProfit(ctx.filteredSales, ctx.filteredInvoices);
+      return [
+        {
+          name: 'Gross profit',
+          rows: [
+            ...metaRows(ctx),
+            ['Line item', 'Amount'],
+            ['Revenue — online sales', gp.onlineRevenue],
+            ...(gp.offlineRevenue > 0 ? [['Revenue — offline invoices', gp.offlineRevenue]] : []),
+            ['Gross revenue', gp.grossRevenue],
+            ['COGS — online sales', -gp.onlineCogs],
+            ...(gp.offlineCogs > 0 ? [['COGS — offline invoices', -gp.offlineCogs]] : []),
+            ['Total COGS', -gp.totalCogs],
+            ['Gross profit', gp.grossProfit],
+            ['Gross margin %', gp.grossMarginPercent],
+            [],
+            ['Channel', 'Revenue', 'COGS', 'Gross profit', 'Margin %'],
+            ['Online sales', gp.onlineRevenue, gp.onlineCogs, gp.onlineGrossProfit, gp.onlineMarginPercent],
+            ['Offline invoices', gp.offlineRevenue, gp.offlineCogs, gp.offlineGrossProfit, gp.offlineMarginPercent],
+          ],
+        },
+      ];
+    }
+
     case ReportId.SALES_BY_PRODUCT: {
       const rows = computeByProduct(ctx.filteredSales, ctx.filteredInvoices);
       return [
         {
-          name: 'Sales by product',
+          name: 'Product-wise profit',
           rows: [
             ...metaRows(ctx),
-            ['Product', 'Lines', 'Revenue', 'Profit', 'Margin %'],
+            ['Product', 'Units', 'COGS', 'Revenue', 'Profit', 'Margin %'],
             ...rows.map((row) => [
               row.productName,
-              row.saleCount,
+              row.unitsSold,
+              row.cogs,
               row.revenue,
               row.profit,
               row.marginPercent,
@@ -298,6 +326,30 @@ export function buildReportWorkbook(ctx: ReportExportContext): WorkbookSheet[] {
       ];
     }
 
+    case ReportId.PURCHASE_TREND: {
+      const buildRows = (granularity: 'monthly' | 'yearly'): WorkbookSheet['rows'] => {
+        const trend = computePurchaseTrend(ctx.filteredPurchases, granularity);
+        return [
+          ...metaRows(ctx, {
+            title: `${ctx.reportTitle} (${granularity === 'monthly' ? 'monthly' : 'yearly'})`,
+          }),
+          ['Period', 'POs', 'Total value', 'Paid', 'Balance due'],
+          ...trend.map((row) => [
+            row.label,
+            row.count,
+            row.totalValue,
+            row.totalPaid,
+            row.balanceDue,
+          ]),
+        ];
+      };
+
+      return [
+        { name: 'Monthly purchases', rows: buildRows('monthly') },
+        { name: 'Yearly purchases', rows: buildRows('yearly') },
+      ];
+    }
+
     case ReportId.STOCK_ON_HAND: {
       const skuMap = new Map(ctx.products.map((product) => [product.id, product.sku]));
       const rows = computeStockReport(ctx.stock, skuMap);
@@ -341,7 +393,7 @@ export function canExportReport(ctx: ReportExportContext): boolean {
     ).length > 0;
   }
 
-  if (ctx.reportId === ReportId.PURCHASE_ORDERS) {
+  if (ctx.reportId === ReportId.PURCHASE_ORDERS || ctx.reportId === ReportId.PURCHASE_TREND) {
     return ctx.filteredPurchases.length > 0;
   }
 

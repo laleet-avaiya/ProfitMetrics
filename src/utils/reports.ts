@@ -1,4 +1,4 @@
-import type { Expense, Invoice, Payment, PeriodProfitSummary, ProductStock, PurchaseOrder, Sale } from '../types';
+import type { Expense, Invoice, Payment, PeriodProfitSummary, Product, ProductStock, PurchaseOrder, Sale } from '../types';
 import { InvoiceStatus, PaymentKind, PurchaseOrderStatus, PurchasePaymentStatus } from '../types';
 import {
   localDateInputToUtc,
@@ -181,6 +181,52 @@ export function computePurchaseReportSummary(purchases: PurchaseOrder[]): Purcha
     partialCount,
     paidCount,
   };
+}
+
+export type PurchaseTrendGranularity = 'monthly' | 'yearly';
+
+export interface PurchaseTrendRow {
+  key: string;
+  label: string;
+  count: number;
+  totalValue: number;
+  totalPaid: number;
+  balanceDue: number;
+}
+
+/** Purchase orders grouped by month or year (by purchase date). */
+export function computePurchaseTrend(
+  purchases: PurchaseOrder[],
+  granularity: PurchaseTrendGranularity
+): PurchaseTrendRow[] {
+  const map = new Map<string, PurchaseTrendRow>();
+
+  for (const purchase of purchases) {
+    const key =
+      granularity === 'yearly'
+        ? localYearKey(purchase.purchaseDate)
+        : localMonthKey(purchase.purchaseDate);
+
+    let row = map.get(key);
+    if (!row) {
+      row = {
+        key,
+        label: granularity === 'yearly' ? formatYearLabel(key) : formatMonthLabel(key),
+        count: 0,
+        totalValue: 0,
+        totalPaid: 0,
+        balanceDue: 0,
+      };
+      map.set(key, row);
+    }
+
+    row.count += 1;
+    row.totalValue = roundMoney(row.totalValue + purchase.total);
+    row.totalPaid = roundMoney(row.totalPaid + purchase.totalPaid);
+    row.balanceDue = roundMoney(row.balanceDue + purchase.balanceDue);
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export type ProfitLossBasis = 'paid' | 'with-pending-po';
@@ -543,6 +589,8 @@ export interface ProductReportRow {
   productId: string;
   productName: string;
   saleCount: number;
+  unitsSold: number;
+  cogs: number;
   revenue: number;
   profit: number;
   marginPercent: number;
@@ -551,10 +599,19 @@ export interface ProductReportRow {
 export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): ProductReportRow[] {
   const map = new Map<string, ProductReportRow>();
 
-  const add = (productId: string, productName: string, revenue: number, profit: number) => {
+  const add = (
+    productId: string,
+    productName: string,
+    quantity: number,
+    cogs: number,
+    revenue: number,
+    profit: number
+  ) => {
     const existing = map.get(productId);
     if (existing) {
       existing.saleCount += 1;
+      existing.unitsSold += quantity;
+      existing.cogs = roundMoney(existing.cogs + cogs);
       existing.revenue = roundMoney(existing.revenue + revenue);
       existing.profit = roundMoney(existing.profit + profit);
     } else {
@@ -562,6 +619,8 @@ export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): Produ
         productId,
         productName,
         saleCount: 1,
+        unitsSold: quantity,
+        cogs,
         revenue,
         profit,
         marginPercent: 0,
@@ -571,7 +630,7 @@ export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): Produ
 
   for (const sale of sales) {
     for (const line of getSaleLineMetrics(sale)) {
-      add(line.productId, line.productName, line.revenue, line.profit);
+      add(line.productId, line.productName, line.quantity, line.cogs, line.revenue, line.profit);
     }
   }
 
@@ -580,7 +639,7 @@ export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): Produ
       const lineRevenue = line.lineTotal;
       const lineCogs = roundMoney(line.purchasePrice * line.quantity);
       const lineProfit = roundMoney(lineRevenue - lineCogs);
-      add(line.productId, line.productName, lineRevenue, lineProfit);
+      add(line.productId, line.productName, line.quantity, lineCogs, lineRevenue, lineProfit);
     }
   }
 
@@ -590,6 +649,57 @@ export function computeByProduct(sales: Sale[], invoices: Invoice[] = []): Produ
       marginPercent: row.revenue > 0 ? roundMoney((row.profit / row.revenue) * 100) : 0,
     }))
     .sort((a, b) => b.profit - a.profit);
+}
+
+export interface GrossProfitSummary {
+  onlineRevenue: number;
+  offlineRevenue: number;
+  grossRevenue: number;
+  onlineCogs: number;
+  offlineCogs: number;
+  totalCogs: number;
+  onlineGrossProfit: number;
+  offlineGrossProfit: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  onlineMarginPercent: number;
+  offlineMarginPercent: number;
+}
+
+/**
+ * Classic gross profit (Revenue − COGS) for the period, split by online sales and
+ * offline invoices. Unlike order profit, this excludes shipping, platform fees, and tax.
+ */
+export function computeGrossProfit(sales: Sale[], invoices: Invoice[] = []): GrossProfitSummary {
+  const onlineRevenue = roundMoney(sales.reduce((sum, s) => sum + s.grossRevenue, 0));
+  const offlineRevenue = roundMoney(invoices.reduce((sum, i) => sum + i.total, 0));
+  const grossRevenue = roundMoney(onlineRevenue + offlineRevenue);
+
+  const onlineCogs = roundMoney(sales.reduce((sum, s) => sum + saleCogs(s), 0));
+  const offlineCogs = roundMoney(invoices.reduce((sum, i) => sum + i.totalCogs, 0));
+  const totalCogs = roundMoney(onlineCogs + offlineCogs);
+
+  const onlineGrossProfit = roundMoney(onlineRevenue - onlineCogs);
+  const offlineGrossProfit = roundMoney(offlineRevenue - offlineCogs);
+  const grossProfit = roundMoney(grossRevenue - totalCogs);
+
+  const margin = (profit: number, revenue: number) =>
+    revenue > 0 ? roundMoney((profit / revenue) * 100) : 0;
+
+  return {
+    onlineRevenue,
+    offlineRevenue,
+    grossRevenue,
+    onlineCogs,
+    offlineCogs,
+    totalCogs,
+    onlineGrossProfit,
+    offlineGrossProfit,
+    grossProfit,
+    grossMarginPercent: margin(grossProfit, grossRevenue),
+    onlineMarginPercent: margin(onlineGrossProfit, onlineRevenue),
+    offlineMarginPercent: margin(offlineGrossProfit, offlineRevenue),
+  };
 }
 
 export interface PlatformReportRow {
@@ -705,6 +815,53 @@ export function computeStockSummary(stock: ProductStock[]): StockSummary {
   };
 }
 
+export interface LowStockAlertRow {
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantityOnHand: number;
+  threshold: number;
+  /** How many units short of the reorder point (0 when exactly at it) */
+  shortfall: number;
+}
+
+/**
+ * Products whose on-hand quantity is at or below their configured reorder point.
+ * Products without a threshold (0 / undefined) are ignored. Sorted most urgent first.
+ */
+export function computeLowStockAlerts(
+  products: Product[],
+  stock: ProductStock[]
+): LowStockAlertRow[] {
+  const stockByProduct = new Map(stock.map((s) => [s.productId, s]));
+  const rows: LowStockAlertRow[] = [];
+
+  for (const product of products) {
+    if (product.deleted || product.status !== 'active') continue;
+    const threshold = product.lowStockThreshold ?? 0;
+    if (threshold <= 0) continue;
+
+    const quantityOnHand = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
+    if (quantityOnHand > threshold) continue;
+
+    rows.push({
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      quantityOnHand,
+      threshold,
+      shortfall: Math.max(0, threshold - quantityOnHand),
+    });
+  }
+
+  rows.sort(
+    (a, b) => b.shortfall - a.shortfall || a.quantityOnHand - b.quantityOnHand ||
+      a.productName.localeCompare(b.productName)
+  );
+
+  return rows;
+}
+
 export interface StockReportRow {
   productId: string;
   productName: string;
@@ -752,6 +909,14 @@ function localMonthKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
+}
+
+function localYearKey(date: Date): string {
+  return String(date.getFullYear());
+}
+
+function formatYearLabel(key: string): string {
+  return key;
 }
 
 function formatDayLabel(key: string): string {

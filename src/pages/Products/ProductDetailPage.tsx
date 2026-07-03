@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, Layers, Package, Pencil, Tag, Warehouse } from 'lucide-react';
+import { ExternalLink, History, Layers, Package, Pencil, Tag, Warehouse } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
 import { DetailMetaChip, DetailMetaRow, DetailNotes } from '../../components/DetailPage/DetailMeta';
@@ -13,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
-import { PlatformFeeKind, type ProductStock } from '../../types';
+import { PlatformFeeKind, type ProductStock, type StockMovement } from '../../types';
 import { amountIncludesTaxLabel, resolveListingTax, taxPercentLabel } from '../../utils/listingTax';
 import {
   computeLineEconomics,
@@ -37,10 +37,15 @@ export function ProductDetailPage() {
   });
 
   const [stock, setStock] = useState<ProductStock | null>(null);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
 
   useEffect(() => {
     if (!company || !productId) return;
     firestoreService.stock.getByProductId(company.id, productId).then(setStock);
+    firestoreService.stockMovements
+      .listByProduct(company.id, productId)
+      .then(setMovements)
+      .catch((err) => console.error('Failed to load stock history:', err));
   }, [company, productId]);
 
   const listings = product?.platformListings ?? [];
@@ -172,6 +177,51 @@ export function ProductDetailPage() {
             </DetailSection>
           ) : null}
 
+          {movements.length > 0 ? (
+            <DetailSection
+              icon={History}
+              iconTone="amber"
+              title="Stock adjustment history"
+              description="Manual on-hand corrections — most recent first."
+            >
+              <div className="divide-y divide-gray-100 dark:divide-gray-700/70">
+                {movements.map((m) => {
+                  const positive = m.delta >= 0;
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {m.reason}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {formatDateLocalSafe(m.createdAt)} · {m.previousQty} → {m.newQty}
+                        </p>
+                        {m.note ? (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-words">
+                            {m.note}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
+                          positive
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                        }`}
+                      >
+                        {positive ? '+' : ''}
+                        {m.delta}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </DetailSection>
+          ) : null}
+
           <DetailSection
             icon={Package}
             iconTone="indigo"
@@ -182,6 +232,15 @@ export function ProductDetailPage() {
               <DetailField label="Name" value={product.name} valueClassName="font-semibold" />
               <DetailField label="SKU" value={product.sku} valueClassName="font-mono text-xs" />
               <DetailField label="Category" value={product.category} />
+              <DetailField label="HSN / SAC code" value={product.hsnCode} valueClassName="font-mono text-xs" />
+              <DetailField
+                label="Low stock alert at"
+                value={
+                  product.lowStockThreshold && product.lowStockThreshold > 0
+                    ? `${product.lowStockThreshold} units`
+                    : 'Off'
+                }
+              />
               <DetailField label="Created" value={formatDateLocalSafe(product.createdAt)} />
               <DetailField label="Updated" value={formatDateLocalSafe(product.updatedAt)} />
             </DetailGrid>

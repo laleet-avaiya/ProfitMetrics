@@ -138,6 +138,7 @@ export function Sales() {
         return (
           row.invoice.invoiceNumber.toLowerCase().includes(q) ||
           (row.invoice.customerName?.toLowerCase().includes(q) ?? false) ||
+          (row.invoice.trackingId?.toLowerCase().includes(q) ?? false) ||
           row.invoice.lines.some((l) => l.productName.toLowerCase().includes(q))
         );
       }
@@ -434,7 +435,10 @@ export function Sales() {
                         {row.kind === 'marketplace' ? (
                           <SaleStatusBadge status={row.sale.status} />
                         ) : (
-                          invoiceStatusLabel(row.invoice.status)
+                          <div className="flex flex-col items-start gap-1">
+                            <span>{invoiceStatusLabel(row.invoice.status)}</span>
+                            <SaleStatusBadge status={row.invoice.deliveryStatus} />
+                          </div>
                         )}
                       </td>
                       <td className={tableCellClass}>

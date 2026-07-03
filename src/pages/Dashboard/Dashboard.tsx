@@ -14,7 +14,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Invoice, Payment, ProductStock, PurchaseOrder, Sale } from '../../types';
+import type { Expense, Invoice, Payment, Product, ProductStock, PurchaseOrder, Sale } from '../../types';
 import { TaxType } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatExpenseTaxLabel } from '../../utils/expenseHelpers';
@@ -27,6 +27,7 @@ import {
   computeByProduct,
   computeCashFlowSummary,
   computeInvoiceReceivables,
+  computeLowStockAlerts,
   computePaymentSummary,
   computePeriodSummary,
   computeReturnStats,
@@ -61,6 +62,7 @@ import {
   Wallet,
   ArrowDownLeft,
   ArrowUpRight,
+  AlertTriangle,
 } from 'lucide-react';
 
 function taxSummaryTitle(taxType: TaxType | undefined): string {
@@ -160,6 +162,7 @@ export function Dashboard() {
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<ProductStock[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<ReportPreset>('month');
   const [customFrom, setCustomFrom] = useState('');
@@ -169,7 +172,7 @@ export function Dashboard() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, paymentsList, purchasesList, expensesList, stockList] =
+      const [salesList, invoicesList, paymentsList, purchasesList, expensesList, stockList, productsList] =
         await Promise.all([
         firestoreService.sales.getAll(company.id),
         firestoreService.invoices.getAll(company.id),
@@ -177,6 +180,7 @@ export function Dashboard() {
         firestoreService.purchases.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
         firestoreService.stock.getAll(company.id),
+        firestoreService.products.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
       setInvoices(invoicesList.filter((i) => !i.deleted));
@@ -184,6 +188,7 @@ export function Dashboard() {
       setPurchases(purchasesList.filter((p) => !p.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
       setStock(stockList);
+      setProducts(productsList.filter((p) => !p.deleted));
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       notification.error('Failed to load dashboard data');
@@ -242,6 +247,11 @@ export function Dashboard() {
   );
 
   const stockSummary = useMemo(() => computeStockSummary(stock), [stock]);
+
+  const lowStockAlerts = useMemo(
+    () => computeLowStockAlerts(products, stock),
+    [products, stock]
+  );
 
   const paymentSummary = useMemo(
     () => computePaymentSummary(filteredPayments),
@@ -546,6 +556,75 @@ export function Dashboard() {
             </>
           )}
         </Card>
+
+        {!loading && lowStockAlerts.length > 0 && (
+          <Card>
+            <CardHeader
+              title="Low stock alerts"
+              description={`${lowStockAlerts.length} product${lowStockAlerts.length === 1 ? '' : 's'} at or below the reorder point`}
+              action={
+                <Link
+                  to="/purchases/new"
+                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Create purchase
+                </Link>
+              }
+            />
+            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <th className="px-3 py-2">Product</th>
+                    <th className="px-3 py-2 text-right w-20">On hand</th>
+                    <th className="px-3 py-2 text-right w-24">Alert at</th>
+                    <th className="px-3 py-2 text-right w-24">Short by</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {lowStockAlerts.map((row) => {
+                    const out = row.quantityOnHand <= 0;
+                    return (
+                      <tr key={row.productId} className="hover:bg-gray-50/60 dark:hover:bg-gray-900/20">
+                        <td className="px-3 py-2">
+                          <Link
+                            to={`/products/${row.productId}`}
+                            className="font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
+                          >
+                            {row.productName}
+                          </Link>
+                          {row.sku ? (
+                            <span className="ml-2 text-xs text-gray-400 dark:text-gray-500 font-mono">
+                              {row.sku}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                              out
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                            }`}
+                          >
+                            {out ? <AlertTriangle className="w-3 h-3" /> : null}
+                            {row.quantityOnHand}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500 dark:text-gray-400">
+                          {row.threshold}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-rose-600 dark:text-rose-400">
+                          {row.shortfall > 0 ? `−${row.shortfall}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
 
         {!loading && hasCashFlowActivity && (
           <Card>

@@ -540,7 +540,8 @@ export function buildSaleFromForm(
   form: SaleFormState,
   companyId: string,
   productNames: Map<string, string>,
-  existing?: Sale
+  existing?: Sale,
+  productHsnCodes?: Map<string, string>
 ): Sale {
   const preview = computeSalePreview(form);
   const outcomeFields = outcomeFieldsForSave(form, preview);
@@ -555,14 +556,18 @@ export function buildSaleFromForm(
     })
   );
 
-  const saleLines: SaleLine[] = form.lines.map((line, index) => ({
-    id: line.id,
-    productId: line.productId,
-    productName: productNames.get(line.productId) ?? 'Unknown product',
-    platformListingId: line.platformListingId || undefined,
-    quantity: Math.max(1, line.quantity),
-    economics: buildLineEconomics(line, linePreviews[index]),
-  }));
+  const saleLines: SaleLine[] = form.lines.map((line, index) => {
+    const hsnCode = productHsnCodes?.get(line.productId)?.trim();
+    return {
+      id: line.id,
+      productId: line.productId,
+      productName: productNames.get(line.productId) ?? 'Unknown product',
+      hsnCode: hsnCode || undefined,
+      platformListingId: line.platformListingId || undefined,
+      quantity: Math.max(1, line.quantity),
+      economics: buildLineEconomics(line, linePreviews[index]),
+    };
+  });
 
   const firstLine = saleLines[0];
   const totalQty = saleLines.reduce((sum, line) => sum + line.quantity, 0);
