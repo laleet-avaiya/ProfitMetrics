@@ -214,7 +214,11 @@ export async function deductStock(
   };
 }
 
-/** Return units to stock (e.g. sale return/cancel). Averages unchanged. */
+/**
+ * Return units to stock (e.g. sale return/cancel). Existing averages are left
+ * unchanged; when no stock record exists yet the provided unit cost seeds the
+ * average so a later weighted receipt is not diluted by a phantom zero cost.
+ */
 export async function restoreStock(
   companyId: string,
   productId: string,
@@ -222,7 +226,9 @@ export async function restoreStock(
   quantity: number,
   userId: string,
   variantId?: string,
-  variantLabel?: string
+  variantLabel?: string,
+  unitPurchasePrice = 0,
+  unitSellingPrice = 0
 ): Promise<ProductStock> {
   const key = stockKey(productId, variantId);
   if (quantity <= 0) {
@@ -240,8 +246,8 @@ export async function restoreStock(
       productId,
       productName,
       quantity,
-      0,
-      0,
+      Math.max(0, unitPurchasePrice),
+      Math.max(0, unitSellingPrice),
       variantId,
       variantLabel
     );

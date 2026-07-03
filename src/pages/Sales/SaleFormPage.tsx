@@ -433,8 +433,22 @@ export function SaleFormPage() {
           );
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
+          // Roll the sale document back to its previous state so it stays
+          // consistent with stock that could not be updated.
+          try {
+            await firestoreService.sales.update(
+              company.id,
+              sale.id,
+              { ...sale, attachments: sale.attachments },
+              user!.uid
+            );
+          } catch (rollbackErr) {
+            console.error('Failed to roll back sale after stock error:', rollbackErr);
+          }
           notification.error(
-            stockErr instanceof Error ? stockErr.message : 'Sale saved but stock could not be updated.'
+            stockErr instanceof Error
+              ? stockErr.message
+              : 'Could not update stock. Your changes were not saved.'
           );
           setSaving(false);
           return;

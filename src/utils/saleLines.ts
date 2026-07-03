@@ -173,6 +173,9 @@ export function getSaleLineMetrics(
       deliveryTaxMode: e.deliveryTaxMode,
       platformFeeTaxPercentage: e.platformFeeTaxPercentage,
       platformFeeTaxMode: e.platformFeeTaxMode,
+      // Feed back the stored output tax (which already reflects any manual tax
+      // override) so report metrics never diverge from the saved sale.
+      taxAmountOverride: e.taxType !== 'none' ? roundMoney(e.taxAmount / qty) : undefined,
     });
   });
 

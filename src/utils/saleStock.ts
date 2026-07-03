@@ -12,6 +12,8 @@ interface StockLineInfo {
   variantLabel?: string;
   productName: string;
   qty: number;
+  unitPurchasePrice: number;
+  unitSellingPrice: number;
 }
 
 /** How many units should be deducted from stock for this sale state, per stock key. */
@@ -38,6 +40,8 @@ export function effectiveStockDeductions(sale: Sale): Map<string, StockLineInfo>
         variantLabel: line.variantLabel,
         productName: line.productName,
         qty,
+        unitPurchasePrice: Math.max(0, line.economics.purchasePrice),
+        unitSellingPrice: Math.max(0, line.economics.sellingPrice),
       });
     }
   }
@@ -67,6 +71,8 @@ function deductionDelta(previous?: Sale | null, next?: Sale | null): Map<string,
         variantId: info.variantId,
         variantLabel: info.variantLabel,
         productName: info.productName,
+        unitPurchasePrice: info.unitPurchasePrice,
+        unitSellingPrice: info.unitSellingPrice,
         delta,
       });
     }
@@ -84,7 +90,15 @@ export async function syncSaleStock(
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
 
-  for (const [, { productId, variantId, variantLabel, productName, delta }] of changes) {
+  for (const {
+    productId,
+    variantId,
+    variantLabel,
+    productName,
+    unitPurchasePrice,
+    unitSellingPrice,
+    delta,
+  } of changes.values()) {
     const label = variantLabel ? `${productName} (${variantLabel})` : productName;
     if (delta > 0) {
       const result = await deductStock(companyId, productId, delta, userId, variantId);
@@ -92,7 +106,17 @@ export async function syncSaleStock(
         return { ok: false, available: result.available, needed: delta, productName: label };
       }
     } else if (delta < 0) {
-      await restoreStock(companyId, productId, productName, -delta, userId, variantId, variantLabel);
+      await restoreStock(
+        companyId,
+        productId,
+        productName,
+        -delta,
+        userId,
+        variantId,
+        variantLabel,
+        unitPurchasePrice,
+        unitSellingPrice
+      );
     }
   }
 
@@ -152,9 +176,25 @@ export async function restoreSaleStock(
   sale: Sale,
   userId: string
 ): Promise<void> {
-  for (const [, { productId, variantId, variantLabel, productName, qty }] of effectiveStockDeductions(
-    sale
-  )) {
-    await restoreStock(companyId, productId, productName, qty, userId, variantId, variantLabel);
+  for (const {
+    productId,
+    variantId,
+    variantLabel,
+    productName,
+    qty,
+    unitPurchasePrice,
+    unitSellingPrice,
+  } of effectiveStockDeductions(sale).values()) {
+    await restoreStock(
+      companyId,
+      productId,
+      productName,
+      qty,
+      userId,
+      variantId,
+      variantLabel,
+      unitPurchasePrice,
+      unitSellingPrice
+    );
   }
 }
