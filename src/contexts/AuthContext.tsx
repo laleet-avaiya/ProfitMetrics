@@ -72,7 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMembership(member);
     setRolePermissions(permissions);
 
-    if (member.role === CompanyRole.ADMIN) {
+    const orgMember = await orgMembershipService.get(loadedCompany.orgId, userId);
+    const canRepairRoles =
+      member.role === CompanyRole.ADMIN || orgMember?.role === OrgRole.ADMIN;
+    if (canRepairRoles) {
       void rolePermissionsService.ensureDefaults(companyId).catch((err) => {
         console.error('Failed to ensure role permission defaults:', err);
       });

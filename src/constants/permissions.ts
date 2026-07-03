@@ -170,7 +170,7 @@ export function hasModulePermission(
   if (role === CompanyRole.ADMIN) return true;
   const key = permissionKey(module, action);
   if (permissions && key in permissions) return permissions[key] === true;
-  return DEFAULT_ROLE_PERMISSIONS[role][key] === true;
+  return DEFAULT_ROLE_PERMISSIONS[role]?.[key] === true;
 }
 
 const HOME_MODULE_ORDER: AppModule[] = [

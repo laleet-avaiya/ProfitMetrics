@@ -89,16 +89,34 @@ service cloud.firestore {
         || (role == 'accountant' && module == 'reports' && action == 'view');
     }
 
+    function storedRolePermission(companyId, module, action) {
+      let rolePath = rolePermissionsPath(companyId, memberRole(companyId));
+      let key = module + '.' + action;
+      return exists(rolePath)
+        && 'permissions' in get(rolePath).data
+        && get(rolePath).data.permissions is map
+        && key in get(rolePath).data.permissions
+        ? get(rolePath).data.permissions[key]
+        : null;
+    }
+
     function hasModulePermission(companyId, module, action) {
       let role = memberRole(companyId);
-      let rolePath = rolePermissionsPath(companyId, role);
+      let stored = storedRolePermission(companyId, module, action);
       return isActiveMember(companyId)
         && (
           role == 'admin'
-          || (exists(rolePath)
-            && get(rolePath).data.permissions[module + '.' + action] == true)
-          || (!exists(rolePath) && builtinRolePermission(role, module, action))
+          || stored == true
+          || (stored != false && builtinRolePermission(role, module, action))
         );
+    }
+
+    function companyOrgId(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId)).data.orgId;
+    }
+
+    function canManageCompanyRoles(companyId) {
+      return isCompanyAdmin(companyId) || isOrgAdmin(companyOrgId(companyId));
     }
 
     function isReportDataModule(module) {
@@ -128,9 +146,11 @@ service cloud.firestore {
     }
 
     function canCreateModule(module) {
-      return hasModulePermission(request.resource.data.companyId, module, 'create')
+      let companyId = request.resource.data.companyId;
+      return isActiveMember(companyId)
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.updatedBy == request.auth.uid;
+        && request.resource.data.updatedBy == request.auth.uid
+        && (isCompanyAdmin(companyId) || hasModulePermission(companyId, module, 'create'));
     }
 
     function canUpdateModuleDoc(module) {
@@ -139,9 +159,11 @@ service cloud.firestore {
         && createdByUnchanged()
         && deletedFieldChangeAllowed(module)
         && (
-          (hasModulePermission(resource.data.companyId, module, 'update')
+          (
+            (isCompanyAdmin(resource.data.companyId) || hasModulePermission(resource.data.companyId, module, 'update'))
             && request.resource.data.deleted != true
-            && request.resource.data.updatedBy == request.auth.uid)
+            && request.resource.data.updatedBy == request.auth.uid
+          )
           || isSoftDeleteUpdate(module)
         );
     }
@@ -327,8 +349,8 @@ service cloud.firestore {
 
     match /companyRoles/{roleDocId} {
       allow read: if isAuthenticated() && isActiveMember(resource.data.companyId);
-      allow create: if isCompanyAdmin(request.resource.data.companyId);
-      allow update: if isCompanyAdmin(resource.data.companyId) && resource.data.role != 'admin';
+      allow create: if canManageCompanyRoles(request.resource.data.companyId);
+      allow update: if canManageCompanyRoles(resource.data.companyId) && resource.data.role != 'admin';
       allow delete: if false;
     }
 
