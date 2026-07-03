@@ -132,9 +132,6 @@ export function ProductFormPage() {
     if (!form.name.trim()) {
       next.name = 'Product name is required';
     }
-    if (form.platformListings.length === 0) {
-      next.listings = 'Add at least one platform listing';
-    }
     const marketplacesForValidation = marketplaces;
     for (const listing of form.platformListings) {
       if (!listing.platform.trim()) {
@@ -220,7 +217,7 @@ export function ProductFormPage() {
   };
 
   const currency = company?.currency ?? 'AED';
-  const isReady = !isEditing && form.name.trim() && form.platformListings.length > 0;
+  const isReady = !isEditing && Boolean(form.name.trim());
   const cancelTo = '/products';
 
   const formTabs = [
@@ -292,8 +289,9 @@ export function ProductFormPage() {
                 {form.name.trim() || 'Untitled product'}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                {form.platformListings.length} platform
-                {form.platformListings.length === 1 ? '' : 's'} · {platformSummary}
+                {form.platformListings.length > 0
+                  ? `${form.platformListings.length} platform${form.platformListings.length === 1 ? '' : 's'} · ${platformSummary}`
+                  : 'No platform listings yet'}
               </p>
             </div>
           </FormSummaryStrip>
@@ -374,9 +372,11 @@ export function ProductFormPage() {
 
           {isReady ? (
             <FormReadyBanner>
-              <span className="font-medium">{form.name.trim()}</span> with{' '}
-              {form.platformListings.length} platform
-              {form.platformListings.length === 1 ? '' : 's'} — ready to create.
+              <span className="font-medium">{form.name.trim()}</span>
+              {form.platformListings.length > 0
+                ? ` with ${form.platformListings.length} platform${form.platformListings.length === 1 ? '' : 's'}`
+                : ''}{' '}
+              — ready to create.
             </FormReadyBanner>
           ) : null}
 

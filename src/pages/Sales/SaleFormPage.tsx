@@ -493,7 +493,7 @@ export function SaleFormPage() {
               <Package className="w-5 h-5" aria-hidden />
             </div>
             <p className={emptyStateMessageClass}>
-              Add at least one active product with platform listings before logging sales.
+              Add at least one active product before logging sales.
             </p>
             <Link to="/products/new">
               <Button type="button" variant="primary">
