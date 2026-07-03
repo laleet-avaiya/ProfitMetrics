@@ -1,5 +1,8 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import type { EntityAttachmentCollection } from '../constants/attachments';
+import {
+  resolveAttachmentContentType,
+  type EntityAttachmentCollection,
+} from '../constants/attachments';
 import type { EntityAttachment } from '../models/attachment';
 import { nowUtc } from '../utils/firestoreDates';
 import { storage } from './firebase';
@@ -38,14 +41,15 @@ export async function uploadEntityAttachment(
     file.name
   );
   const storageRef = ref(storage, storagePath);
+  const contentType = resolveAttachmentContentType(file);
 
-  await uploadBytes(storageRef, file, { contentType: file.type });
+  await uploadBytes(storageRef, file, { contentType });
 
   return {
     id,
     storagePath,
     fileName: file.name,
-    contentType: file.type,
+    contentType,
     sizeBytes: file.size,
     uploadedBy: userId,
     uploadedAt: nowUtc(),

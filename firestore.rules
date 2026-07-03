@@ -123,7 +123,8 @@ service cloud.firestore {
     }
 
     function createdByUnchanged() {
-      return request.resource.data.createdBy == resource.data.createdBy;
+      return !('createdBy' in resource.data)
+        || request.resource.data.createdBy == resource.data.createdBy;
     }
 
     function canCreateModule(module) {

@@ -180,6 +180,18 @@ export function ProductFormPage() {
         notification.success('Product updated');
       } else {
         const id = createListingId();
+        const uploaded =
+          pendingFiles.length > 0
+            ? await finalizePendingAttachments(
+                company.orgId,
+                company.id,
+                'products',
+                id,
+                pendingFiles.map((item) => item.file),
+                user!.uid
+              )
+            : [];
+
         const newProduct: Product = {
           id,
           companyId: company.id,
@@ -189,28 +201,23 @@ export function ProductFormPage() {
           category: form.category.trim() || undefined,
           status: 'active',
           platformListings: listings,
+          ...(uploaded.length > 0 ? { attachments: uploaded } : {}),
           createdAt: now,
           updatedAt: now,
         };
         await firestoreService.products.create(company.id, newProduct, user!.uid);
-        const uploaded = await finalizePendingAttachments(
-          company.orgId,
-          company.id,
-          'products',
-          id,
-          pendingFiles.map((item) => item.file),
-          user!.uid
-        );
-        if (uploaded.length > 0) {
-          await firestoreService.products.update(company.id, id, { attachments: uploaded }, user!.uid);
-        }
         notification.success('Product created');
       }
 
       navigate('/products');
     } catch (err) {
       console.error('Failed to save product:', err);
-      notification.error('Failed to save product. Please try again.');
+      const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+      if (code.includes('storage')) {
+        notification.error('Failed to upload document. Use JPEG, PNG, GIF, WebP, HEIC, or PDF (max 10 MB).');
+      } else {
+        notification.error('Failed to save product. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
