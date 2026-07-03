@@ -98,6 +98,18 @@ export async function previewNextSaleNumber(companyId: string, orderDate: string
   return allocateDocumentNumber('ORD', year, numbers);
 }
 
+/**
+ * Allocate the definitive order number at save time. Uses an atomic counter so
+ * two concurrent sale creations can never collide on the same ORD number. The
+ * existing max seeds the counter to stay consistent with pre-counter records.
+ */
 export async function allocateNextSaleNumber(companyId: string, orderDate: string): Promise<string> {
-  return previewNextSaleNumber(companyId, orderDate);
+  const year = yearFromLocalDateInput(orderDate);
+  const sales = await firestoreService.sales.getAll(companyId);
+  const numbers = sales
+    .filter((s) => !s.deleted && s.orderNumber)
+    .map((s) => s.orderNumber!);
+  const floor = nextSequenceFromExisting('ORD', year, numbers) - 1;
+  const seq = await firestoreService.counters.next(companyId, `ORD_${year}`, floor);
+  return formatDocumentNumber('ORD', year, seq);
 }

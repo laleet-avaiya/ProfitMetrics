@@ -67,8 +67,24 @@ export function Products() {
         firestoreService.products.getAll(companyId),
         firestoreService.stock.getAll(companyId),
       ]);
+      // For variant products only count buckets for variants that still exist,
+      // so orphaned stock (from renamed/removed options, or a leftover base
+      // bucket after variants were enabled) never inflates the list total.
+      const variantIdsByProduct = new Map<string, Set<string>>();
+      for (const p of list) {
+        if (p.variants && p.variants.length > 0) {
+          variantIdsByProduct.set(p.id, new Set(p.variants.map((v) => v.id)));
+        }
+      }
       const stockTotals = new Map<string, number>();
       for (const s of stockList) {
+        const variantIds = variantIdsByProduct.get(s.productId);
+        if (variantIds) {
+          if (s.variantId && variantIds.has(s.variantId)) {
+            stockTotals.set(s.productId, (stockTotals.get(s.productId) ?? 0) + s.quantityOnHand);
+          }
+          continue;
+        }
         stockTotals.set(s.productId, (stockTotals.get(s.productId) ?? 0) + s.quantityOnHand);
       }
       return {

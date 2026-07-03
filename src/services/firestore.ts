@@ -9,6 +9,7 @@ import {
   query,
   where,
   serverTimestamp,
+  runTransaction,
   type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -37,6 +38,7 @@ const COLLECTION_STOCK_MOVEMENTS = 'stockMovements';
 const COLLECTION_CUSTOMERS = 'customers';
 const COLLECTION_INVOICES = 'invoices';
 const COLLECTION_PAYMENTS = 'payments';
+const COLLECTION_COUNTERS = 'counters';
 
 const COLLECTION_AUDIT: Record<string, { entityType: AuditEntityType; action: AuditAction; summary: string }> = {
   [COLLECTION_PRODUCTS]: { entityType: 'product', action: 'product.deleted', summary: 'Product deleted' },
@@ -296,5 +298,28 @@ export const firestoreService = {
       update(companyId, COLLECTION_PAYMENTS, id, updates, userId)) as UpdateFn<Payment>,
     delete: ((companyId, id, deletedBy) =>
       withDelete(companyId, COLLECTION_PAYMENTS, id, deletedBy)) as DeleteFn,
+  },
+  counters: {
+    /**
+     * Atomically allocate the next sequence for a counter key. Runs in a
+     * Firestore transaction so concurrent callers never receive the same value.
+     * `floor` seeds the counter from pre-existing data (e.g. the current max
+     * document number) the first time the counter is used.
+     */
+    next: async (companyId: string, key: string, floor = 0): Promise<number> => {
+      const ref = doc(db, COLLECTION_COUNTERS, `${companyId}_${key}`);
+      return runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const current = snap.exists() ? Number(snap.data().value ?? 0) : 0;
+        const nextValue = Math.max(current, floor) + 1;
+        tx.set(ref, {
+          companyId,
+          key,
+          value: nextValue,
+          updatedAt: serverTimestamp(),
+        });
+        return nextValue;
+      });
+    },
   },
 };

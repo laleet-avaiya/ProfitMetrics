@@ -63,11 +63,22 @@ export function ProductDetailPage() {
     () => new Map(variantStocks.map((s) => [s.variantId!, s])),
     [variantStocks]
   );
+  // Only count buckets whose variant still exists on the product. Renaming or
+  // removing options leaves orphaned stock records behind (keyed by an old
+  // variant id) that would otherwise inflate the product's totals.
+  const currentVariantIds = useMemo(
+    () => new Set((product?.variants ?? []).map((v) => v.id)),
+    [product?.variants]
+  );
+  const currentVariantStocks = useMemo(
+    () => variantStocks.filter((s) => s.variantId && currentVariantIds.has(s.variantId)),
+    [variantStocks, currentVariantIds]
+  );
   const totalOnHand = hasVariants
-    ? variantStocks.reduce((sum, s) => sum + s.quantityOnHand, 0)
+    ? currentVariantStocks.reduce((sum, s) => sum + s.quantityOnHand, 0)
     : stock?.quantityOnHand ?? 0;
   const totalStockValue = hasVariants
-    ? variantStocks.reduce((sum, s) => sum + s.totalValue, 0)
+    ? currentVariantStocks.reduce((sum, s) => sum + s.totalValue, 0)
     : stock?.totalValue ?? 0;
 
   const persistAttachments = async (attachments: NonNullable<typeof product>['attachments']) => {

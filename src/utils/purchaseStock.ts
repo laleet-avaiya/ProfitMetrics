@@ -8,6 +8,10 @@ import { stockKey } from './variantHelpers';
 const RECEIPT_LOCKED_MESSAGE =
   'Stock for this purchase order was already received. Create a new PO to receive more goods.';
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** Apply stock receipts for newly received quantities since the previous PO state. */
 export async function syncPurchaseStockReceipts(
   companyId: string,
@@ -92,6 +96,14 @@ export async function reversePurchaseStockReceipts(
     }
 
     const newQty = stock.quantityOnHand - delta;
+    // Reverse the receipt at its own purchase price so the weighted-average
+    // cost returns toward its pre-receipt value. Removing at the current
+    // blended average would leave the remaining stock with a wrong cost basis
+    // (and hence wrong inventory value and future COGS).
+    const currentValue =
+      stock.totalValue ?? roundMoney(stock.quantityOnHand * stock.avgPurchasePrice);
+    const newValue = Math.max(0, roundMoney(currentValue - delta * prevLine.purchasePrice));
+    const newAvg = newQty > 0 ? roundMoney(newValue / newQty) : 0;
     await firestoreService.stock.update(
       companyId,
       key,
@@ -99,7 +111,8 @@ export async function reversePurchaseStockReceipts(
         companyId,
         productName: prevLine.productName,
         quantityOnHand: newQty,
-        totalValue: Math.round(newQty * stock.avgPurchasePrice * 100) / 100,
+        avgPurchasePrice: newAvg,
+        totalValue: newQty > 0 ? roundMoney(newQty * newAvg) : 0,
         updatedAt: new Date(),
       },
       userId

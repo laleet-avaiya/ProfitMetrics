@@ -296,9 +296,12 @@ export function buildPurchaseFromForm(
       return lineFromForm(l, product?.name ?? 'Unknown product', existingLine);
     });
 
-  const subtotal = roundMoney(lines.reduce((s, l) => s + l.lineSubtotal, 0));
+  // `lineTotal` is already mode-correct (tax embedded for inclusive, added on
+  // top for exclusive). Sum those for the PO total; subtotal is the ex-tax base
+  // so that `subtotal + taxAmount === total` holds in every tax mode.
+  const total = roundMoney(lines.reduce((s, l) => s + l.lineTotal, 0));
   const taxAmount = roundMoney(lines.reduce((s, l) => s + (l.taxAmount ?? 0), 0));
-  const total = roundMoney(subtotal + taxAmount);
+  const subtotal = roundMoney(total - taxAmount);
 
   const payments = existing?.payments ?? [];
   const totalPaid = roundMoney(payments.reduce((s, p) => s + p.amount, 0));
@@ -352,9 +355,9 @@ export function computePurchasePreview(form: PurchaseFormState, products: Produc
       return lineFromForm(l, product?.name ?? '');
     });
 
-  const subtotal = roundMoney(lines.reduce((s, l) => s + l.lineSubtotal, 0));
+  const total = roundMoney(lines.reduce((s, l) => s + l.lineTotal, 0));
   const taxAmount = roundMoney(lines.reduce((s, l) => s + (l.taxAmount ?? 0), 0));
-  const total = roundMoney(subtotal + taxAmount);
+  const subtotal = roundMoney(total - taxAmount);
 
   return { lines, subtotal, taxAmount, total, lineCount: lines.length };
 }

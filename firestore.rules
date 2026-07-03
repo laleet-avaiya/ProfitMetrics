@@ -389,6 +389,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Atomic sequence counters (e.g. order numbers). Any active company member
+    // may allocate; the document only holds a monotonic integer.
+    match /counters/{docId} {
+      allow read: if resource == null
+        || isActiveCompanyMember(resource.data.companyId);
+      allow create: if request.resource.data.companyId is string
+        && isActiveCompanyMember(request.resource.data.companyId);
+      allow update: if isActiveCompanyMember(resource.data.companyId)
+        && companyIdUnchanged();
+      allow delete: if false;
+    }
+
     match /purchases/{docId} {
       allow read: if canReadCompanyData('purchases');
       allow create: if canCreateCompanyData('purchases');

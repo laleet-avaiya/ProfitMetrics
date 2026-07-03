@@ -617,7 +617,20 @@ export function buildSaleFromForm(
       ? firstLine.productName
       : `${firstLine.productName} + ${saleLines.length - 1} more`;
 
-  const total = roundMoney(preview.grossRevenue);
+  // grossRevenue already contains tax for inclusive-tax lines. For exclusive
+  // (e.g. GST-on-top) lines the output tax must be added so the invoice total
+  // and the amount owed by the customer include the tax charged.
+  const exclusiveOutputTax = roundMoney(
+    form.lines.reduce(
+      (sum, line, index) =>
+        sum +
+        (line.economics.sellingTaxMode === TaxMode.EXCLUSIVE
+          ? linePreviews[index].taxAmount
+          : 0),
+      0
+    )
+  );
+  const total = roundMoney(preview.grossRevenue + exclusiveOutputTax);
   const totalPaid = roundMoney(existing?.totalPaid ?? 0);
   const balanceDue = roundMoney(Math.max(0, total - totalPaid));
   const paymentStatus = derivePaymentStatus(total, totalPaid);

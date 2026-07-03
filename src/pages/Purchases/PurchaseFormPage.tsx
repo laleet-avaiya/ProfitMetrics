@@ -255,7 +255,12 @@ export function PurchaseFormPage() {
       );
 
       if (isEditing && purchase) {
-        if (!isPurchaseReceiptLocked(purchase)) {
+        const cancelling =
+          payload.status === PurchaseOrderStatus.CANCELLED &&
+          purchase.status !== PurchaseOrderStatus.CANCELLED;
+        // Always sync on cancellation so previously received stock is reversed,
+        // even when the receipt is locked (locked only blocks receiving more).
+        if (cancelling || !isPurchaseReceiptLocked(purchase)) {
           try {
             await syncPurchaseStockReceipts(company.id, purchase, payload, user!.uid);
           } catch (stockErr) {
