@@ -34,33 +34,27 @@ export function StockReconciliationPanel({
   const [expanded, setExpanded] = useState(false);
   const [summary, setSummary] = useState<StockReconciliationSummary | null>(null);
   const [sales, setSales] = useState<Awaited<ReturnType<typeof firestoreService.sales.getAll>>>([]);
-  const [invoices, setInvoices] = useState<
-    Awaited<ReturnType<typeof firestoreService.invoices.getAll>>
-  >([]);
 
   const load = useCallback(async () => {
     if (!company) return;
     setLoading(true);
     try {
-      const [products, stock, purchases, salesList, invoiceList] = await Promise.all([
+      const [products, stock, purchases, salesList] = await Promise.all([
         firestoreService.products.getAll(company.id),
         firestoreService.stock.getAll(company.id),
         firestoreService.purchases.getAll(company.id),
         firestoreService.sales.getAll(company.id),
-        firestoreService.invoices.getAll(company.id),
       ]);
 
       const activeSales = salesList.filter(notDeleted);
-      const activeInvoices = invoiceList.filter(notDeleted);
       setSales(activeSales);
-      setInvoices(activeInvoices);
       setSummary(
         computeStockReconciliation({
           products: products.filter(notDeleted),
           stock: stock.filter(notDeleted),
           purchases: purchases.filter(notDeleted),
           sales: activeSales,
-          invoices: activeInvoices,
+          invoices: [],
         })
       );
     } catch (err) {
@@ -113,7 +107,7 @@ export function StockReconciliationPanel({
             company.id,
             summary,
             sales,
-            invoices,
+            [],
             user.uid
           );
           let message = `Updated ${result.updatedProducts} product(s)`;

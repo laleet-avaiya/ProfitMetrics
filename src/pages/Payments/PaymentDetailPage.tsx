@@ -94,16 +94,6 @@ export function PaymentDetailPage() {
                   }
                 />
               ) : null}
-              {payment.invoiceId ? (
-                <DetailField
-                  label="Invoice"
-                  value={
-                    <Link to={`/invoices/${payment.invoiceId}`} className={detailLinkClass}>
-                      {payment.invoiceNumber ?? 'View invoice'}
-                    </Link>
-                  }
-                />
-              ) : null}
               {payment.saleId ? (
                 <DetailField
                   label="Order"

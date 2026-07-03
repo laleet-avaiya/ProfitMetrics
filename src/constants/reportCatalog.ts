@@ -23,22 +23,22 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   {
     id: ReportId.PROFIT_LOSS,
     title: 'Profit & Loss',
-    description: 'Online sales, offline invoices, order profit, operating expenses, and net profit.',
+    description: 'Sales revenue, order profit, operating expenses, and net profit.',
   },
   {
     id: ReportId.GROSS_PROFIT,
     title: 'Gross profit',
-    description: 'Revenue minus cost of goods sold (COGS) and gross margin, split by online and offline.',
+    description: 'Revenue minus cost of goods sold (COGS) and gross margin.',
   },
   {
     id: ReportId.SALES_BY_PRODUCT,
     title: 'Product-wise profit',
-    description: 'Units, COGS, revenue, profit, and margin per product from online orders and offline invoices.',
+    description: 'Units, COGS, revenue, profit, and margin per product.',
   },
   {
     id: ReportId.SALES_BY_PLATFORM,
-    title: 'Sales by channel',
-    description: 'Compare online marketplaces vs invoices by revenue and profit.',
+    title: 'Sales by platform',
+    description: 'Compare platforms by revenue and profit.',
   },
   {
     id: ReportId.EXPENSE_BREAKDOWN,
@@ -48,12 +48,12 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   {
     id: ReportId.TAX_SUMMARY,
     title: 'GST / VAT summary',
-    description: 'Output tax on online sales and invoices vs input tax (ITC) from expenses.',
+    description: 'Output tax on sales vs input tax (ITC) from expenses.',
   },
   {
     id: ReportId.TREND,
     title: 'Profit trend',
-    description: 'Revenue, order profit, expenses, and net profit over time (online + offline).',
+    description: 'Revenue, order profit, expenses, and net profit over time.',
   },
   {
     id: ReportId.STOCK_ON_HAND,

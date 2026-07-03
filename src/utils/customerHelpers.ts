@@ -1,6 +1,5 @@
-import type { Customer, Invoice, Payment, Sale } from '../types';
+import type { Customer, Payment, Sale } from '../types';
 import { SaleStatus } from '../types';
-import { isReportableInvoice } from './reports';
 import { getSaleDisplayProductName } from './saleLines';
 import { createListingId } from './productDefaults';
 import { nowUtc } from './firestoreDates';
@@ -82,12 +81,11 @@ export interface CustomerLedgerSummary {
 export interface CustomerLedgerEntry {
   id: string;
   date: Date;
-  type: 'invoice' | 'sale' | 'payment';
+  type: 'sale' | 'payment';
   reference: string;
   description: string;
   debit: number;
   credit: number;
-  invoiceId?: string;
   saleId?: string;
   paymentId?: string;
 }
@@ -111,13 +109,9 @@ function isReceivableSale(sale: Sale): boolean {
 
 export function buildCustomerLedger(
   customerId: string,
-  invoices: Invoice[],
   payments: Payment[],
   sales: Sale[] = []
 ): CustomerLedgerResult {
-  const customerInvoices = invoices.filter(
-    (i) => !i.deleted && i.customerId === customerId && isReportableInvoice(i)
-  );
   const customerSales = sales.filter(
     (s) => isReceivableSale(s) && s.customerId === customerId
   );
@@ -126,19 +120,6 @@ export function buildCustomerLedger(
   );
 
   const entries: CustomerLedgerEntry[] = [];
-
-  for (const inv of customerInvoices) {
-    entries.push({
-      id: `inv-${inv.id}`,
-      date: inv.invoiceDate,
-      type: 'invoice',
-      reference: inv.invoiceNumber,
-      description: `Invoice — ${inv.lines.length} line${inv.lines.length === 1 ? '' : 's'}`,
-      debit: inv.total,
-      credit: 0,
-      invoiceId: inv.id,
-    });
-  }
 
   for (const sale of customerSales) {
     entries.push({
@@ -155,9 +136,7 @@ export function buildCustomerLedger(
 
   for (const payment of customerPayments) {
     let description = 'Payment received';
-    if (payment.kind === 'invoice' && payment.invoiceNumber) {
-      description = `Payment for invoice ${payment.invoiceNumber}`;
-    } else if (payment.kind === 'sale' && payment.saleOrderNumber) {
+    if (payment.kind === 'sale' && payment.saleOrderNumber) {
       description = `Payment for order ${payment.saleOrderNumber}`;
     } else if (payment.kind === 'marketplace_payout' && payment.platform) {
       description = `${payment.platform} payout`;
@@ -169,11 +148,10 @@ export function buildCustomerLedger(
       id: `pay-${payment.id}`,
       date: payment.paymentDate,
       type: 'payment',
-      reference: payment.reference ?? payment.invoiceNumber ?? payment.saleOrderNumber ?? '—',
+      reference: payment.reference ?? payment.saleOrderNumber ?? '—',
       description,
       debit: 0,
       credit: payment.amount,
-      invoiceId: payment.invoiceId,
       saleId: payment.saleId,
       paymentId: payment.id,
     });
@@ -182,17 +160,13 @@ export function buildCustomerLedger(
   entries.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const totalInvoiced = roundMoney(
-    customerInvoices.reduce((s, i) => s + i.total, 0) +
-      customerSales.reduce((s, sale) => s + saleTotal(sale), 0)
+    customerSales.reduce((s, sale) => s + saleTotal(sale), 0)
   );
   const totalPaid = roundMoney(customerPayments.reduce((s, p) => s + p.amount, 0));
   const balanceDue = roundMoney(
-    customerInvoices.reduce((s, i) => s + i.balanceDue, 0) +
-      customerSales.reduce((s, sale) => s + saleBalance(sale), 0)
+    customerSales.reduce((s, sale) => s + saleBalance(sale), 0)
   );
-  const openInvoices =
-    customerInvoices.filter((i) => i.balanceDue > 0).length +
-    customerSales.filter((sale) => saleBalance(sale) > 0).length;
+  const openInvoices = customerSales.filter((sale) => saleBalance(sale) > 0).length;
 
   return {
     totalInvoiced,
@@ -205,13 +179,11 @@ export function buildCustomerLedger(
 
 export function buildCustomerSummary(
   customerId: string,
-  invoices: Invoice[],
   payments: Payment[],
   sales: Sale[] = []
 ): CustomerLedgerSummary {
   const { totalInvoiced, totalPaid, balanceDue, openInvoices } = buildCustomerLedger(
     customerId,
-    invoices,
     payments,
     sales
   );

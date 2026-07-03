@@ -26,7 +26,7 @@ import type { Payment } from '../../types';
 import { PaymentKind } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { dateFilterRange, isDateInRange, type DateFilter } from '../../utils/expenseHelpers';
-import { getPaymentDisplaySource, syncInvoicePaymentRollup } from '../../utils/paymentHelpers';
+import { getPaymentDisplaySource, syncSalePaymentRollup } from '../../utils/paymentHelpers';
 import { formatMoney } from '../../utils/profit';
 
 type KindFilter = 'all' | PaymentKind;
@@ -95,8 +95,8 @@ export function Payments() {
       variant: 'danger',
       onConfirm: async () => {
         await firestoreService.payments.delete(company.id, payment.id, user!.uid);
-        if (payment.invoiceId) {
-          await syncInvoicePaymentRollup(company.id, payment.invoiceId, user!.uid);
+        if (payment.saleId) {
+          await syncSalePaymentRollup(company.id, payment.saleId, user!.uid);
         }
         notification.success('Payment deleted');
         reload();
@@ -107,7 +107,7 @@ export function Payments() {
   return (
     <SectionPage
       title="Payments"
-      description={`Money received — invoice payments, direct receipts, and marketplace payouts (${marketplaceSummary}).`}
+      description={`Money received — sale payments, direct receipts, and marketplace payouts (${marketplaceSummary}).`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <StatCard label="Payments" value={String(summary.count)} subtext="Filtered results" tone="indigo" icon={Wallet} />
@@ -159,7 +159,7 @@ export function Payments() {
         {loading ? (
           <LoadingView message="Loading payments…" size="lg" className="py-16" />
         ) : filtered.length === 0 ? (
-          <EmptyState icon={Wallet} title="No payments yet" description="Record invoice payments, direct receipts, or marketplace payouts." action={canCreate ? <Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button> : undefined} />
+          <EmptyState icon={Wallet} title="No payments yet" description="Record sale payments, direct receipts, or marketplace payouts." action={canCreate ? <Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button> : undefined} />
         ) : (
           <>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">

@@ -12,8 +12,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
-import type { Invoice, Payment, Sale } from '../../types';
-import { InvoiceStatus } from '../../types';
+import type { Payment, Sale } from '../../types';
+import { SaleStatus } from '../../types';
 import { buildCustomerLedger } from '../../utils/customerHelpers';
 import { formatDateLocal } from '../../utils/date';
 import { formatMoney } from '../../utils/profit';
@@ -24,7 +24,6 @@ export function CustomerDetailPage() {
   const { company } = useAuth();
   const { canUpdate } = useModuleAccess(AppModule.CUSTOMERS);
   const currency = company?.currency ?? 'AED';
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
 
@@ -37,11 +36,9 @@ export function CustomerDetailPage() {
   useEffect(() => {
     if (!company) return;
     Promise.all([
-      firestoreService.invoices.getAll(company.id),
       firestoreService.payments.getAll(company.id),
       firestoreService.sales.getAll(company.id),
-    ]).then(([inv, pay, sale]) => {
-      setInvoices(inv.filter((i) => !i.deleted));
+    ]).then(([pay, sale]) => {
       setPayments(pay.filter((p) => !p.deleted));
       setSales(sale.filter((s) => !s.deleted));
     });
@@ -57,8 +54,8 @@ export function CustomerDetailPage() {
         entries: [],
       };
     }
-    return buildCustomerLedger(customerId, invoices, payments, sales);
-  }, [customerId, invoices, payments, sales]);
+    return buildCustomerLedger(customerId, payments, sales);
+  }, [customerId, payments, sales]);
 
   const ledgerWithBalance = useMemo(() => {
     let balance = 0;
@@ -68,9 +65,12 @@ export function CustomerDetailPage() {
     });
   }, [ledger.entries]);
 
-  const customerInvoices = useMemo(
-    () => invoices.filter((i) => i.customerId === customerId && i.status !== InvoiceStatus.VOID),
-    [invoices, customerId]
+  const customerSales = useMemo(
+    () =>
+      sales
+        .filter((s) => s.customerId === customerId && s.status !== SaleStatus.CANCELLED)
+        .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime()),
+    [sales, customerId]
   );
 
   return (
@@ -117,9 +117,9 @@ export function CustomerDetailPage() {
           <DetailStatStrip
             stats={[
               {
-                label: 'Invoiced',
+                label: 'Ordered',
                 value: formatMoney(ledger.totalInvoiced, currency),
-                subtext: `${ledger.openInvoices} open invoice${ledger.openInvoices === 1 ? '' : 's'}`,
+                subtext: `${ledger.openInvoices} open order${ledger.openInvoices === 1 ? '' : 's'}`,
                 icon: FileText,
                 tone: 'indigo',
               },
@@ -134,7 +134,7 @@ export function CustomerDetailPage() {
               {
                 label: 'Balance due',
                 value: formatMoney(ledger.balanceDue, currency),
-                subtext: 'Outstanding on invoices',
+                subtext: 'Outstanding on orders',
                 icon: UserCircle,
                 tone: ledger.balanceDue > 0 ? 'amber' : 'emerald',
               },
@@ -154,19 +154,19 @@ export function CustomerDetailPage() {
           <DetailSection
             icon={FileText}
             iconTone="violet"
-            title="Invoices"
-            description="Invoices for this customer."
+            title="Orders"
+            description="Sales orders for this customer."
             headerAction={
-              <Link to={`/invoices/new?customer=${customer.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
-                New invoice →
+              <Link to={`/sales?customer=${customer.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
+                View sales →
               </Link>
             }
           >
-            {customerInvoices.length === 0 ? (
+            {customerSales.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No invoices yet.{' '}
-                <Link to={`/invoices/new?customer=${customer.id}`} className={detailLinkClass}>
-                  Create first invoice
+                No orders yet.{' '}
+                <Link to="/sales/new" className={detailLinkClass}>
+                  Create first sale
                 </Link>
               </p>
             ) : (
@@ -175,26 +175,31 @@ export function CustomerDetailPage() {
                   <thead>
                     <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 uppercase">
                       <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Invoice</th>
+                      <th className="px-3 py-2">Order</th>
                       <th className="px-3 py-2 text-right">Total</th>
                       <th className="px-3 py-2 text-right">Balance</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {customerInvoices.map((inv) => (
-                      <tr key={inv.id}>
-                        <td className="px-3 py-2">{formatDateLocal(inv.invoiceDate)}</td>
-                        <td className="px-3 py-2">
-                          <Link to={`/invoices/${inv.id}`} className={detailLinkClass}>
-                            {inv.invoiceNumber}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(inv.total, currency)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">
-                          {inv.balanceDue > 0 ? formatMoney(inv.balanceDue, currency) : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {customerSales.map((sale) => {
+                      const total = sale.total ?? sale.grossRevenue;
+                      const balance =
+                        sale.balanceDue ?? Math.max(0, total - (sale.totalPaid ?? 0));
+                      return (
+                        <tr key={sale.id}>
+                          <td className="px-3 py-2">{formatDateLocal(sale.orderDate)}</td>
+                          <td className="px-3 py-2">
+                            <Link to={`/sales/${sale.id}`} className={detailLinkClass}>
+                              {sale.orderNumber ?? sale.orderId ?? sale.productName}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatMoney(total, currency)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">
+                            {balance > 0 ? formatMoney(balance, currency) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -205,7 +210,7 @@ export function CustomerDetailPage() {
             icon={Wallet}
             iconTone="emerald"
             title="Customer ledger"
-            description="Running balance from invoices and payments — debit is amount owed, credit is amount received."
+            description="Running balance from orders and payments — debit is amount owed, credit is amount received."
             headerAction={
               ledger.balanceDue > 0 ? (
                 <Link to={`/payments/new?customer=${customer.id}`} className={`text-xs font-medium ${detailLinkClass}`}>
@@ -233,16 +238,12 @@ export function CustomerDetailPage() {
                         <td className="px-3 py-2">{formatDateLocal(entry.date)}</td>
                         <td className="px-3 py-2 capitalize">{entry.type}</td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                          {entry.invoiceId ? (
-                            <Link to={`/invoices/${entry.invoiceId}`} className={detailLinkClass}>
+                          {entry.saleId ? (
+                            <Link to={`/sales/${entry.saleId}`} className={detailLinkClass}>
                               {entry.description}
                             </Link>
                           ) : entry.paymentId ? (
                             <Link to={`/payments/${entry.paymentId}`} className={detailLinkClass}>
-                              {entry.description}
-                            </Link>
-                          ) : entry.saleId ? (
-                            <Link to={`/sales/${entry.saleId}`} className={detailLinkClass}>
                               {entry.description}
                             </Link>
                           ) : (

@@ -80,7 +80,7 @@ service cloud.firestore {
 
     function isBusinessModule(module) {
       return module in [
-        'customers', 'sales', 'invoices', 'payments',
+        'customers', 'sales', 'payments',
         'purchases', 'expenses', 'vendors', 'products'
       ];
     }
@@ -379,13 +379,6 @@ service cloud.firestore {
       allow read: if canReadCompanyData('sales');
       allow create: if canCreateCompanyData('sales');
       allow update: if canUpdateCompanyData('sales');
-      allow delete: if false;
-    }
-
-    match /invoices/{docId} {
-      allow read: if canReadCompanyData('invoices');
-      allow create: if canCreateCompanyData('invoices');
-      allow update: if canUpdateCompanyData('invoices');
       allow delete: if false;
     }
 

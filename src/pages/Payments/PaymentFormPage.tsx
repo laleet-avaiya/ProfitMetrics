@@ -26,14 +26,13 @@ import { PAYMENT_KIND_OPTIONS } from '../../constants/paymentKinds';
 import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { firestoreService } from '../../services/firestore';
-import type { Customer, Invoice, Payment, Sale } from '../../types';
+import type { Customer, Payment, Sale } from '../../types';
 import { PaymentKind, PaymentMode } from '../../types';
 import { getActiveCustomers } from '../../utils/customerHelpers';
 import {
   buildPaymentFromForm,
   emptyPaymentForm,
   paymentToForm,
-  syncInvoicePaymentRollup,
   syncSalePaymentRollup,
   type PaymentFormState,
 } from '../../utils/paymentHelpers';
@@ -64,7 +63,6 @@ export function PaymentFormPage() {
 
   const [payment, setPayment] = useState<Payment | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<PaymentFormState>(() => emptyPaymentForm());
@@ -77,10 +75,6 @@ export function PaymentFormPage() {
   );
 
   const activeCustomers = useMemo(() => getActiveCustomers(customers), [customers]);
-  const openInvoices = useMemo(
-    () => invoices.filter((i) => i.balanceDue > 0),
-    [invoices]
-  );
   const openSales = useMemo(
     () => sales.filter((s) => saleBalanceDue(s) > 0),
     [sales]
@@ -92,13 +86,11 @@ export function PaymentFormPage() {
     setLoading(true);
     Promise.all([
       firestoreService.customers.getAll(company.id),
-      firestoreService.invoices.getAll(company.id),
       firestoreService.sales.getAll(company.id),
       isEditing && paymentId ? firestoreService.payments.get(company.id, paymentId) : Promise.resolve(null),
-    ]).then(([customerList, invoiceList, saleList, foundPayment]) => {
+    ]).then(([customerList, saleList, foundPayment]) => {
       if (cancelled) return;
       setCustomers(customerList.filter((c) => !c.deleted));
-      setInvoices(invoiceList.filter((i) => !i.deleted));
       setSales(saleList.filter((s) => !s.deleted));
       if (foundPayment?.deleted) {
         setPayment(null);
@@ -111,13 +103,9 @@ export function PaymentFormPage() {
         const initial = emptyPaymentForm(
           (searchParams.get('kind') as PaymentKind) || PaymentKind.DIRECT
         );
-        const invoiceFromUrl = searchParams.get('invoice');
         const saleFromUrl = searchParams.get('sale');
         const customerFromUrl = searchParams.get('customer');
-        if (invoiceFromUrl) {
-          initial.kind = PaymentKind.INVOICE;
-          initial.invoiceId = invoiceFromUrl;
-        } else if (saleFromUrl) {
+        if (saleFromUrl) {
           initial.kind = PaymentKind.SALE;
           initial.saleId = saleFromUrl;
         } else if (customerFromUrl) {
@@ -132,10 +120,6 @@ export function PaymentFormPage() {
     };
   }, [company, isEditing, paymentId, searchParams]);
 
-  const selectedInvoice = useMemo(
-    () => invoices.find((i) => i.id === form.invoiceId),
-    [invoices, form.invoiceId]
-  );
   const selectedSale = useMemo(
     () => sales.find((s) => s.id === form.saleId),
     [sales, form.saleId]
@@ -157,12 +141,11 @@ export function PaymentFormPage() {
       const payload = buildPaymentFromForm(
         form,
         company.id,
-        selectedInvoice,
+        undefined,
         customer,
         payment ?? undefined,
         selectedSale
       );
-      const prevInvoiceId = payment?.invoiceId;
       const prevSaleId = payment?.saleId;
 
       if (isEditing && payment) {
@@ -171,12 +154,6 @@ export function PaymentFormPage() {
         await firestoreService.payments.create(company.id, payload, user!.uid);
       }
 
-      if (payload.invoiceId) {
-        await syncInvoicePaymentRollup(company.id, payload.invoiceId, user!.uid);
-      }
-      if (prevInvoiceId && prevInvoiceId !== payload.invoiceId) {
-        await syncInvoicePaymentRollup(company.id, prevInvoiceId, user!.uid);
-      }
       if (payload.saleId) {
         await syncSalePaymentRollup(company.id, payload.saleId, user!.uid);
       }
@@ -204,12 +181,6 @@ export function PaymentFormPage() {
         value={hasAmount ? formatMoney(amountNum, currency) : '—'}
         emphasize
       />
-      {form.kind === PaymentKind.INVOICE && selectedInvoice ? (
-        <FormSidebarRow
-          label="Invoice due"
-          value={formatMoney(selectedInvoice.balanceDue, currency)}
-        />
-      ) : null}
       {form.kind === PaymentKind.SALE && selectedSale ? (
         <FormSidebarRow
           label="Order due"
@@ -234,7 +205,7 @@ export function PaymentFormPage() {
       <PageShell>
         <PageHeader
           title={isEditing ? 'Edit payment' : 'Record payment'}
-          description="Invoice or sale payment, direct receipt, or marketplace payout."
+          description="Sale payment, direct receipt, or marketplace payout."
           actions={
             <FormPageHeaderActions
               formId="payment-form"
@@ -268,15 +239,7 @@ export function PaymentFormPage() {
                     value={form.paymentDate}
                     onChange={(e) => setForm((p) => ({ ...p, paymentDate: e.target.value }))}
                   />
-                  {form.kind === PaymentKind.INVOICE ? (
-                    <PaymentAmountField
-                      value={form.amount}
-                      onChange={(amount) => setForm((p) => ({ ...p, amount }))}
-                      pendingAmount={selectedInvoice?.balanceDue ?? 0}
-                      currency={currency}
-                      required
-                    />
-                  ) : form.kind === PaymentKind.SALE ? (
+                  {form.kind === PaymentKind.SALE ? (
                     <PaymentAmountField
                       value={form.amount}
                       onChange={(amount) => setForm((p) => ({ ...p, amount }))}
@@ -326,27 +289,7 @@ export function PaymentFormPage() {
                 </div>
               </FormFieldGroup>
 
-              {(form.kind === PaymentKind.INVOICE ||
-                form.kind === PaymentKind.SALE ||
-                form.kind === PaymentKind.MARKETPLACE_PAYOUT ||
-                form.kind === PaymentKind.DIRECT) && <FormFieldGroupDivider />}
-
-              {form.kind === PaymentKind.INVOICE ? (
-                <FormFieldGroup title="Invoice link">
-                  <Select
-                    label="Invoice"
-                    value={form.invoiceId}
-                    onChange={(e) => setForm((p) => ({ ...p, invoiceId: e.target.value }))}
-                    options={[
-                      { value: '', label: 'Select invoice…' },
-                      ...openInvoices.map((i) => ({
-                        value: i.id,
-                        label: `${i.invoiceNumber} — ${i.customerName} (${i.balanceDue} due)`,
-                      })),
-                    ]}
-                  />
-                </FormFieldGroup>
-              ) : null}
+              <FormFieldGroupDivider />
 
               {form.kind === PaymentKind.SALE ? (
                 <FormFieldGroup title="Sale link">

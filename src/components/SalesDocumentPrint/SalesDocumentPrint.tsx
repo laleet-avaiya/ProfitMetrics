@@ -1,7 +1,10 @@
 import type { Company } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatMoney } from '../../utils/profit';
-import { salesKindLabel } from '../../constants/salesChannels';
+
+function salesKindLabel(kind: 'marketplace' | 'offline'): string {
+  return kind === 'offline' ? 'Offline' : 'Marketplace';
+}
 
 export interface SalesDocumentPrintLine {
   productName: string;

@@ -19,8 +19,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
-import type { Customer, Invoice } from '../../types';
-import { isReportableInvoice } from '../../utils/reports';
+import type { Customer, Sale } from '../../types';
+import { SaleStatus } from '../../types';
 import { nowUtc } from '../../utils/firestoreDates';
 import { formatMoney } from '../../utils/profit';
 
@@ -36,7 +36,7 @@ export function Customers() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
 
   const emptyData = useMemo(
-    () => ({ customers: [] as Customer[], invoices: [] as Invoice[] }),
+    () => ({ customers: [] as Customer[], sales: [] as Sale[] }),
     []
   );
 
@@ -44,32 +44,34 @@ export function Customers() {
     initialData: emptyData,
     errorMessage: 'Failed to load customers',
     fetch: async (companyId) => {
-      const [customerList, invoiceList] = await Promise.all([
+      const [customerList, saleList] = await Promise.all([
         firestoreService.customers.getAll(companyId),
-        firestoreService.invoices.getAll(companyId),
+        firestoreService.sales.getAll(companyId),
       ]);
       return {
         customers: customerList.filter(notDeleted),
-        invoices: invoiceList.filter(notDeleted),
+        sales: saleList.filter(notDeleted),
       };
     },
   });
 
-  const { customers, invoices } = data;
+  const { customers, sales } = data;
   const [search, setSearch] = useState('');
 
   const invoiceStats = useMemo(() => {
     const map = new Map<string, { count: number; balanceDue: number }>();
-    for (const inv of invoices) {
-      if (!inv.customerId || !isReportableInvoice(inv)) continue;
-      const prev = map.get(inv.customerId) ?? { count: 0, balanceDue: 0 };
-      map.set(inv.customerId, {
+    for (const sale of sales) {
+      if (!sale.customerId || sale.status === SaleStatus.CANCELLED) continue;
+      const total = sale.total ?? sale.grossRevenue;
+      const balance = sale.balanceDue ?? Math.max(0, total - (sale.totalPaid ?? 0));
+      const prev = map.get(sale.customerId) ?? { count: 0, balanceDue: 0 };
+      map.set(sale.customerId, {
         count: prev.count + 1,
-        balanceDue: prev.balanceDue + inv.balanceDue,
+        balanceDue: prev.balanceDue + balance,
       });
     }
     return map;
-  }, [invoices]);
+  }, [sales]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,7 +118,7 @@ export function Customers() {
   return (
     <SectionPage
       title="Customers"
-      description="Buyers for invoicing and payment tracking."
+      description="Buyers for order and payment tracking."
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <StatCard label="Customers" value={String(filtered.length)} subtext="Filtered results" tone="indigo" icon={UserCircle} />
@@ -126,7 +128,7 @@ export function Customers() {
             filtered.reduce((s, c) => s + (invoiceStats.get(c.id)?.balanceDue ?? 0), 0),
             currency
           )}
-          subtext="Unpaid on invoices"
+          subtext="Unpaid on orders"
           tone="amber"
           icon={Wallet}
         />
@@ -165,7 +167,7 @@ export function Customers() {
           <EmptyState
             icon={UserCircle}
             title="No customers yet"
-            description="Add customers when you create offline invoices."
+            description="Add customers to track their orders and payments."
             action={
               canCreate ? (
                 <Button variant="primary" onClick={() => navigate('/customers/new')}>
@@ -185,7 +187,7 @@ export function Customers() {
                   <th className={tableHeadCellClass}>Contact</th>
                   <th className={tableHeadCellClass}>Email</th>
                   <th className={tableHeadCellClass}>Status</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Invoices</th>
+                  <th className={`${tableHeadCellClass} text-right`}>Orders</th>
                   <th className={`${tableHeadCellClass} text-right`}>Balance</th>
                   <th className={`${tableHeadCellClass} text-right`}>Actions</th>
                 </tr>
@@ -267,7 +269,7 @@ export function Customers() {
                     </span>
                   </div>
                   <p className="text-xs tabular-nums text-gray-600 dark:text-gray-400">
-                    {stats?.count ?? 0} invoice(s)
+                    {stats?.count ?? 0} order(s)
                     {(stats?.balanceDue ?? 0) > 0
                       ? ` · ${formatMoney(stats!.balanceDue, currency)} due`
                       : ''}

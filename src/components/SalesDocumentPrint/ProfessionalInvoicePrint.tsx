@@ -1,7 +1,10 @@
 import type { SalesDocumentPrintProps } from './SalesDocumentPrint';
 import { formatDateLocal } from '../../utils/date';
 import { formatMoney } from '../../utils/profit';
-import { salesKindLabel } from '../../constants/salesChannels';
+
+function salesKindLabel(kind: 'marketplace' | 'offline'): string {
+  return kind === 'offline' ? 'Offline' : 'Marketplace';
+}
 
 function GridCell({
   label,
