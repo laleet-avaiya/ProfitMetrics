@@ -53,13 +53,51 @@ service cloud.firestore {
       return /databases/$(database)/documents/companyRoles/$(companyId + '_' + role);
     }
 
+    function isBusinessDataModule(module) {
+      return module == 'customers'
+        || module == 'sales'
+        || module == 'invoices'
+        || module == 'payments'
+        || module == 'purchases'
+        || module == 'expenses'
+        || module == 'vendors'
+        || module == 'products';
+    }
+
+    function managerBuiltinPermission(module, action) {
+      return (module == 'dashboard' && action == 'view')
+        || (module == 'reports' && action == 'view')
+        || (module == 'ai_assistant' && (action == 'view' || action == 'create'))
+        || (module == 'settings' && (action == 'view' || action == 'update'))
+        || (module == 'subscription' && action == 'view')
+        || (isBusinessDataModule(module)
+          && (action == 'view' || action == 'create' || action == 'update' || action == 'delete'));
+    }
+
+    function viewerBuiltinPermission(module, action) {
+      return (module == 'dashboard' && action == 'view')
+        || (module == 'reports' && action == 'view')
+        || (module == 'ai_assistant' && (action == 'view' || action == 'create'))
+        || (module == 'settings' && action == 'view')
+        || (module == 'subscription' && action == 'view')
+        || (isBusinessDataModule(module) && action == 'view');
+    }
+
+    function builtinRolePermission(role, module, action) {
+      return (role == 'manager' && managerBuiltinPermission(module, action))
+        || (role == 'viewer' && viewerBuiltinPermission(module, action))
+        || (role == 'accountant' && module == 'reports' && action == 'view');
+    }
+
     function hasModulePermission(companyId, module, action) {
+      let role = memberRole(companyId);
+      let rolePath = rolePermissionsPath(companyId, role);
       return isActiveMember(companyId)
         && (
-          memberRole(companyId) == 'admin'
-          || (memberRole(companyId) == 'accountant' && module == 'reports' && action == 'view')
-          || (exists(rolePermissionsPath(companyId, memberRole(companyId)))
-            && get(rolePermissionsPath(companyId, memberRole(companyId))).data.permissions[module + '.' + action] == true)
+          role == 'admin'
+          || (exists(rolePath)
+            && get(rolePath).data.permissions[module + '.' + action] == true)
+          || (!exists(rolePath) && builtinRolePermission(role, module, action))
         );
     }
 

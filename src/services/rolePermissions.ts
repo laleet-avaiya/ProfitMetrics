@@ -64,6 +64,32 @@ export const rolePermissionsService = {
     await batch.commit();
   },
 
+  /** Create any missing non-admin role permission docs (legacy companies). */
+  async ensureDefaults(companyId: string): Promise<void> {
+    const roles: CompanyRoleType[] = [
+      CompanyRole.MANAGER,
+      CompanyRole.VIEWER,
+      CompanyRole.ACCOUNTANT,
+    ];
+    const now = nowUtc();
+
+    await Promise.all(
+      roles.map(async (role) => {
+        const existing = await this.get(companyId, role);
+        if (existing) return;
+        await setDoc(
+          doc(db, COLLECTION, getRoleDocId(companyId, role)),
+          prepareDatesForFirestore({
+            companyId,
+            role,
+            permissions: DEFAULT_ROLE_PERMISSIONS[role],
+            updatedAt: now,
+          })
+        );
+      })
+    );
+  },
+
   async update(
     companyId: string,
     role: CompanyRoleType,

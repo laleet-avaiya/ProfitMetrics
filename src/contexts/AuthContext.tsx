@@ -25,6 +25,7 @@ import type { AuthContextType, CreateCompanyDetails, SignUpDetails } from './Aut
 import type { Company, CompanyMember, Organization, OrgMember, UserProfile } from '../types';
 import type { ModulePermissionMap } from '../constants/permissions';
 import { OrgRole } from '../models/org';
+import { CompanyRole } from '../constants/roles';
 
 const COMPANY_COLLECTION = 'companies';
 const ORG_COLLECTION = 'orgs';
@@ -70,6 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCompany(loadedCompany);
     setMembership(member);
     setRolePermissions(permissions);
+
+    if (member.role === CompanyRole.ADMIN) {
+      void rolePermissionsService.ensureDefaults(companyId).catch((err) => {
+        console.error('Failed to ensure role permission defaults:', err);
+      });
+    }
 
     if (!org || org.id !== loadedCompany.orgId) {
       await loadOrgContext(loadedCompany.orgId, userId);
