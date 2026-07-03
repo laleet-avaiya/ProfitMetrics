@@ -184,6 +184,7 @@ export function Invoices() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={FileText} title="No invoices yet" description="Create invoices for your customers." action={canCreate ? <Button variant="primary" onClick={() => navigate('/invoices/new')}>Create invoice</Button> : undefined} />
         ) : (
+          <>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
               <thead>
@@ -234,6 +235,64 @@ export function Invoices() {
               </tbody>
             </table>
           </div>
+
+          <div className="md:hidden space-y-3">
+            {filtered.map((inv) => (
+              <div
+                key={inv.id}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      <Link to={`/invoices/${inv.id}`} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                        {inv.invoiceNumber}
+                      </Link>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {inv.customerName ?? '—'} · {formatDateLocal(inv.invoiceDate)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                    {invoiceStatusLabel(inv.status)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs tabular-nums text-gray-600 dark:text-gray-400">
+                  <span>{purchasePaymentStatusLabel(inv.paymentStatus)}</span>
+                  <span>
+                    {formatMoney(inv.total, currency)}
+                    {inv.balanceDue > 0 ? (
+                      <span className="text-rose-600 dark:text-rose-400"> · {formatMoney(inv.balanceDue, currency)} due</span>
+                    ) : null}
+                  </span>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/invoices/${inv.id}`)}>
+                    <Eye className="w-4 h-4" />
+                    View
+                  </Button>
+                  {canUpdate ? (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/invoices/${inv.id}/edit`)}>
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDelete ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(inv)}
+                      className="text-rose-600 dark:text-rose-400"
+                      aria-label="Delete invoice"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
       </Card>
     </SectionPage>

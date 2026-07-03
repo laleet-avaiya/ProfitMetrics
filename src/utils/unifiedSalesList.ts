@@ -39,7 +39,10 @@ export function filterUnifiedRows(
 }
 
 export function unifiedRowReference(row: UnifiedSalesRow): string {
-  return row.kind === 'marketplace' ? row.sale.orderId : row.invoice.invoiceNumber;
+  if (row.kind === 'marketplace') {
+    return row.sale.orderNumber ?? row.sale.orderId ?? '—';
+  }
+  return row.invoice.invoiceNumber;
 }
 
 export function unifiedRowSubtitle(row: UnifiedSalesRow): string {

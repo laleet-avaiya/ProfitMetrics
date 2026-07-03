@@ -161,6 +161,7 @@ export function Payments() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={Wallet} title="No payments yet" description="Record invoice payments, direct receipts, or marketplace payouts." action={canCreate ? <Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button> : undefined} />
         ) : (
+          <>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
               <thead>
@@ -211,6 +212,59 @@ export function Payments() {
               </tbody>
             </table>
           </div>
+
+          <div className="md:hidden space-y-3">
+            {filtered.map((payment) => (
+              <div
+                key={payment.id}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      <Link to={`/payments/${payment.id}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline">
+                        {getPaymentDisplaySource(payment)}
+                      </Link>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {paymentKindLabel(payment.kind)} · {formatDateLocal(payment.paymentDate)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                    {formatMoney(payment.amount, currency)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                  {paymentModeLabel(payment.paymentMode)}
+                  {payment.reference ? ` · ${payment.reference}` : ''}
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/payments/${payment.id}`)}>
+                    <Eye className="w-4 h-4" />
+                    View
+                  </Button>
+                  {canUpdate ? (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/payments/${payment.id}/edit`)}>
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDelete ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(payment)}
+                      className="text-rose-600 dark:text-rose-400"
+                      aria-label="Delete payment"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
       </Card>
     </SectionPage>

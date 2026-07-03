@@ -1,4 +1,5 @@
 import type {
+  Customer,
   DeliveryMode,
   Product,
   ProductPlatformListing,
@@ -19,6 +20,7 @@ import {
 import { normalizeDeliveryMode } from '../constants/deliveryModes';
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { normalizeSalePaymentStatus } from '../constants/purchaseStatuses';
+import { derivePaymentStatus } from './purchaseHelpers';
 import { resolveListingTax } from './listingTax';
 import {
   computeLineEconomics,
@@ -67,11 +69,33 @@ export interface SaleLineFormState {
   economics: SaleFormEconomics;
 }
 
+/** Optional buyer capture on marketplace orders — mirrors invoice customers. */
+export interface SaleCustomerFormState {
+  mode: 'existing' | 'new';
+  customerId: string;
+  name: string;
+  email: string;
+  phone: string;
+  taxId: string;
+}
+
+export function emptySaleCustomerForm(): SaleCustomerFormState {
+  return {
+    mode: 'existing',
+    customerId: '',
+    name: '',
+    email: '',
+    phone: '',
+    taxId: '',
+  };
+}
+
 export interface SaleFormState {
   orderId: string;
   orderDate: string;
   trackingId: string;
   platform: string;
+  customer: SaleCustomerFormState;
   deliveryMode: DeliveryMode;
   orderShippingCost: number;
   orderDeliveryTaxPercentage: number;
@@ -167,6 +191,7 @@ export function emptySaleForm(): SaleFormState {
     orderDate: utcToLocalDateInput(new Date()),
     trackingId: '',
     platform: '',
+    customer: emptySaleCustomerForm(),
     deliveryMode: DeliveryModeEnum.INDIVIDUAL,
     orderShippingCost: 0,
     orderDeliveryTaxPercentage: 0,
@@ -277,10 +302,16 @@ export function saleToForm(sale: Sale): SaleFormState {
   const firstEconomics = firstLine?.economics ?? sale.economics;
 
   return {
-    orderId: sale.orderId,
+    orderId: sale.orderId ?? '',
     orderDate: utcToLocalDateInput(sale.orderDate),
     trackingId: sale.trackingId ?? '',
     platform: sale.platform,
+    customer: {
+      ...emptySaleCustomerForm(),
+      mode: 'existing',
+      customerId: sale.customerId ?? '',
+      name: sale.customerName ?? '',
+    },
     deliveryMode: normalizeDeliveryMode(sale.deliveryMode),
     orderShippingCost: sale.orderShippingCost ?? 0,
     orderDeliveryTaxPercentage:
@@ -547,7 +578,9 @@ export function buildSaleFromForm(
   companyId: string,
   productNames: Map<string, string>,
   existing?: Sale,
-  productHsnCodes?: Map<string, string>
+  productHsnCodes?: Map<string, string>,
+  customer?: Customer,
+  orderNumber?: string
 ): Sale {
   const preview = computeSalePreview(form);
   const outcomeFields = outcomeFieldsForSave(form, preview);
@@ -584,10 +617,16 @@ export function buildSaleFromForm(
       ? firstLine.productName
       : `${firstLine.productName} + ${saleLines.length - 1} more`;
 
+  const total = roundMoney(preview.grossRevenue);
+  const totalPaid = roundMoney(existing?.totalPaid ?? 0);
+  const balanceDue = roundMoney(Math.max(0, total - totalPaid));
+  const paymentStatus = derivePaymentStatus(total, totalPaid);
+
   return {
     id: existing?.id ?? createListingId(),
     companyId,
-    orderId: form.orderId.trim(),
+    orderNumber: orderNumber ?? existing?.orderNumber,
+    orderId: form.orderId.trim() || undefined,
     orderDate: localDateInputToUtc(form.orderDate),
     trackingId: form.trackingId.trim() || undefined,
     lines: saleLines,
@@ -600,9 +639,11 @@ export function buildSaleFromForm(
     platform: form.platform.trim(),
     platformListingId: firstLine.platformListingId,
     quantity: totalQty,
+    customerId: customer?.id,
+    customerName: customer?.name,
     status: normalizeSaleStatus(form.status),
     paymentMode: form.paymentMode,
-    paymentStatus: normalizeSalePaymentStatus(form.paymentStatus),
+    paymentStatus,
     ...outcomeFields,
     economics: buildOrderEconomicsSnapshot(form, preview),
     grossRevenue: preview.grossRevenue,
@@ -610,6 +651,9 @@ export function buildSaleFromForm(
     platformFees: preview.platformFees,
     profit: preview.profit,
     profitMarginPercent: preview.profitMarginPercent,
+    total,
+    totalPaid,
+    balanceDue,
     notes: form.notes.trim() || undefined,
     stockApplied: existing?.stockApplied,
     createdAt: existing?.createdAt ?? now,

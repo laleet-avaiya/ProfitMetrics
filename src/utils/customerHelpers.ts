@@ -1,5 +1,7 @@
-import type { Customer, Invoice, Payment } from '../types';
+import type { Customer, Invoice, Payment, Sale } from '../types';
+import { SaleStatus } from '../types';
 import { isReportableInvoice } from './reports';
+import { getSaleDisplayProductName } from './saleLines';
 import { createListingId } from './productDefaults';
 import { nowUtc } from './firestoreDates';
 
@@ -80,12 +82,13 @@ export interface CustomerLedgerSummary {
 export interface CustomerLedgerEntry {
   id: string;
   date: Date;
-  type: 'invoice' | 'payment';
+  type: 'invoice' | 'sale' | 'payment';
   reference: string;
   description: string;
   debit: number;
   credit: number;
   invoiceId?: string;
+  saleId?: string;
   paymentId?: string;
 }
 
@@ -93,13 +96,30 @@ export interface CustomerLedgerResult extends CustomerLedgerSummary {
   entries: CustomerLedgerEntry[];
 }
 
+function saleTotal(sale: Sale): number {
+  return sale.total ?? sale.grossRevenue;
+}
+
+function saleBalance(sale: Sale): number {
+  if (sale.balanceDue != null) return sale.balanceDue;
+  return Math.max(0, saleTotal(sale) - (sale.totalPaid ?? 0));
+}
+
+function isReceivableSale(sale: Sale): boolean {
+  return !sale.deleted && sale.status !== SaleStatus.CANCELLED;
+}
+
 export function buildCustomerLedger(
   customerId: string,
   invoices: Invoice[],
-  payments: Payment[]
+  payments: Payment[],
+  sales: Sale[] = []
 ): CustomerLedgerResult {
   const customerInvoices = invoices.filter(
     (i) => !i.deleted && i.customerId === customerId && isReportableInvoice(i)
+  );
+  const customerSales = sales.filter(
+    (s) => isReceivableSale(s) && s.customerId === customerId
   );
   const customerPayments = payments.filter(
     (p) => !p.deleted && p.customerId === customerId
@@ -120,10 +140,25 @@ export function buildCustomerLedger(
     });
   }
 
+  for (const sale of customerSales) {
+    entries.push({
+      id: `sale-${sale.id}`,
+      date: sale.orderDate,
+      type: 'sale',
+      reference: sale.orderNumber ?? sale.orderId ?? getSaleDisplayProductName(sale),
+      description: `Order — ${getSaleDisplayProductName(sale)}`,
+      debit: saleTotal(sale),
+      credit: 0,
+      saleId: sale.id,
+    });
+  }
+
   for (const payment of customerPayments) {
     let description = 'Payment received';
     if (payment.kind === 'invoice' && payment.invoiceNumber) {
       description = `Payment for invoice ${payment.invoiceNumber}`;
+    } else if (payment.kind === 'sale' && payment.saleOrderNumber) {
+      description = `Payment for order ${payment.saleOrderNumber}`;
     } else if (payment.kind === 'marketplace_payout' && payment.platform) {
       description = `${payment.platform} payout`;
     } else if (payment.kind === 'direct') {
@@ -134,21 +169,30 @@ export function buildCustomerLedger(
       id: `pay-${payment.id}`,
       date: payment.paymentDate,
       type: 'payment',
-      reference: payment.reference ?? payment.invoiceNumber ?? '—',
+      reference: payment.reference ?? payment.invoiceNumber ?? payment.saleOrderNumber ?? '—',
       description,
       debit: 0,
       credit: payment.amount,
       invoiceId: payment.invoiceId,
+      saleId: payment.saleId,
       paymentId: payment.id,
     });
   }
 
   entries.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const totalInvoiced = roundMoney(customerInvoices.reduce((s, i) => s + i.total, 0));
+  const totalInvoiced = roundMoney(
+    customerInvoices.reduce((s, i) => s + i.total, 0) +
+      customerSales.reduce((s, sale) => s + saleTotal(sale), 0)
+  );
   const totalPaid = roundMoney(customerPayments.reduce((s, p) => s + p.amount, 0));
-  const balanceDue = roundMoney(customerInvoices.reduce((s, i) => s + i.balanceDue, 0));
-  const openInvoices = customerInvoices.filter((i) => i.balanceDue > 0).length;
+  const balanceDue = roundMoney(
+    customerInvoices.reduce((s, i) => s + i.balanceDue, 0) +
+      customerSales.reduce((s, sale) => s + saleBalance(sale), 0)
+  );
+  const openInvoices =
+    customerInvoices.filter((i) => i.balanceDue > 0).length +
+    customerSales.filter((sale) => saleBalance(sale) > 0).length;
 
   return {
     totalInvoiced,
@@ -162,12 +206,14 @@ export function buildCustomerLedger(
 export function buildCustomerSummary(
   customerId: string,
   invoices: Invoice[],
-  payments: Payment[]
+  payments: Payment[],
+  sales: Sale[] = []
 ): CustomerLedgerSummary {
   const { totalInvoiced, totalPaid, balanceDue, openInvoices } = buildCustomerLedger(
     customerId,
     invoices,
-    payments
+    payments,
+    sales
   );
   return { totalInvoiced, totalPaid, balanceDue, openInvoices };
 }

@@ -6,6 +6,7 @@ import {
   Plus,
   Receipt,
   Truck,
+  UserCircle,
   Wallet,
 } from 'lucide-react';
 import { Layout } from '../../components/Layout/Layout';
@@ -36,13 +37,21 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
-import type { Product, Sale } from '../../types';
+import type { Customer, Product, Sale } from '../../types';
 import type { EntityAttachment } from '../../models/attachment';
+import {
+  buildCustomerFromForm,
+  emptyCustomerForm,
+  getActiveCustomers,
+} from '../../utils/customerHelpers';
 import { finalizePendingAttachments } from '../../utils/entityAttachments';
-import { DeliveryMode, PaymentMode, PurchasePaymentStatus, TaxType, SaleStatus } from '../../types';
+import { DeliveryMode, PaymentMode, TaxType, SaleStatus } from '../../types';
 import { DELIVERY_MODE_OPTIONS, deliveryModeLabel } from '../../constants/deliveryModes';
 import { PAYMENT_MODE_OPTIONS } from '../../constants/paymentModes';
-import { PURCHASE_PAYMENT_STATUS_OPTIONS } from '../../constants/purchaseStatuses';
+import { purchasePaymentStatusLabel } from '../../constants/purchaseStatuses';
+import { derivePaymentStatus } from '../../utils/purchaseHelpers';
+import { previewNextSaleNumber, allocateNextSaleNumber } from '../../utils/documentNumbers';
+import { formatMoney } from '../../utils/profit';
 import { taxPercentLabel } from '../../utils/listingTax';
 import {
   buildSaleFromForm,
@@ -70,7 +79,7 @@ import {
   tableWrapClass,
 } from '../../constants/ui';
 
-type SaleFormTab = 'order' | 'items' | 'delivery' | 'extras' | 'documents';
+type SaleFormTab = 'order' | 'customer' | 'items' | 'delivery' | 'extras' | 'documents';
 
 export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
@@ -83,6 +92,8 @@ export function SaleFormPage() {
 
   const [sale, setSale] = useState<Sale | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [orderNumberPreview, setOrderNumberPreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<SaleFormState>(() => emptySaleForm());
   const [saving, setSaving] = useState(false);
@@ -103,7 +114,13 @@ export function SaleFormPage() {
     return [...active, ...extras];
   }, [products, sale]);
 
+  const activeCustomers = useMemo(() => getActiveCustomers(customers), [customers]);
+
   const preview = useMemo(() => computeSalePreview(form), [form]);
+  const orderTotal = preview.grossRevenue;
+  const orderPaid = sale?.totalPaid ?? 0;
+  const orderBalance = Math.max(0, orderTotal - orderPaid);
+  const orderPaymentStatus = derivePaymentStatus(orderTotal, orderPaid);
   const firstLineEconomics = form.lines[0]?.economics;
   const tracksTax = (firstLineEconomics?.taxType ?? TaxType.NONE) !== TaxType.NONE;
   const pctLabel = taxPercentLabel(firstLineEconomics?.taxType ?? TaxType.NONE);
@@ -119,9 +136,13 @@ export function SaleFormPage() {
 
     const load = async () => {
       try {
-        const productList = await firestoreService.products.getAll(company.id);
+        const [productList, customerList] = await Promise.all([
+          firestoreService.products.getAll(company.id),
+          firestoreService.customers.getAll(company.id),
+        ]);
         if (cancelled) return;
         setProducts(productList.filter((p) => !p.deleted));
+        setCustomers(customerList.filter((c) => !c.deleted));
 
         if (isEditing && saleId) {
           const found = await firestoreService.sales.get(company.id, saleId);
@@ -152,6 +173,21 @@ export function SaleFormPage() {
       cancelled = true;
     };
   }, [company, isEditing, notification, saleId]);
+
+  useEffect(() => {
+    if (!company || isEditing) return;
+    let cancelled = false;
+    previewNextSaleNumber(company.id, form.orderDate)
+      .then((next) => {
+        if (!cancelled) setOrderNumberPreview(next);
+      })
+      .catch(() => {
+        /* preview is best-effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company, isEditing, form.orderDate]);
 
   const updateLine = (lineId: string, patch: Partial<(typeof form.lines)[0]>) => {
     setForm((f) => ({
@@ -299,7 +335,6 @@ export function SaleFormPage() {
     const next: typeof errors = {};
     const lineErrors: Record<string, { productId?: string; platformListingId?: string; variantId?: string }> = {};
 
-    if (!form.orderId.trim()) next.orderId = 'Order ID is required';
     if (!form.platform.trim()) next.platform = 'Select a marketplace';
 
     for (const line of form.lines) {
@@ -333,6 +368,22 @@ export function SaleFormPage() {
     return true;
   };
 
+  const resolveCustomer = async (): Promise<Customer | undefined> => {
+    if (!company) return undefined;
+    if (form.customer.mode === 'existing') {
+      if (!form.customer.customerId) return undefined;
+      return customers.find((c) => c.id === form.customer.customerId);
+    }
+    if (!form.customer.name.trim()) return undefined;
+    const customerPayload = buildCustomerFromForm(
+      { ...emptyCustomerForm(), ...form.customer, status: 'active' },
+      company.id
+    );
+    const created = await firestoreService.customers.create(company.id, customerPayload, user!.uid);
+    setCustomers((prev) => [...prev, created]);
+    return created;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company) return;
@@ -340,6 +391,9 @@ export function SaleFormPage() {
 
     setSaving(true);
     try {
+      const customer = await resolveCustomer();
+      const orderNumber =
+        sale?.orderNumber ?? (await allocateNextSaleNumber(company.id, form.orderDate));
       const productNames = new Map(formProducts.map((p) => [p.id, p.name]));
       const productHsnCodes = new Map(
         formProducts.filter((p) => p.hsnCode).map((p) => [p.id, p.hsnCode as string])
@@ -349,7 +403,9 @@ export function SaleFormPage() {
         company.id,
         productNames,
         sale ?? undefined,
-        productHsnCodes
+        productHsnCodes,
+        customer,
+        orderNumber
       );
 
       if (isEditing && sale) {
@@ -468,10 +524,11 @@ export function SaleFormPage() {
     if (listings.length > 1 && !line.platformListingId) return false;
     return true;
   });
-  const isReady = !isEditing && form.orderId.trim() && form.platform.trim() && validLines;
+  const isReady = !isEditing && form.platform.trim() && validLines;
 
   const formTabs = [
     { id: 'order' as const, label: 'Order', icon: Receipt },
+    { id: 'customer' as const, label: 'Customer', icon: UserCircle },
     { id: 'items' as const, label: 'Items', icon: Package, badge: form.lines.length },
     { id: 'delivery' as const, label: 'Delivery', icon: Truck },
     { id: 'extras' as const, label: 'Payment & notes', icon: Wallet },
@@ -513,7 +570,9 @@ export function SaleFormPage() {
       <PageShell>
         <PageHeader
           title={isEditing ? 'Edit sale' : 'Log sale'}
-          description={isEditing ? `Order ${sale?.orderId ?? ''}` : 'Marketplace order'}
+          description={
+            isEditing ? `Order ${sale?.orderNumber ?? sale?.orderId ?? ''}` : 'Marketplace order'
+          }
           actions={
             !noProducts ? (
               <FormPageHeaderActions
@@ -574,12 +633,22 @@ export function SaleFormPage() {
                 {activeTab === 'order' ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <Input
-                      label="Order ID"
+                      label="Order number"
+                      value={
+                        isEditing
+                          ? (sale?.orderNumber ?? '—')
+                          : orderNumberPreview || 'Auto-generated on save'
+                      }
+                      readOnly
+                      disabled
+                      helperText="Generated automatically"
+                    />
+                    <Input
+                      label="Marketplace order ID"
                       value={form.orderId}
                       onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
                       error={errors.orderId}
-                      required
-                      placeholder="Amazon order #"
+                      placeholder="Optional — marketplace order #"
                     />
                     <Input
                       label="Order date"
@@ -599,6 +668,90 @@ export function SaleFormPage() {
                       error={errors.platform}
                       required
                     />
+                  </div>
+                ) : null}
+
+                {activeTab === 'customer' ? (
+                  <div className="space-y-3 max-w-2xl">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Optionally link a buyer to this marketplace order.
+                    </p>
+                    <Select
+                      label="Customer type"
+                      value={form.customer.mode}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          customer: {
+                            ...f.customer,
+                            mode: e.target.value as 'existing' | 'new',
+                          },
+                        }))
+                      }
+                      options={[
+                        { value: 'existing', label: 'Existing customer' },
+                        { value: 'new', label: 'New customer' },
+                      ]}
+                    />
+                    {form.customer.mode === 'existing' ? (
+                      <Select
+                        label="Customer"
+                        value={form.customer.customerId}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            customer: { ...f.customer, customerId: e.target.value },
+                          }))
+                        }
+                        options={[
+                          { value: '', label: 'No customer' },
+                          ...activeCustomers.map((c) => ({ value: c.id, label: c.name })),
+                        ]}
+                      />
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label="Name"
+                          value={form.customer.name}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              customer: { ...f.customer, name: e.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Email"
+                          value={form.customer.email}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              customer: { ...f.customer, email: e.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Phone"
+                          value={form.customer.phone}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              customer: { ...f.customer, phone: e.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Tax ID"
+                          value={form.customer.taxId}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              customer: { ...f.customer, taxId: e.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
@@ -762,20 +915,6 @@ export function SaleFormPage() {
                         }
                       />
                       <Select
-                        label="Payment status"
-                        value={form.paymentStatus}
-                        options={PURCHASE_PAYMENT_STATUS_OPTIONS.map((o) => ({
-                          value: o.value,
-                          label: o.label,
-                        }))}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            paymentStatus: e.target.value as PurchasePaymentStatus,
-                          }))
-                        }
-                      />
-                      <Select
                         label="Order status"
                         value={form.status}
                         options={SALE_STATUS_OPTIONS}
@@ -803,6 +942,49 @@ export function SaleFormPage() {
                         onChange={(e) => setForm((f) => ({ ...f, trackingId: e.target.value }))}
                         placeholder="AWB123456789"
                       />
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                          Payment
+                        </p>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                          {purchasePaymentStatusLabel(orderPaymentStatus)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Order total</p>
+                          <p className="tabular-nums font-medium">{formatMoney(orderTotal, currency)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Received</p>
+                          <p className="tabular-nums font-medium text-emerald-600 dark:text-emerald-400">
+                            {formatMoney(orderPaid, currency)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Balance due</p>
+                          <p className="tabular-nums font-medium text-rose-600 dark:text-rose-400">
+                            {formatMoney(orderBalance, currency)}
+                          </p>
+                        </div>
+                      </div>
+                      {isEditing && sale ? (
+                        orderBalance > 0 ? (
+                          <Link
+                            to={`/payments/new?sale=${sale.id}`}
+                            className="inline-block text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                          >
+                            Record payment →
+                          </Link>
+                        ) : null
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Save the order first, then record payments against it.
+                        </p>
+                      )}
                     </div>
 
                     {isReturned ? (
@@ -882,7 +1064,8 @@ export function SaleFormPage() {
 
             {isReady ? (
               <FormReadyBanner>
-                Order <span className="font-medium">{form.orderId.trim()}</span> on{' '}
+                Order{' '}
+                <span className="font-medium">{orderNumberPreview || 'ORD-…'}</span> on{' '}
                 <span className="font-medium">{form.platform}</span> — ready to log.
               </FormReadyBanner>
             ) : null}

@@ -148,7 +148,11 @@ service cloud.firestore {
     // ── Company-scoped business data (shared pattern) ─────────────────────
 
     function canReadCompanyData(module) {
-      return hasModulePermission(resource.data.companyId, module, 'view')
+      // A `get` on a non-existent document evaluates this rule with a null
+      // `resource`; allow it so the client receives "not found" instead of a
+      // permission error (nothing is leaked — the doc has no data).
+      return resource == null
+        || hasModulePermission(resource.data.companyId, module, 'view')
         || hasModulePermission(resource.data.companyId, 'reports', 'view');
     }
 

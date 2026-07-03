@@ -254,6 +254,7 @@ export function Purchases() {
             }
           />
         ) : (
+          <>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
               <thead>
@@ -342,6 +343,69 @@ export function Purchases() {
               </tbody>
             </table>
           </div>
+
+          <div className="md:hidden space-y-3">
+            {filtered.map((purchase) => (
+              <div
+                key={purchase.id}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      <Link
+                        to={`/purchases/${purchase.id}`}
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        {purchase.poNumber}
+                      </Link>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {purchase.vendorName ?? '—'} · {formatDateLocal(purchase.purchaseDate)}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 inline-flex text-xs px-2 py-0.5 rounded-full ${statusTone(purchase.status)}`}>
+                    {purchaseStatusLabel(purchase.status)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs tabular-nums text-gray-600 dark:text-gray-400">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full ${paymentTone(purchase.paymentStatus)}`}>
+                    {purchasePaymentStatusLabel(purchase.paymentStatus)}
+                  </span>
+                  <span>
+                    {formatMoney(purchase.total, currency)}
+                    {purchase.balanceDue > 0 ? (
+                      <span className="text-rose-600 dark:text-rose-400"> · {formatMoney(purchase.balanceDue, currency)} due</span>
+                    ) : null}
+                  </span>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/purchases/${purchase.id}`)}>
+                    <Eye className="w-4 h-4" />
+                    View
+                  </Button>
+                  {canUpdate ? (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/purchases/${purchase.id}/edit`)}>
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDelete ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(purchase)}
+                      className="text-rose-600 dark:text-rose-400"
+                      aria-label={`Delete ${purchase.poNumber}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
       </Card>
     </SectionPage>

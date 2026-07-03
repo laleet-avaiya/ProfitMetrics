@@ -65,15 +65,18 @@ export function buildSalePrintProps(
   company: NonNullable<SalesDocumentPrintProps['company']>
 ): Omit<SalesDocumentPrintProps, 'currency'> {
   const subtotal = sale.grossRevenue - (sale.economics.taxAmount ?? 0);
+  const total = sale.total ?? sale.grossRevenue;
   return {
     kind: 'marketplace',
-    documentNumber: sale.orderId,
+    documentNumber: sale.orderNumber ?? sale.orderId ?? '',
     documentDate: sale.orderDate,
-    billTo: `${sale.platform} customer`,
+    billTo: sale.customerName ?? `${sale.platform} customer`,
     lines: printLinesFromSale(sale),
     subtotal,
     taxAmount: sale.economics.taxAmount ?? 0,
     total: sale.grossRevenue,
+    totalPaid: sale.totalPaid,
+    balanceDue: sale.balanceDue ?? Math.max(0, total - (sale.totalPaid ?? 0)),
     notes: sale.notes,
     company,
   };

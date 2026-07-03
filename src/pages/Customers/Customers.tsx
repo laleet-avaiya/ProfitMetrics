@@ -176,6 +176,7 @@ export function Customers() {
             }
           />
         ) : (
+          <>
           <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
               <thead>
@@ -238,6 +239,77 @@ export function Customers() {
               </tbody>
             </table>
           </div>
+
+          <div className="md:hidden space-y-3">
+            {filtered.map((customer) => {
+              const stats = invoiceStats.get(customer.id);
+              return (
+                <div
+                  key={customer.id}
+                  className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 dark:text-white truncate">
+                        <Link
+                          to={`/customers/${customer.id}`}
+                          className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+                        >
+                          {customer.name}
+                        </Link>
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {customer.contactName ?? customer.email ?? customer.phone ?? 'No contact info'}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                      {customer.status}
+                    </span>
+                  </div>
+                  <p className="text-xs tabular-nums text-gray-600 dark:text-gray-400">
+                    {stats?.count ?? 0} invoice(s)
+                    {(stats?.balanceDue ?? 0) > 0
+                      ? ` · ${formatMoney(stats!.balanceDue, currency)} due`
+                      : ''}
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/customers/${customer.id}`)}>
+                      <Eye className="w-4 h-4" />
+                      View
+                    </Button>
+                    {canUpdate ? (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate(`/customers/${customer.id}/edit`)}>
+                        <Pencil className="w-4 h-4" />
+                        Edit
+                      </Button>
+                    ) : null}
+                    {canUpdate ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleArchive(customer)}
+                        aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}
+                      >
+                        {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
+                      </Button>
+                    ) : null}
+                    {canDelete ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(customer)}
+                        className="text-rose-600 dark:text-rose-400"
+                        aria-label="Delete customer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          </>
         )}
       </Card>
     </SectionPage>

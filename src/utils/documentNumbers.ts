@@ -1,9 +1,18 @@
 import { firestoreService } from '../services/firestore';
 import { localDateInputToUtc } from './firestoreDates';
 
-export type DocumentPrefix = 'PO' | 'INV' | 'EXP';
+export type DocumentPrefix = 'PO' | 'INV' | 'EXP' | 'ORD';
 
-const SEQUENCE_PAD = 4;
+const DEFAULT_SEQUENCE_PAD = 4;
+
+/** Per-prefix zero-padding width. Sales use 6 digits (ORD-2026-000001). */
+const SEQUENCE_PAD: Partial<Record<DocumentPrefix, number>> = {
+  ORD: 6,
+};
+
+function padForPrefix(prefix: DocumentPrefix): number {
+  return SEQUENCE_PAD[prefix] ?? DEFAULT_SEQUENCE_PAD;
+}
 
 /** Calendar year from a local `<input type="date">` value. */
 export function yearFromLocalDateInput(dateStr: string): number {
@@ -12,7 +21,7 @@ export function yearFromLocalDateInput(dateStr: string): number {
 
 /** Format PO-2026-0001 style document numbers. */
 export function formatDocumentNumber(prefix: DocumentPrefix, year: number, sequence: number): string {
-  return `${prefix}-${year}-${String(sequence).padStart(SEQUENCE_PAD, '0')}`;
+  return `${prefix}-${year}-${String(sequence).padStart(padForPrefix(prefix), '0')}`;
 }
 
 function sequencePattern(prefix: DocumentPrefix, year: number): RegExp {
@@ -78,4 +87,17 @@ export async function previewNextExpenseNumber(companyId: string, expenseDate: s
 
 export async function allocateNextExpenseNumber(companyId: string, expenseDate: string): Promise<string> {
   return previewNextExpenseNumber(companyId, expenseDate);
+}
+
+export async function previewNextSaleNumber(companyId: string, orderDate: string): Promise<string> {
+  const sales = await firestoreService.sales.getAll(companyId);
+  const year = yearFromLocalDateInput(orderDate);
+  const numbers = sales
+    .filter((s) => !s.deleted && s.orderNumber)
+    .map((s) => s.orderNumber!);
+  return allocateDocumentNumber('ORD', year, numbers);
+}
+
+export async function allocateNextSaleNumber(companyId: string, orderDate: string): Promise<string> {
+  return previewNextSaleNumber(companyId, orderDate);
 }

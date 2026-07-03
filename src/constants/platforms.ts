@@ -13,6 +13,8 @@ export const DEFAULT_MARKETPLACES = [
   'WhatsApp',
   'Instagram',
   'Facebook',
+  'Walk in',
+  'Website',
 ] as const;
 
 /** Reserved option in product platform listings for free-text names. */

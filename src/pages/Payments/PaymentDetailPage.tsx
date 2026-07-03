@@ -104,6 +104,16 @@ export function PaymentDetailPage() {
                   }
                 />
               ) : null}
+              {payment.saleId ? (
+                <DetailField
+                  label="Order"
+                  value={
+                    <Link to={`/sales/${payment.saleId}`} className={detailLinkClass}>
+                      {payment.saleOrderNumber ?? 'View order'}
+                    </Link>
+                  }
+                />
+              ) : null}
             </DetailGrid>
             {payment.notes ? <DetailNotes>{payment.notes}</DetailNotes> : null}
           </DetailSection>

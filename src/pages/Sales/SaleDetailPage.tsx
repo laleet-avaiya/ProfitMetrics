@@ -9,6 +9,7 @@ import {
   TrendingDown,
   TrendingUp,
   Truck,
+  Wallet,
 } from 'lucide-react';
 import { EntityDetailShell } from '../../components/DetailPage/EntityDetailShell';
 import { DetailField, DetailGrid, detailLinkClass } from '../../components/DetailPage/DetailField';
@@ -76,7 +77,7 @@ export function SaleDetailPage() {
       notFoundDescription="This order may have been deleted."
       backTo="/sales"
       backLabel="Back to sales"
-      title={sale ? `Order ${sale.orderId}` : 'Sale'}
+      title={sale ? `Order ${sale.orderNumber ?? sale.orderId ?? ''}` : 'Sale'}
       description={
         sale
           ? `${getSaleDisplayProductName(sale)} · ${sale.platform}${lineCount > 1 ? ` · ${lineCount} items` : ''}`
@@ -115,6 +116,17 @@ export function SaleDetailPage() {
               >
                 <Pencil className="w-4 h-4" />
                 Edit sale
+              </Button>
+            ) : null}
+            {(sale.balanceDue ??
+              Math.max(0, (sale.total ?? sale.grossRevenue) - (sale.totalPaid ?? 0))) > 0 ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => navigate(`/payments/new?sale=${sale.id}`)}
+              >
+                <Wallet className="w-4 h-4" />
+                Record payment
               </Button>
             ) : null}
           </div>
@@ -164,7 +176,16 @@ export function SaleDetailPage() {
             description="Marketplace order, product, and delivery info."
           >
             <DetailGrid columns={3}>
-              <DetailField label="Order ID" value={sale.orderId} valueClassName="font-mono text-xs" />
+              <DetailField
+                label="Order number"
+                value={sale.orderNumber ?? '—'}
+                valueClassName="font-mono text-xs"
+              />
+              <DetailField
+                label="Marketplace order ID"
+                value={sale.orderId}
+                valueClassName="font-mono text-xs"
+              />
               <DetailField label="Order date" value={formatDateLocal(sale.orderDate)} />
               <DetailField
                 label="Items"
@@ -176,6 +197,20 @@ export function SaleDetailPage() {
               />
               <DetailField label="Delivery" value={deliveryModeLabel(sale.deliveryMode)} />
               <DetailField label="Platform" value={sale.platform} />
+              <DetailField
+                label="Customer"
+                value={
+                  sale.customerName ? (
+                    sale.customerId ? (
+                      <Link to={`/customers/${sale.customerId}`} className={`text-sm ${detailLinkClass}`}>
+                        {sale.customerName} →
+                      </Link>
+                    ) : (
+                      sale.customerName
+                    )
+                  ) : null
+                }
+              />
               <DetailField label="Status" value={<SaleStatusBadge status={sale.status} />} />
               <DetailField label="Payment mode" value={paymentModeLabel(sale.paymentMode)} />
               <DetailField
@@ -187,6 +222,19 @@ export function SaleDetailPage() {
                     {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}
                   </span>
                 }
+              />
+              <DetailField
+                label="Received"
+                value={formatMoney(sale.totalPaid ?? 0, currency)}
+                valueClassName="tabular-nums"
+              />
+              <DetailField
+                label="Balance due"
+                value={formatMoney(
+                  sale.balanceDue ?? Math.max(0, (sale.total ?? sale.grossRevenue) - (sale.totalPaid ?? 0)),
+                  currency
+                )}
+                valueClassName="tabular-nums font-medium"
               />
               <DetailField label="Tracking ID" value={sale.trackingId} valueClassName="font-mono text-xs" />
               {sale.status === SaleStatus.RETURNED && (

@@ -183,8 +183,10 @@ export interface SaleLine {
 export interface Sale {
   id: string;
   companyId: string;
-  /** External order ID from the marketplace */
-  orderId: string;
+  /** Auto-generated internal order number, e.g. ORD-2026-000001 (primary reference) */
+  orderNumber?: string;
+  /** External order ID from the marketplace — optional */
+  orderId?: string;
   /** Business order date — stored as UTC instant (local calendar day on save) */
   orderDate: Date;
   /** Order lines — multi-item marketplace orders. Legacy sales omit this. */
@@ -201,6 +203,10 @@ export interface Sale {
   platform: string;
   platformListingId?: string;
   quantity: number;
+  /** Optional linked customer (marketplace buyer) */
+  customerId?: string;
+  /** Denormalized customer name for list views */
+  customerName?: string;
   /** pending · shipped · delivered · returned · cancelled — omitted on legacy records */
   status?: SaleStatus;
   /** Tracking only — how marketplace payout was received */
@@ -233,6 +239,12 @@ export interface Sale {
   platformFees: number;
   profit: number;
   profitMarginPercent: number;
+  /** Amount the customer owes for this order (defaults to gross revenue) */
+  total?: number;
+  /** Sum of payments received against this order */
+  totalPaid?: number;
+  /** total − totalPaid */
+  balanceDue?: number;
   notes?: string;
   createdBy?: string;
   updatedBy?: string;
@@ -585,6 +597,7 @@ export type PaymentMode = (typeof PaymentMode)[keyof typeof PaymentMode];
 
 export const PaymentKind = {
   INVOICE: 'invoice',
+  SALE: 'sale',
   DIRECT: 'direct',
   MARKETPLACE_PAYOUT: 'marketplace_payout',
 } as const;
@@ -600,6 +613,10 @@ export interface Payment {
   paymentMode?: PaymentMode;
   invoiceId?: string;
   invoiceNumber?: string;
+  /** Linked marketplace sale for kind === 'sale' */
+  saleId?: string;
+  /** Denormalized sale order number, e.g. ORD-2026-000001 */
+  saleOrderNumber?: string;
   customerId?: string;
   customerName?: string;
   /** e.g. Amazon, Shopify — for marketplace lump-sum payouts */

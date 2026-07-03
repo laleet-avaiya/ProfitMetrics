@@ -12,7 +12,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useEntityDetail } from '../../hooks/useEntityDetail';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { firestoreService } from '../../services/firestore';
-import type { Invoice, Payment } from '../../types';
+import type { Invoice, Payment, Sale } from '../../types';
 import { InvoiceStatus } from '../../types';
 import { buildCustomerLedger } from '../../utils/customerHelpers';
 import { formatDateLocal } from '../../utils/date';
@@ -26,6 +26,7 @@ export function CustomerDetailPage() {
   const currency = company?.currency ?? 'AED';
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
 
   const { entity: customer, loading, notFound } = useEntityDetail({
     id: customerId,
@@ -38,9 +39,11 @@ export function CustomerDetailPage() {
     Promise.all([
       firestoreService.invoices.getAll(company.id),
       firestoreService.payments.getAll(company.id),
-    ]).then(([inv, pay]) => {
+      firestoreService.sales.getAll(company.id),
+    ]).then(([inv, pay, sale]) => {
       setInvoices(inv.filter((i) => !i.deleted));
       setPayments(pay.filter((p) => !p.deleted));
+      setSales(sale.filter((s) => !s.deleted));
     });
   }, [company]);
 
@@ -54,8 +57,8 @@ export function CustomerDetailPage() {
         entries: [],
       };
     }
-    return buildCustomerLedger(customerId, invoices, payments);
-  }, [customerId, invoices, payments]);
+    return buildCustomerLedger(customerId, invoices, payments, sales);
+  }, [customerId, invoices, payments, sales]);
 
   const ledgerWithBalance = useMemo(() => {
     let balance = 0;
@@ -236,6 +239,10 @@ export function CustomerDetailPage() {
                             </Link>
                           ) : entry.paymentId ? (
                             <Link to={`/payments/${entry.paymentId}`} className={detailLinkClass}>
+                              {entry.description}
+                            </Link>
+                          ) : entry.saleId ? (
+                            <Link to={`/sales/${entry.saleId}`} className={detailLinkClass}>
                               {entry.description}
                             </Link>
                           ) : (

@@ -1,4 +1,4 @@
-import type { Customer, Invoice, Payment } from '../types';
+import type { Customer, Invoice, Payment, Sale } from '../types';
 import { PaymentKind, PaymentMode } from '../types';
 import { paymentKindLabel as paymentKindLabelFromConstants } from '../constants/paymentKinds';
 import { derivePaymentStatus } from './purchaseHelpers';
@@ -17,6 +17,7 @@ export interface PaymentFormState {
   kind: PaymentKind;
   paymentMode: PaymentMode;
   invoiceId: string;
+  saleId: string;
   customerId: string;
   platform: string;
   reference: string;
@@ -30,6 +31,7 @@ export function emptyPaymentForm(kind: PaymentKind = PaymentKind.DIRECT): Paymen
     kind,
     paymentMode: PaymentMode.CASH,
     invoiceId: '',
+    saleId: '',
     customerId: '',
     platform: '',
     reference: '',
@@ -44,6 +46,7 @@ export function paymentToForm(payment: Payment): PaymentFormState {
     kind: payment.kind,
     paymentMode: payment.paymentMode ?? PaymentMode.CASH,
     invoiceId: payment.invoiceId ?? '',
+    saleId: payment.saleId ?? '',
     customerId: payment.customerId ?? '',
     platform: payment.platform ?? '',
     reference: payment.reference ?? '',
@@ -51,12 +54,18 @@ export function paymentToForm(payment: Payment): PaymentFormState {
   };
 }
 
+function saleReference(sale?: Sale | null): string | undefined {
+  if (!sale) return undefined;
+  return sale.orderNumber ?? sale.orderId ?? undefined;
+}
+
 export function buildPaymentFromForm(
   form: PaymentFormState,
   companyId: string,
   invoice?: Invoice | null,
   customer?: Customer | null,
-  existing?: Payment
+  existing?: Payment,
+  sale?: Sale | null
 ): Payment {
   const now = nowUtc();
   const amount = roundMoney(Math.max(0, parseFloat(form.amount) || 0));
@@ -72,9 +81,13 @@ export function buildPaymentFromForm(
       form.kind === PaymentKind.INVOICE
         ? (invoice?.id ?? (form.invoiceId || undefined))
         : undefined,
-    invoiceNumber: invoice?.invoiceNumber,
-    customerId: (customer?.id ?? invoice?.customerId ?? form.customerId) || undefined,
-    customerName: customer?.name ?? invoice?.customerName,
+    invoiceNumber: form.kind === PaymentKind.INVOICE ? invoice?.invoiceNumber : undefined,
+    saleId:
+      form.kind === PaymentKind.SALE ? (sale?.id ?? (form.saleId || undefined)) : undefined,
+    saleOrderNumber: form.kind === PaymentKind.SALE ? saleReference(sale) : undefined,
+    customerId:
+      (customer?.id ?? invoice?.customerId ?? sale?.customerId ?? form.customerId) || undefined,
+    customerName: customer?.name ?? invoice?.customerName ?? sale?.customerName,
     platform:
       form.kind === PaymentKind.MARKETPLACE_PAYOUT
         ? form.platform.trim() || undefined
@@ -117,9 +130,43 @@ export async function syncInvoicePaymentRollup(
   return { ...invoice, ...updated };
 }
 
+/** Recompute a sale's paid totals from all linked payments. */
+export async function syncSalePaymentRollup(
+  companyId: string,
+  saleId: string,
+  userId: string
+): Promise<Sale | null> {
+  const sale = await firestoreService.sales.get(companyId, saleId);
+  if (!sale || sale.deleted) return null;
+
+  const allPayments = await firestoreService.payments.getAll(companyId);
+  const linked = allPayments.filter(
+    (p) => !p.deleted && p.saleId === saleId && p.kind === PaymentKind.SALE
+  );
+
+  const total = sale.total ?? sale.grossRevenue;
+  const totalPaid = roundMoney(linked.reduce((s, p) => s + p.amount, 0));
+  const balanceDue = roundMoney(Math.max(0, total - totalPaid));
+  const paymentStatus = derivePaymentStatus(total, totalPaid);
+
+  const updated: Partial<Sale> = {
+    total,
+    totalPaid,
+    balanceDue,
+    paymentStatus,
+    updatedAt: nowUtc(),
+  };
+
+  await firestoreService.sales.update(companyId, saleId, updated, userId);
+  return { ...sale, ...updated };
+}
+
 export function getPaymentDisplaySource(payment: Payment): string {
   if (payment.kind === PaymentKind.INVOICE && payment.invoiceNumber) {
     return `Invoice ${payment.invoiceNumber}`;
+  }
+  if (payment.kind === PaymentKind.SALE && payment.saleOrderNumber) {
+    return `Order ${payment.saleOrderNumber}`;
   }
   if (payment.kind === PaymentKind.MARKETPLACE_PAYOUT && payment.platform) {
     return payment.platform;

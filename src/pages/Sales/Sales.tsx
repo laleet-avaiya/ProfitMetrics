@@ -70,7 +70,6 @@ export function Sales() {
     canDelete: canDeleteSale,
   } = useModuleAccess(AppModule.SALES);
   const {
-    canCreate: canCreateInvoice,
     canUpdate: canUpdateInvoice,
     canDelete: canDeleteInvoice,
   } = useModuleAccess(AppModule.INVOICES);
@@ -146,10 +145,12 @@ export function Sales() {
       if (!q) return true;
       const sale = row.sale;
       return (
-        sale.orderId.toLowerCase().includes(q) ||
+        (sale.orderNumber?.toLowerCase().includes(q) ?? false) ||
+        (sale.orderId?.toLowerCase().includes(q) ?? false) ||
         (sale.trackingId?.toLowerCase().includes(q) ?? false) ||
         sale.productName.toLowerCase().includes(q) ||
         sale.platform.toLowerCase().includes(q) ||
+        (sale.customerName?.toLowerCase().includes(q) ?? false) ||
         (sale.notes?.toLowerCase().includes(q) ?? false)
       );
     });
@@ -249,7 +250,7 @@ export function Sales() {
   const canDeleteRow = (row: UnifiedSalesRow) =>
     row.kind === 'marketplace' ? canDeleteSale : canDeleteInvoice;
 
-  const showCreateActions = canCreateInvoice || canCreateSale;
+  const showCreateActions = canCreateSale;
 
   return (
     <SectionPage
@@ -288,16 +289,6 @@ export function Sales() {
           actions={
             showCreateActions ? (
               <>
-                {canCreateInvoice ? (
-                  <Button
-                    variant="violet"
-                    onClick={() => navigate('/invoices/new')}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Offline sales
-                  </Button>
-                ) : null}
                 {canCreateSale ? (
                   <Button
                     variant="primary"
@@ -305,7 +296,7 @@ export function Sales() {
                     className="flex-1 sm:flex-none"
                   >
                     <Plus className="w-4 h-4" />
-                    Marketplace sale
+                    New sale
                   </Button>
                 ) : null}
               </>
@@ -370,20 +361,14 @@ export function Sales() {
           <EmptyState
             icon={ShoppingCart}
             title={emptyTitle}
-            description="Log a marketplace order or create an offline customer sale."
+            description="Log a sale with customer and payment details."
             action={
               showCreateActions ? (
                 <div className="flex flex-col sm:flex-row gap-2">
-                  {canCreateInvoice ? (
-                    <Button variant="violet" onClick={() => navigate('/invoices/new')}>
-                      <Plus className="w-4 h-4" />
-                      Offline sales
-                    </Button>
-                  ) : null}
                   {canCreateSale ? (
                     <Button variant="primary" onClick={() => navigate('/sales/new')}>
                       <Plus className="w-4 h-4" />
-                      Marketplace sale
+                      New sale
                     </Button>
                   ) : null}
                 </div>

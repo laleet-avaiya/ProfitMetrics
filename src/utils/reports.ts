@@ -329,7 +329,7 @@ export function computePaymentSummary(payments: Payment[]): PaymentSummary {
 
   for (const payment of payments) {
     totalReceived += payment.amount;
-    if (payment.kind === PaymentKind.INVOICE) {
+    if (payment.kind === PaymentKind.INVOICE || payment.kind === PaymentKind.SALE) {
       invoicePayments += payment.amount;
       invoicePaymentCount++;
     } else if (payment.kind === PaymentKind.DIRECT) {
