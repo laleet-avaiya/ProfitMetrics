@@ -41,16 +41,61 @@ export function inferPlatformFeeKind(
   return PlatformFeeKind.FIXED;
 }
 
+/**
+ * When purchase-side tax % is unset but selling tax is tracked, assume the same
+ * rate and mode on purchase. Otherwise inclusive purchase prices (e.g. 118 with
+ * 18% GST) are treated as ex-tax COGS and input GST is effectively counted
+ * twice — once in the PO payment and again as embedded cost on the sale.
+ */
+export function defaultPurchaseTaxFromSelling(
+  taxType: TaxType,
+  sellingTaxPercentage: number,
+  sellingTaxMode: TaxMode,
+  purchaseTaxPercentage?: number,
+  purchaseTaxMode?: TaxMode
+): { purchaseTaxPercentage: number; purchaseTaxMode: TaxMode } {
+  if (taxType === TaxTypeEnum.NONE || sellingTaxPercentage <= 0) {
+    return {
+      purchaseTaxPercentage: purchaseTaxPercentage ?? 0,
+      purchaseTaxMode: purchaseTaxMode ?? TaxModeEnum.INCLUSIVE,
+    };
+  }
+  if ((purchaseTaxPercentage ?? 0) > 0) {
+    return {
+      purchaseTaxPercentage: purchaseTaxPercentage!,
+      purchaseTaxMode: purchaseTaxMode ?? TaxModeEnum.INCLUSIVE,
+    };
+  }
+  if (purchaseTaxMode === TaxModeEnum.EXCLUSIVE) {
+    return {
+      purchaseTaxPercentage: 0,
+      purchaseTaxMode: TaxModeEnum.EXCLUSIVE,
+    };
+  }
+  return {
+    purchaseTaxPercentage: sellingTaxPercentage,
+    purchaseTaxMode: purchaseTaxMode ?? sellingTaxMode,
+  };
+}
+
 /** Resolve listing tax fields with legacy fallbacks. */
 export function resolveListingTax(listing: ProductPlatformListing): ResolvedLineTax {
   const sellingTaxPercentage = listing.sellingTaxPercentage ?? listing.taxPercentage ?? 0;
   const sellingTaxMode = listing.sellingTaxMode ?? listing.taxMode ?? TaxModeEnum.INCLUSIVE;
+  const taxType = listing.taxType ?? TaxTypeEnum.NONE;
+  const purchaseTax = defaultPurchaseTaxFromSelling(
+    taxType,
+    sellingTaxPercentage,
+    sellingTaxMode,
+    listing.purchaseTaxPercentage,
+    listing.purchaseTaxMode
+  );
 
   return {
-    taxType: listing.taxType ?? TaxTypeEnum.NONE,
+    taxType,
     platformFeeKind: inferPlatformFeeKind(listing),
-    purchaseTaxPercentage: listing.purchaseTaxPercentage ?? 0,
-    purchaseTaxMode: listing.purchaseTaxMode ?? TaxModeEnum.INCLUSIVE,
+    purchaseTaxPercentage: purchaseTax.purchaseTaxPercentage,
+    purchaseTaxMode: purchaseTax.purchaseTaxMode,
     sellingTaxPercentage,
     sellingTaxMode,
     deliveryTaxPercentage: listing.deliveryTaxPercentage ?? 0,

@@ -1,7 +1,8 @@
 import { normalizeDeliveryMode } from '../constants/deliveryModes';
 import type { DeliveryMode, Sale, SaleLine } from '../types';
 import { DeliveryMode as DeliveryModeEnum } from '../types';
-import { computeLineEconomics, computeTaxAmount, computeTaxBase } from './profit';
+import { computeLineEconomics, computeOrderEconomics, computeTaxAmount, computeTaxBase } from './profit';
+import { resolveListingTax } from './listingTax';
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -122,12 +123,37 @@ export function getSaleDeliveryCostBase(sale: Sale): number {
 
 export function saleCogs(sale: Sale): number {
   return roundMoney(
-    getSaleLines(sale).reduce(
-      (sum, line) =>
-        sum +
-        roundMoney(Math.max(0, line.economics.purchasePrice) * Math.max(1, line.quantity)),
-      0
-    )
+    getSaleLines(sale).reduce((sum, line) => {
+      const qty = Math.max(1, line.quantity);
+      const e = line.economics;
+      const resolved = resolveListingTax({
+        id: '',
+        platform: '',
+        purchasePrice: e.purchasePrice,
+        sellingPrice: e.sellingPrice,
+        shippingCost: e.shippingCost,
+        platformFee: e.platformFee,
+        platformFeePercent: e.platformFeePercent,
+        platformFeeKind: e.platformFeeKind,
+        taxType: e.taxType,
+        taxPercentage: e.taxPercentage,
+        taxMode: e.taxMode,
+        purchaseTaxPercentage: e.purchaseTaxPercentage,
+        purchaseTaxMode: e.purchaseTaxMode,
+        sellingTaxPercentage: e.sellingTaxPercentage,
+        sellingTaxMode: e.sellingTaxMode,
+        deliveryTaxPercentage: e.deliveryTaxPercentage,
+        deliveryTaxMode: e.deliveryTaxMode,
+        platformFeeTaxPercentage: e.platformFeeTaxPercentage,
+        platformFeeTaxMode: e.platformFeeTaxMode,
+      });
+      const unitCogs = computeTaxBase(
+        Math.max(0, e.purchasePrice),
+        resolved.purchaseTaxPercentage,
+        resolved.purchaseTaxMode
+      );
+      return sum + roundMoney(unitCogs * qty);
+    }, 0)
   );
 }
 
@@ -147,9 +173,39 @@ export function getSaleLineMetrics(
   profit: number;
 }> {
   const lines = getSaleLines(sale);
-  const orderProfit = sale.profit;
-  const orderRevenue = sale.grossRevenue;
   const isGroup = getSaleDeliveryMode(sale) === DeliveryModeEnum.GROUP;
+  const orderRevenue = sale.grossRevenue;
+  const orderProfit = computeOrderEconomics({
+    lines: lines.map((line) => {
+      const qty = Math.max(1, line.quantity);
+      const e = line.economics;
+      return {
+        quantity: qty,
+        purchasePrice: e.purchasePrice,
+        sellingPrice: e.sellingPrice,
+        shippingCost: isGroup ? 0 : e.shippingCost,
+        platformFee: e.platformFee,
+        platformFeePercent: e.platformFeePercent,
+        platformFeeKind: e.platformFeeKind,
+        taxType: e.taxType,
+        taxPercentage: e.taxPercentage,
+        taxMode: e.taxMode,
+        purchaseTaxPercentage: e.purchaseTaxPercentage,
+        purchaseTaxMode: e.purchaseTaxMode,
+        sellingTaxPercentage: e.sellingTaxPercentage,
+        sellingTaxMode: e.sellingTaxMode,
+        deliveryTaxPercentage: e.deliveryTaxPercentage,
+        deliveryTaxMode: e.deliveryTaxMode,
+        platformFeeTaxPercentage: e.platformFeeTaxPercentage,
+        platformFeeTaxMode: e.platformFeeTaxMode,
+        taxAmountOverride: e.taxType !== 'none' ? roundMoney(e.taxAmount / qty) : undefined,
+      };
+    }),
+    deliveryMode: getSaleDeliveryMode(sale),
+    orderShippingCost: sale.orderShippingCost,
+    orderDeliveryTaxPercentage: sale.orderDeliveryTaxPercentage,
+    orderDeliveryTaxMode: sale.orderDeliveryTaxMode,
+  }).profit;
 
   const lineResults = lines.map((line) => {
     const qty = Math.max(1, line.quantity);
@@ -190,7 +246,7 @@ export function getSaleLineMetrics(
     }
 
     const qty = Math.max(1, line.quantity);
-    const cogs = roundMoney(Math.max(0, line.economics.purchasePrice) * qty);
+    const cogs = result.cogs;
 
     return {
       productId: line.productId,

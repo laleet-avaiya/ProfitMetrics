@@ -57,12 +57,36 @@ describe('computeLineEconomics', () => {
       taxMode: TaxMode.INCLUSIVE,
       sellingTaxPercentage: 5,
       sellingTaxMode: TaxMode.INCLUSIVE,
+      purchaseTaxPercentage: 0,
+      purchaseTaxMode: TaxMode.EXCLUSIVE,
     });
 
     expect(result.grossRevenue).toBe(105);
     expect(result.taxAmount).toBe(5);
     expect(result.netRevenue).toBe(100);
     expect(result.profit).toBe(50);
+  });
+
+  it('uses ex-tax COGS when purchase price is GST-inclusive and purchase tax is unset', () => {
+    const result = computeLineEconomics({
+      quantity: 1,
+      purchasePrice: 118,
+      sellingPrice: 236,
+      shippingCost: 0,
+      taxType: 'gst',
+      taxPercentage: 18,
+      taxMode: TaxMode.INCLUSIVE,
+      sellingTaxPercentage: 18,
+      sellingTaxMode: TaxMode.INCLUSIVE,
+      purchaseTaxPercentage: 0,
+      purchaseTaxMode: TaxMode.INCLUSIVE,
+    });
+
+    expect(result.cogs).toBe(100);
+    expect(result.netRevenue).toBe(200);
+    expect(result.purchaseTaxAmount).toBe(18);
+    expect(result.profit).toBe(100);
+    expect(result.profitWithoutItc).toBe(82);
   });
 });
 

@@ -19,6 +19,7 @@ import { TaxType } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatExpenseTaxLabel } from '../../utils/expenseHelpers';
 import { formatMoney, formatPercent } from '../../utils/profit';
+import { getSaleProfit } from '../../utils/saleHelpers';
 import { getExpenseVendorDisplay } from '../../utils/vendorHelpers';
 import { getPaymentDisplaySource } from '../../utils/paymentHelpers';
 import { paymentKindLabel } from '../../constants/paymentKinds';
@@ -925,8 +926,8 @@ export function Dashboard() {
                       </div>
                       <div className="shrink-0 text-right space-y-1">
                         <SaleStatusBadge status={sale.status} />
-                        <p className={`text-sm font-semibold tabular-nums ${profitClass(sale.profit)}`}>
-                          {formatMoney(sale.profit, currency)}
+                        <p className={`text-sm font-semibold tabular-nums ${profitClass(getSaleProfit(sale))}`}>
+                          {formatMoney(getSaleProfit(sale), currency)}
                         </p>
                       </div>
                     </li>

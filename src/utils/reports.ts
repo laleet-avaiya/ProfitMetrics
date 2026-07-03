@@ -7,7 +7,12 @@ import {
 } from './firestoreDates';
 import { isDateInRange } from './expenseHelpers';
 import { getSaleLineMetrics, saleCogs, saleShipping } from './saleLines';
+import { computeStoredSaleEconomics } from './saleHelpers';
 import { stockKey } from './variantHelpers';
+
+function saleProfit(sale: Sale): number {
+  return computeStoredSaleEconomics(sale).profit;
+}
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
@@ -528,7 +533,7 @@ export function computePeriodSummary(
   const offlineTax = roundMoney(invoices.reduce((sum, i) => sum + i.taxAmount, 0));
   const totalTax = roundMoney(onlineTax + offlineTax);
 
-  const onlineProfit = roundMoney(sales.reduce((sum, s) => sum + s.profit, 0));
+  const onlineProfit = roundMoney(sales.reduce((sum, s) => sum + saleProfit(s), 0));
   const offlineProfit = roundMoney(invoices.reduce((sum, i) => sum + i.profit, 0));
   const grossProfit = roundMoney(onlineProfit + offlineProfit);
 
@@ -767,13 +772,13 @@ export function computeByPlatform(sales: Sale[], invoices: Invoice[] = []): Plat
     if (existing) {
       existing.saleCount += 1;
       existing.revenue = roundMoney(existing.revenue + sale.grossRevenue);
-      existing.profit = roundMoney(existing.profit + sale.profit);
+      existing.profit = roundMoney(existing.profit + saleProfit(sale));
     } else {
       map.set(sale.platform, {
         platform: sale.platform,
         saleCount: 1,
         revenue: sale.grossRevenue,
-        profit: sale.profit,
+        profit: saleProfit(sale),
         marginPercent: 0,
       });
     }
@@ -1067,7 +1072,7 @@ export function computeTrend(
     const key = granularity === 'daily' ? localDayKey(sale.orderDate) : localMonthKey(sale.orderDate);
     const row = ensure(key);
     row.revenue = roundMoney(row.revenue + sale.grossRevenue);
-    row.orderProfit = roundMoney(row.orderProfit + sale.profit);
+    row.orderProfit = roundMoney(row.orderProfit + saleProfit(sale));
   }
 
   for (const invoice of invoices) {

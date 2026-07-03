@@ -12,6 +12,7 @@ import {
   autoTaxPerUnit,
   economicsFromListing,
   getListingsForPlatform,
+  syncPurchaseTaxDefaults,
   type SaleFormEconomics,
   type SaleFormState,
   type SaleLineFormState,
@@ -29,6 +30,28 @@ const taxTypeOptions = [
 function parseNumber(value: string): number {
   const n = parseFloat(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function mergeEconomicsPatch(
+  current: SaleFormEconomics,
+  patch: Partial<SaleFormEconomics>
+): Partial<SaleFormEconomics> {
+  const touchesSellingTax =
+    patch.sellingTaxPercentage !== undefined ||
+    patch.sellingTaxMode !== undefined ||
+    patch.taxType !== undefined ||
+    patch.taxMode !== undefined;
+  const userSetPurchaseTax =
+    patch.purchaseTaxPercentage !== undefined || patch.purchaseTaxMode !== undefined;
+
+  if (!touchesSellingTax || userSetPurchaseTax) return patch;
+
+  const synced = syncPurchaseTaxDefaults({ ...current, ...patch });
+  return {
+    ...patch,
+    purchaseTaxPercentage: synced.purchaseTaxPercentage,
+    purchaseTaxMode: synced.purchaseTaxMode,
+  };
 }
 
 interface SaleLineEditorProps {
@@ -122,6 +145,9 @@ export function SaleLineEditor({
 
   const tracksTax = line.economics.taxType !== TaxType.NONE;
   const pctLabel = taxPercentLabel(line.economics.taxType);
+  const patchEconomics = (patch: Partial<SaleFormEconomics>) => {
+    onEconomicsChange(mergeEconomicsPatch(line.economics, patch));
+  };
   const feeKind = line.economics.platformFeeKind ?? PlatformFeeKind.FIXED;
   const displayedTaxPerUnit = line.economics.taxAmountManual
     ? (line.economics.taxAmountPerUnit ?? 0)
@@ -184,7 +210,7 @@ export function SaleLineEditor({
         value={line.economics.taxType}
         options={taxTypeOptions}
         onChange={(e) =>
-          onEconomicsChange({
+          patchEconomics({
             taxType: e.target.value as SaleFormEconomics['taxType'],
           })
         }
@@ -202,13 +228,13 @@ export function SaleLineEditor({
               disabled={!tracksTax}
               value={line.economics.purchaseTaxPercentage || ''}
               onChange={(e) =>
-                onEconomicsChange({ purchaseTaxPercentage: parseNumber(e.target.value) })
+                patchEconomics({ purchaseTaxPercentage: parseNumber(e.target.value) })
               }
             />
             <AmountIncludesTaxField
               value={line.economics.purchaseTaxMode}
               disabled={!tracksTax}
-              onChange={(mode) => onEconomicsChange({ purchaseTaxMode: mode })}
+              onChange={(mode) => patchEconomics({ purchaseTaxMode: mode })}
             />
           </div>
         </div>
@@ -224,14 +250,14 @@ export function SaleLineEditor({
               disabled={!tracksTax}
               value={line.economics.sellingTaxPercentage || ''}
               onChange={(e) =>
-                onEconomicsChange({ sellingTaxPercentage: parseNumber(e.target.value) })
+                patchEconomics({ sellingTaxPercentage: parseNumber(e.target.value) })
               }
             />
             <AmountIncludesTaxField
               value={line.economics.sellingTaxMode}
               disabled={!tracksTax}
               onChange={(mode) =>
-                onEconomicsChange({ sellingTaxMode: mode, taxMode: mode })
+                patchEconomics({ sellingTaxMode: mode, taxMode: mode })
               }
             />
           </div>
@@ -243,7 +269,7 @@ export function SaleLineEditor({
             disabled={!tracksTax}
             value={displayedTaxPerUnit || ''}
             onChange={(e) =>
-              onEconomicsChange({
+              patchEconomics({
                 taxAmountPerUnit: parseNumber(e.target.value),
                 taxAmountManual: true,
               })
@@ -260,7 +286,7 @@ export function SaleLineEditor({
               options={platformFeeKindOptions}
               onChange={(e) => {
                 const kind = e.target.value as PlatformFeeKind;
-                onEconomicsChange({
+                patchEconomics({
                   platformFeeKind: kind,
                   platformFee:
                     kind === PlatformFeeKind.FIXED ? line.economics.platformFee : undefined,
@@ -279,7 +305,7 @@ export function SaleLineEditor({
                 step="0.01"
                 value={line.economics.platformFee ?? ''}
                 onChange={(e) =>
-                  onEconomicsChange({
+                  patchEconomics({
                     platformFee: e.target.value ? parseNumber(e.target.value) : undefined,
                     platformFeePercent: undefined,
                   })
@@ -293,7 +319,7 @@ export function SaleLineEditor({
                 step="0.1"
                 value={line.economics.platformFeePercent ?? ''}
                 onChange={(e) =>
-                  onEconomicsChange({
+                  patchEconomics({
                     platformFeePercent: e.target.value
                       ? parseNumber(e.target.value)
                       : undefined,
@@ -323,7 +349,7 @@ export function SaleLineEditor({
             min="0"
             step="0.01"
             value={line.economics.shippingCost || ''}
-            onChange={(e) => onEconomicsChange({ shippingCost: parseNumber(e.target.value) })}
+            onChange={(e) => patchEconomics({ shippingCost: parseNumber(e.target.value) })}
           />
           <Input
             label={pctLabel}
@@ -333,13 +359,13 @@ export function SaleLineEditor({
             disabled={!tracksTax}
             value={line.economics.deliveryTaxPercentage || ''}
             onChange={(e) =>
-              onEconomicsChange({ deliveryTaxPercentage: parseNumber(e.target.value) })
+              patchEconomics({ deliveryTaxPercentage: parseNumber(e.target.value) })
             }
           />
           <AmountIncludesTaxField
             value={line.economics.deliveryTaxMode}
             disabled={!tracksTax}
-            onChange={(mode) => onEconomicsChange({ deliveryTaxMode: mode })}
+            onChange={(mode) => patchEconomics({ deliveryTaxMode: mode })}
           />
         </div>
       ) : null}
@@ -415,7 +441,7 @@ export function SaleLineEditor({
               step="0.01"
               value={line.economics.purchasePrice || ''}
               onChange={(e) =>
-                onEconomicsChange({ purchasePrice: parseNumber(e.target.value) })
+                patchEconomics({ purchasePrice: parseNumber(e.target.value) })
               }
               className={tableInputControlClass}
             />
@@ -427,7 +453,7 @@ export function SaleLineEditor({
               step="0.01"
               value={line.economics.sellingPrice || ''}
               onChange={(e) =>
-                onEconomicsChange({ sellingPrice: parseNumber(e.target.value) })
+                patchEconomics({ sellingPrice: parseNumber(e.target.value) })
               }
               className={tableInputControlClass}
             />
@@ -577,7 +603,7 @@ export function SaleLineEditor({
             step="0.01"
             value={line.economics.purchasePrice || ''}
             onChange={(e) =>
-              onEconomicsChange({ purchasePrice: parseNumber(e.target.value) })
+              patchEconomics({ purchasePrice: parseNumber(e.target.value) })
             }
           />
           <Input
@@ -587,7 +613,7 @@ export function SaleLineEditor({
             step="0.01"
             value={line.economics.sellingPrice || ''}
             onChange={(e) =>
-              onEconomicsChange({ sellingPrice: parseNumber(e.target.value) })
+              patchEconomics({ sellingPrice: parseNumber(e.target.value) })
             }
           />
         </div>

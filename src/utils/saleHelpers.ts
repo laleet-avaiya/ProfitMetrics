@@ -21,7 +21,7 @@ import { normalizeDeliveryMode } from '../constants/deliveryModes';
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { normalizeSalePaymentStatus } from '../constants/purchaseStatuses';
 import { derivePaymentStatus } from './purchaseHelpers';
-import { resolveListingTax } from './listingTax';
+import { resolveListingTax, defaultPurchaseTaxFromSelling } from './listingTax';
 import {
   computeLineEconomics,
   computeOrderEconomics,
@@ -35,6 +35,28 @@ import { localDateInputToUtc, nowUtc, utcToLocalDateInput } from './firestoreDat
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** Keep purchase-side tax in sync with selling tax when unset (avoids double-counting GST in COGS). */
+export function syncPurchaseTaxDefaults(economics: SaleFormEconomics): SaleFormEconomics {
+  const purchaseTax = defaultPurchaseTaxFromSelling(
+    economics.taxType,
+    economics.sellingTaxPercentage,
+    economics.sellingTaxMode,
+    economics.purchaseTaxPercentage,
+    economics.purchaseTaxMode
+  );
+  if (
+    purchaseTax.purchaseTaxPercentage === economics.purchaseTaxPercentage &&
+    purchaseTax.purchaseTaxMode === economics.purchaseTaxMode
+  ) {
+    return economics;
+  }
+  return {
+    ...economics,
+    purchaseTaxPercentage: purchaseTax.purchaseTaxPercentage,
+    purchaseTaxMode: purchaseTax.purchaseTaxMode,
+  };
 }
 
 export interface SaleFormEconomics {
@@ -214,7 +236,7 @@ export function emptySaleForm(): SaleFormState {
 
 export function economicsFromListing(listing: ProductPlatformListing): SaleFormEconomics {
   const resolved = resolveListingTax(listing);
-  return {
+  return syncPurchaseTaxDefaults({
     purchasePrice: listing.purchasePrice,
     sellingPrice: listing.sellingPrice,
     shippingCost: listing.shippingCost,
@@ -233,7 +255,7 @@ export function economicsFromListing(listing: ProductPlatformListing): SaleFormE
     platformFeeTaxPercentage: resolved.platformFeeTaxPercentage,
     platformFeeTaxMode: resolved.platformFeeTaxMode,
     taxAmountManual: false,
-  };
+  });
 }
 
 function economicsFromSaleRecord(economics: SaleLineEconomics, qty: number): SaleFormEconomics {
@@ -259,7 +281,7 @@ function economicsFromSaleRecord(economics: SaleLineEconomics, qty: number): Sal
     platformFeeTaxMode: economics.platformFeeTaxMode,
   });
 
-  return {
+  return syncPurchaseTaxDefaults({
     purchasePrice: economics.purchasePrice,
     sellingPrice: economics.sellingPrice,
     shippingCost: economics.shippingCost,
@@ -279,7 +301,7 @@ function economicsFromSaleRecord(economics: SaleLineEconomics, qty: number): Sal
     platformFeeTaxMode: resolved.platformFeeTaxMode,
     taxAmountPerUnit: economics.taxAmount / qty,
     taxAmountManual: true,
-  };
+  });
 }
 
 function lineFormFromSaleLine(line: SaleLine): SaleLineFormState {
@@ -446,6 +468,19 @@ export function computeSalePreview(form: SaleFormState): SalePreviewResult {
   };
 }
 
+/** Recompute order economics from a saved sale (fixes legacy purchase-tax defaults on read). */
+export function computeStoredSaleEconomics(sale: Sale): SalePreviewResult {
+  return computeSalePreview(saleToForm(sale));
+}
+
+export function getSaleProfit(sale: Sale): number {
+  return computeStoredSaleEconomics(sale).profit;
+}
+
+export function getSaleProfitMarginPercent(sale: Sale): number {
+  return computeStoredSaleEconomics(sale).profitMarginPercent;
+}
+
 export function autoTaxPerUnit(economics: SaleFormEconomics): number {
   if (economics.taxType === TaxType.NONE) return 0;
   return computeTaxAmount(
@@ -508,7 +543,7 @@ function buildLineEconomics(
   line: SaleLineFormState,
   linePreview: LineEconomicsResult
 ): SaleLineEconomics {
-  const e = line.economics;
+  const e = syncPurchaseTaxDefaults(line.economics);
   return {
     purchasePrice: e.purchasePrice,
     sellingPrice: e.sellingPrice,
@@ -539,7 +574,7 @@ function buildOrderEconomicsSnapshot(
   form: SaleFormState,
   preview: SalePreviewResult
 ): SaleLineEconomics {
-  const first = form.lines[0]?.economics ?? defaultEconomics();
+  const first = syncPurchaseTaxDefaults(form.lines[0]?.economics ?? defaultEconomics());
   return {
     purchasePrice: first.purchasePrice,
     sellingPrice: first.sellingPrice,

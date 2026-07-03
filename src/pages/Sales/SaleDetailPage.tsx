@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMemo } from 'react';
 import {
   Calendar,
   Layers,
@@ -33,6 +34,7 @@ import { firestoreService } from '../../services/firestore';
 import { SaleStatus } from '../../types';
 import { amountIncludesTaxLabel, taxPercentLabel } from '../../utils/listingTax';
 import { formatMoney, formatPercent } from '../../utils/profit';
+import { computeStoredSaleEconomics } from '../../utils/saleHelpers';
 import { formatDateLocal } from '../../utils/date';
 import { deliveryModeLabel } from '../../constants/deliveryModes';
 import {
@@ -56,11 +58,12 @@ export function SaleDetailPage() {
     errorMessage: 'Failed to load sale',
   });
 
+  const computed = useMemo(() => (sale ? computeStoredSaleEconomics(sale) : null), [sale]);
   const e = sale?.economics;
   const saleLines = sale ? getSaleLines(sale) : [];
   const lineCount = sale ? getSaleLineCount(sale) : 0;
   const pctLabel = e ? taxPercentLabel(e.taxType) : 'Tax %';
-  const profitPositive = (sale?.profit ?? 0) >= 0;
+  const profitPositive = (computed?.profit ?? 0) >= 0;
 
   const persistAttachments = async (attachments: NonNullable<typeof sale>['attachments']) => {
     if (!company || !sale || !user) return;
@@ -151,7 +154,7 @@ export function SaleDetailPage() {
               },
               {
                 label: 'Profit',
-                value: formatMoney(sale.profit, currency),
+                value: formatMoney(computed?.profit ?? 0, currency),
                 icon: profitPositive ? TrendingUp : TrendingDown,
                 tone: profitPositive ? 'emerald' : 'rose',
                 valueClassName: profitPositive
@@ -160,7 +163,7 @@ export function SaleDetailPage() {
               },
               {
                 label: 'Margin',
-                value: formatPercent(sale.profitMarginPercent),
+                value: formatPercent(computed?.profitMarginPercent ?? 0),
                 tone: profitPositive ? 'emerald' : 'rose',
                 valueClassName: profitPositive
                   ? 'text-emerald-600 dark:text-emerald-400'

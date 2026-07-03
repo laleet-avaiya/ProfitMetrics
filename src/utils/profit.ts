@@ -1,7 +1,7 @@
 import type { DeliveryMode, PlatformFeeKind, ProductPlatformListing, SaleLineEconomics, TaxMode } from '../types';
 import { DeliveryMode as DeliveryModeEnum, PlatformFeeKind as PlatformFeeKindEnum, TaxMode as TaxModeEnum } from '../types';
 import type { LineTaxSettings } from '../types';
-import { resolveListingTax } from './listingTax';
+import { resolveListingTax, defaultPurchaseTaxFromSelling } from './listingTax';
 
 export interface LineEconomicsInput {
   quantity: number;
@@ -57,11 +57,21 @@ function roundMoney(value: number): number {
 }
 
 function resolvedTax(input: LineEconomicsInput): LineTaxSettings {
+  const sellingTaxPercentage = input.sellingTaxPercentage ?? input.taxPercentage ?? 0;
+  const sellingTaxMode = input.sellingTaxMode ?? input.taxMode ?? TaxModeEnum.INCLUSIVE;
+  const purchaseTax = defaultPurchaseTaxFromSelling(
+    input.taxType,
+    sellingTaxPercentage,
+    sellingTaxMode,
+    input.purchaseTaxPercentage,
+    input.purchaseTaxMode
+  );
+
   return {
-    purchaseTaxPercentage: input.purchaseTaxPercentage ?? 0,
-    purchaseTaxMode: input.purchaseTaxMode ?? TaxModeEnum.INCLUSIVE,
-    sellingTaxPercentage: input.sellingTaxPercentage ?? input.taxPercentage ?? 0,
-    sellingTaxMode: input.sellingTaxMode ?? input.taxMode ?? TaxModeEnum.INCLUSIVE,
+    purchaseTaxPercentage: purchaseTax.purchaseTaxPercentage,
+    purchaseTaxMode: purchaseTax.purchaseTaxMode,
+    sellingTaxPercentage,
+    sellingTaxMode,
     deliveryTaxPercentage: input.deliveryTaxPercentage ?? 0,
     deliveryTaxMode: input.deliveryTaxMode ?? TaxModeEnum.INCLUSIVE,
     platformFeeTaxPercentage: input.platformFeeTaxPercentage ?? 0,

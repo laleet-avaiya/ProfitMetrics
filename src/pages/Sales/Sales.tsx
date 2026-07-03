@@ -33,6 +33,7 @@ import type { Customer, Sale } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { dateFilterRange, isDateInRange, type DateFilter } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
+import { getSaleProfit } from '../../utils/saleHelpers';
 import { deleteSaleLinkedExpenses } from '../../utils/saleExpenses';
 import { restoreSaleStock } from '../../utils/saleStock';
 import { SaleStatusBadge } from '../../components/ui/SaleStatusBadge';
@@ -119,7 +120,7 @@ export function Sales() {
         (acc, sale) => ({
           count: acc.count + 1,
           revenue: acc.revenue + saleRevenue(sale),
-          profit: acc.profit + sale.profit,
+          profit: acc.profit + getSaleProfit(sale),
         }),
         { count: 0, revenue: 0, profit: 0 }
       ),
@@ -277,12 +278,12 @@ export function Sales() {
                       </td>
                       <td
                         className={`${tableCellClass} text-right tabular-nums font-medium ${
-                          sale.profit >= 0
+                          getSaleProfit(sale) >= 0
                             ? 'text-emerald-600 dark:text-emerald-400'
                             : 'text-red-600 dark:text-red-400'
                         }`}
                       >
-                        {formatMoney(sale.profit, currency)}
+                        {formatMoney(getSaleProfit(sale), currency)}
                       </td>
                       <td className={tableCellClass}>
                         <div className="flex items-center justify-end gap-1">
