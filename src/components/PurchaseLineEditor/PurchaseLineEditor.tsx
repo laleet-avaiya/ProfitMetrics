@@ -1,5 +1,5 @@
-import { ChevronDown, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
 import { Input } from '../Input/Input';
 import { Select } from '../Select/Select';
 import { SearchableSelect } from '../SearchableSelect/SearchableSelect';
@@ -50,8 +50,6 @@ export function PurchaseLineEditor({
   onRemove,
   layout = 'card',
 }: PurchaseLineEditorProps) {
-  const [expanded, setExpanded] = useState(false);
-
   const productOptions = useMemo(
     () => [
       { value: '', label: 'Select product…' },
@@ -135,17 +133,6 @@ export function PurchaseLineEditor({
           </td>
           <td className={`${tableCellClass} w-20`}>
             <div className="flex items-center justify-end gap-0.5">
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-                aria-label={expanded ? 'Hide tax' : 'Show tax'}
-                title="Tax"
-              >
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                />
-              </button>
               {canRemove ? (
                 <button
                   type="button"
@@ -159,45 +146,43 @@ export function PurchaseLineEditor({
             </div>
           </td>
         </tr>
-        {expanded ? (
-          <tr className="bg-gray-50/80 dark:bg-gray-900/30">
-            <td colSpan={7} className="px-3 pb-3 pt-1">
-              <div className="rounded-lg border border-gray-200/80 dark:border-gray-700/70 bg-white dark:bg-gray-800/40 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
-                  Tax details
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-start">
-                  <Select
-                    label="Tax type"
-                    value={line.taxType}
-                    onChange={(e) => onChange({ taxType: e.target.value as TaxType })}
-                    options={taxTypeOptions}
-                  />
-                  {line.taxType !== TaxType.NONE ? (
-                    <>
-                      <Input
-                        label="Tax %"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={line.taxPercentage}
-                        onChange={(e) => onChange({ taxPercentage: e.target.value })}
-                      />
-                      <TaxModeField
-                        value={line.taxMode}
-                        onChange={(taxMode) => onChange({ taxMode })}
-                      />
-                    </>
-                  ) : (
-                    <p className="sm:col-span-2 sm:self-center text-xs text-gray-500 dark:text-gray-400">
-                      No tax applied to this line.
-                    </p>
-                  )}
-                </div>
+        <tr className="bg-gray-50/80 dark:bg-gray-900/30">
+          <td colSpan={7} className="px-3 pb-3 pt-1">
+            <div className="rounded-lg border border-gray-200/80 dark:border-gray-700/70 bg-white dark:bg-gray-800/40 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">
+                Tax details
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-start">
+                <Select
+                  label="Tax type"
+                  value={line.taxType}
+                  onChange={(e) => onChange({ taxType: e.target.value as TaxType })}
+                  options={taxTypeOptions}
+                />
+                {line.taxType !== TaxType.NONE ? (
+                  <>
+                    <Input
+                      label="Tax %"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={line.taxPercentage}
+                      onChange={(e) => onChange({ taxPercentage: e.target.value })}
+                    />
+                    <TaxModeField
+                      value={line.taxMode}
+                      onChange={(taxMode) => onChange({ taxMode })}
+                    />
+                  </>
+                ) : (
+                  <p className="sm:col-span-2 sm:self-center text-xs text-gray-500 dark:text-gray-400">
+                    No tax applied to this line.
+                  </p>
+                )}
               </div>
-            </td>
-          </tr>
-        ) : null}
+            </div>
+          </td>
+        </tr>
       </>
     );
   }
