@@ -48,7 +48,7 @@ import {
   type InvoiceFormState,
 } from '../../utils/invoiceHelpers';
 import { allocateNextInvoiceNumber, previewNextInvoiceNumber } from '../../utils/documentNumbers';
-import { applyInvoiceStock, resyncInvoiceStock } from '../../utils/invoiceStock';
+import { applyInvoiceStock, invoiceStockFailureMessage, resyncInvoiceStock } from '../../utils/invoiceStock';
 import { formatMoney } from '../../utils/profit';
 import {
   emptyStateMessageClass,
@@ -236,21 +236,48 @@ export function InvoiceFormPage() {
 
       if (isEditing && invoice) {
         await firestoreService.invoices.update(company.id, invoice.id, payload, user!.uid);
-        const stockResult = await resyncInvoiceStock(company.id, invoice, {
-          ...payload,
-          id: invoice.id,
-        }, user!.uid);
-        if (!stockResult.ok) {
-          notification.error(`Insufficient stock for ${stockResult.productName}`);
+        try {
+          const stockResult = await resyncInvoiceStock(company.id, invoice, {
+            ...payload,
+            id: invoice.id,
+          }, user!.uid);
+          if (!stockResult.ok) {
+            throw new Error(invoiceStockFailureMessage(stockResult));
+          }
+        } catch (stockErr) {
+          console.error('Failed to resync invoice stock:', stockErr);
+          notification.error(
+            stockErr instanceof Error
+              ? stockErr.message
+              : 'Invoice saved but stock could not be updated.'
+          );
+          setSaving(false);
+          return;
         }
         notification.success('Invoice updated');
         navigate(`/invoices/${invoice.id}`);
       } else {
         const created = await firestoreService.invoices.create(company.id, payload, user!.uid);
         if (shouldApplyInvoiceStock(created)) {
-          const stockResult = await applyInvoiceStock(company.id, created, user!.uid);
-          if (!stockResult.ok) {
-            notification.error(`Invoice saved but insufficient stock for ${stockResult.productName}`);
+          try {
+            const stockResult = await applyInvoiceStock(company.id, created, user!.uid);
+            if (!stockResult.ok) {
+              throw new Error(invoiceStockFailureMessage(stockResult));
+            }
+          } catch (stockErr) {
+            console.error('Failed to apply invoice stock:', stockErr);
+            try {
+              await firestoreService.invoices.delete(company.id, created.id, user!.uid);
+            } catch (rollbackErr) {
+              console.error('Failed to roll back invoice after stock error:', rollbackErr);
+            }
+            notification.error(
+              stockErr instanceof Error
+                ? stockErr.message
+                : 'Could not update stock. The offline sale was not saved.'
+            );
+            setSaving(false);
+            return;
           }
         }
         notification.success('Offline sale created');

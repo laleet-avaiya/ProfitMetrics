@@ -95,6 +95,31 @@ export async function checkSaleStock(
   return { ok: true };
 }
 
+export type StockSyncFailure = {
+  ok: false;
+  available: number;
+  needed: number;
+  productName?: string;
+};
+
+export function stockSyncFailureMessage(result: StockSyncFailure): string {
+  const name = result.productName ?? 'product';
+  return `Insufficient stock for ${name}. Available: ${result.available}, needed: ${result.needed}`;
+}
+
+/** Sync stock and throw when deduction cannot be applied (permissions, insufficient qty). */
+export async function requireSyncSaleStock(
+  companyId: string,
+  sale: Sale,
+  userId: string,
+  previous?: Sale | null
+): Promise<void> {
+  const result = await syncSaleStock(companyId, sale, userId, previous);
+  if (!result.ok) {
+    throw new Error(stockSyncFailureMessage(result));
+  }
+}
+
 /** Restore stock when a sale is deleted. */
 export async function restoreSaleStock(
   companyId: string,

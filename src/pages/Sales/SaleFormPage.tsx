@@ -58,8 +58,8 @@ import {
 import { LineEconomicsPreview } from '../../components/LineEconomicsPreview/LineEconomicsPreview';
 import { OutcomeChargeFields } from '../../components/OutcomeChargeFields/OutcomeChargeFields';
 import { utcToLocalDateInput } from '../../utils/firestoreDates';
-import { syncSaleExpenses } from '../../utils/saleExpenses';
-import { syncSaleStock, checkSaleStock } from '../../utils/saleStock';
+import { deleteSaleLinkedExpenses, syncSaleExpenses } from '../../utils/saleExpenses';
+import { checkSaleStock, requireSyncSaleStock } from '../../utils/saleStock';
 import { getSaleLines } from '../../utils/saleLines';
 import { SALE_STATUS_OPTIONS, saleStatusLabel } from '../../constants/saleStatuses';
 import {
@@ -356,10 +356,14 @@ export function SaleFormPage() {
           user!.uid
         );
         try {
-          await syncSaleStock(company.id, payload, user!.uid, sale);
+          await requireSyncSaleStock(company.id, payload, user!.uid, sale);
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
-          notification.error('Sale saved but stock could not be updated.');
+          notification.error(
+            stockErr instanceof Error ? stockErr.message : 'Sale saved but stock could not be updated.'
+          );
+          setSaving(false);
+          return;
         }
         try {
           await syncSaleExpenses(company.id, payload, user!.uid);
@@ -396,10 +400,22 @@ export function SaleFormPage() {
           );
         }
         try {
-          await syncSaleStock(company.id, created, user!.uid);
+          await requireSyncSaleStock(company.id, created, user!.uid);
         } catch (stockErr) {
           console.error('Failed to sync sale stock:', stockErr);
-          notification.error('Sale saved but stock could not be updated.');
+          try {
+            await firestoreService.sales.delete(company.id, created.id, user!.uid);
+            await deleteSaleLinkedExpenses(company.id, created.id, user!.uid);
+          } catch (rollbackErr) {
+            console.error('Failed to roll back sale after stock error:', rollbackErr);
+          }
+          notification.error(
+            stockErr instanceof Error
+              ? stockErr.message
+              : 'Could not update stock. The sale was not saved.'
+          );
+          setSaving(false);
+          return;
         }
         try {
           await syncSaleExpenses(company.id, created, user!.uid);

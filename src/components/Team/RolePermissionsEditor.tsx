@@ -32,11 +32,20 @@ export function RolePermissionsEditor() {
   useEffect(() => {
     if (!company) return;
     setLoading(true);
-    void rolePermissionsService.get(company.id, activeRole).then((definition) => {
-      setPermissions(definition?.permissions ?? DEFAULT_ROLE_PERMISSIONS[activeRole]);
-      setLoading(false);
-    });
-  }, [company, activeRole]);
+    void rolePermissionsService
+      .get(company.id, activeRole)
+      .then((definition) => {
+        setPermissions(definition?.permissions ?? DEFAULT_ROLE_PERMISSIONS[activeRole]);
+      })
+      .catch((error) => {
+        console.error('Failed to load role permissions:', error);
+        setPermissions(DEFAULT_ROLE_PERMISSIONS[activeRole]);
+        notification.error('Failed to load role permissions');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [company, activeRole, notification]);
 
   const toggle = (module: AppModule, action: PermissionAction) => {
     const key = permissionKey(module, action);

@@ -1,10 +1,55 @@
 import { firestoreService } from '../services/firestore';
-import type { Invoice } from '../types';
+import type { Invoice, Sale } from '../types';
 import { InvoiceStatus } from '../types';
 import { shouldApplyInvoiceStock } from './invoiceHelpers';
 import { checkSaleStock } from './saleStock';
 import { deductStock, restoreStock } from './stockHelpers';
 import { nowUtc } from './firestoreDates';
+
+function invoiceToStockSale(invoice: Invoice): Sale {
+  const first = invoice.lines[0];
+  return {
+    id: invoice.id,
+    companyId: invoice.companyId,
+    orderId: invoice.invoiceNumber,
+    orderDate: invoice.invoiceDate,
+    lines: invoice.lines.map((line) => ({
+      id: line.id,
+      productId: line.productId,
+      productName: line.productName,
+      quantity: line.quantity,
+      economics: {
+        purchasePrice: line.purchasePrice,
+        sellingPrice: line.unitPrice,
+        shippingCost: 0,
+        taxType: line.taxType ?? 'none',
+        taxPercentage: line.taxPercentage ?? 0,
+        taxMode: line.taxMode ?? 'inclusive',
+        taxAmount: line.taxAmount ?? 0,
+      },
+    })),
+    productId: first?.productId ?? '',
+    productName: first?.productName ?? 'Invoice',
+    platform: 'Offline',
+    quantity: invoice.lines.reduce((sum, line) => sum + line.quantity, 0),
+    economics: {
+      purchasePrice: first?.purchasePrice ?? 0,
+      sellingPrice: first?.unitPrice ?? 0,
+      shippingCost: 0,
+      taxType: first?.taxType ?? 'none',
+      taxPercentage: first?.taxPercentage ?? 0,
+      taxMode: first?.taxMode ?? 'inclusive',
+      taxAmount: first?.taxAmount ?? 0,
+    },
+    grossRevenue: invoice.total,
+    totalCosts: invoice.totalCogs,
+    platformFees: 0,
+    profit: invoice.profit,
+    profitMarginPercent: 0,
+    createdAt: invoice.createdAt,
+    updatedAt: invoice.updatedAt,
+  };
+}
 
 /** Deduct stock for all lines on a sent/paid invoice. */
 export async function applyInvoiceStock(
@@ -16,36 +61,19 @@ export async function applyInvoiceStock(
     return { ok: true };
   }
 
-  for (const line of invoice.lines) {
-    const check = await checkSaleStock(companyId, {
-      id: invoice.id,
-      companyId,
-      orderId: invoice.invoiceNumber,
-      orderDate: invoice.invoiceDate,
-      productId: line.productId,
-      productName: line.productName,
-      platform: 'Offline',
-      quantity: line.quantity,
-      economics: {
-        purchasePrice: line.purchasePrice,
-        sellingPrice: line.unitPrice,
-        shippingCost: 0,
-        taxType: line.taxType ?? 'none',
-        taxPercentage: line.taxPercentage ?? 0,
-        taxMode: line.taxMode ?? 'inclusive',
-        taxAmount: line.taxAmount ?? 0,
-      },
-      grossRevenue: line.lineTotal,
-      totalCosts: line.purchasePrice * line.quantity,
-      platformFees: 0,
-      profit: line.lineTotal - line.purchasePrice * line.quantity,
-      profitMarginPercent: 0,
-      createdAt: invoice.createdAt,
-      updatedAt: invoice.updatedAt,
-    });
-    if (!check.ok) {
-      return { ok: false, productName: line.productName, available: check.available, needed: check.needed };
-    }
+  if (invoice.lines.length === 0) {
+    return { ok: true };
+  }
+
+  const stockSale = invoiceToStockSale(invoice);
+  const check = await checkSaleStock(companyId, stockSale);
+  if (!check.ok) {
+    return {
+      ok: false,
+      productName: check.productName ?? 'product',
+      available: check.available,
+      needed: check.needed,
+    };
   }
 
   for (const line of invoice.lines) {
@@ -105,4 +133,10 @@ export async function restoreInvoiceStock(
     },
     userId
   );
+}
+
+export function invoiceStockFailureMessage(
+  result: { ok: false; productName: string; available: number; needed: number }
+): string {
+  return `Insufficient stock for ${result.productName}. Available: ${result.available}, needed: ${result.needed}`;
 }

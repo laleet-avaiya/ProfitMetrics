@@ -53,6 +53,20 @@ service cloud.firestore {
       return /databases/$(database)/documents/companyRoles/$(companyId + '_' + role);
     }
 
+    function companyIdFromRoleDocId(roleDocId) {
+      return roleDocId
+        .replace('_accountant', '')
+        .replace('_manager', '')
+        .replace('_viewer', '')
+        .replace('_admin', '');
+    }
+
+    function canReadCompanyRole(roleDocId) {
+      let companyId = companyIdFromRoleDocId(roleDocId);
+      return isActiveMember(companyId)
+        && (resource == null || resource.data.companyId == companyId);
+    }
+
     function isBusinessDataModule(module) {
       return module == 'customers'
         || module == 'sales'
@@ -185,6 +199,43 @@ service cloud.firestore {
 
     function canDeleteModuleDoc(module) {
       return false;
+    }
+
+    /** Stock moves when recording sales, invoices, or purchase receipts — not only product edits. */
+    function canAdjustStock(companyId) {
+      return isCompanyAdmin(companyId)
+        || canManageCompanyRoles(companyId)
+        || hasModulePermission(companyId, 'products', 'update')
+        || hasModulePermission(companyId, 'products', 'create')
+        || hasModulePermission(companyId, 'sales', 'create')
+        || hasModulePermission(companyId, 'sales', 'update')
+        || hasModulePermission(companyId, 'invoices', 'create')
+        || hasModulePermission(companyId, 'invoices', 'update')
+        || hasModulePermission(companyId, 'purchases', 'create')
+        || hasModulePermission(companyId, 'purchases', 'update');
+    }
+
+    function canUpdateStockDoc() {
+      return ownsDocument()
+        && maintainsCompanyId()
+        && createdByUnchanged()
+        && deletedFieldChangeAllowed('products')
+        && (
+          (
+            canAdjustStock(resource.data.companyId)
+            && request.resource.data.deleted != true
+            && request.resource.data.updatedBy == request.auth.uid
+          )
+          || isSoftDeleteUpdate('products')
+        );
+    }
+
+    function canCreateStockDoc() {
+      let companyId = request.resource.data.companyId;
+      return isActiveMember(companyId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && canAdjustStock(companyId);
     }
 
     function maintainsCompanyId() {
@@ -348,7 +399,7 @@ service cloud.firestore {
     }
 
     match /companyRoles/{roleDocId} {
-      allow read: if isAuthenticated() && isActiveMember(resource.data.companyId);
+      allow read: if isAuthenticated() && canReadCompanyRole(roleDocId);
       allow create: if canManageCompanyRoles(request.resource.data.companyId);
       allow update: if canManageCompanyRoles(resource.data.companyId) && resource.data.role != 'admin';
       allow delete: if false;
@@ -433,9 +484,9 @@ service cloud.firestore {
 
     match /stock/{docId} {
       allow read: if canReadModuleDoc('products');
-      allow update: if canUpdateModuleDoc('products');
+      allow update: if canUpdateStockDoc();
       allow delete: if canDeleteModuleDoc('products');
-      allow create: if canCreateModule('products');
+      allow create: if canCreateStockDoc();
     }
 
     match /customers/{docId} {

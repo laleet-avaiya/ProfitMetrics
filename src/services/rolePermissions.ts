@@ -37,7 +37,12 @@ function permissionsNeedRepair(role: CompanyRoleType, stored?: ModulePermissionM
 
 export const rolePermissionsService = {
   async get(companyId: string, role: CompanyRoleType): Promise<CompanyRoleDefinition | null> {
-    const snap = await getDoc(doc(db, COLLECTION, getRoleDocId(companyId, role)));
+    let snap;
+    try {
+      snap = await getDoc(doc(db, COLLECTION, getRoleDocId(companyId, role)));
+    } catch {
+      return null;
+    }
     if (!snap.exists()) return null;
     const data = snap.data();
     const stored = (data.permissions ?? null) as ModulePermissionMap | null;
