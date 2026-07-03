@@ -6,19 +6,19 @@ import type { Expense, Invoice, Product, ProductStock, PurchaseOrder, Sale } fro
 import {
   computePeriodSummary,
   filterExpensesInRange,
-  filterInvoicesInRange,
   filterPurchasesInRange,
   filterSalesInRange,
   getReportDateRange,
   type ReportPreset,
 } from '../utils/reports';
 
+const NO_INVOICES: Invoice[] = [];
+
 export function useReportData() {
   const { company } = useAuth();
   const notification = useNotification();
 
   const [sales, setSales] = useState<Sale[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stock, setStock] = useState<ProductStock[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -32,17 +32,15 @@ export function useReportData() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, expensesList, stockList, productsList, purchasesList] =
+      const [salesList, expensesList, stockList, productsList, purchasesList] =
         await Promise.all([
         firestoreService.sales.getAll(company.id),
-        firestoreService.invoices.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
         firestoreService.stock.getAll(company.id),
         firestoreService.products.getAll(company.id),
         firestoreService.purchases.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
-      setInvoices(invoicesList.filter((i) => !i.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
       setStock(stockList);
       setProducts(productsList.filter((p) => !p.deleted));
@@ -69,10 +67,7 @@ export function useReportData() {
     [sales, dateRange]
   );
 
-  const filteredInvoices = useMemo(
-    () => filterInvoicesInRange(invoices, dateRange.from, dateRange.to),
-    [invoices, dateRange]
-  );
+  const filteredInvoices = NO_INVOICES;
 
   const filteredExpenses = useMemo(
     () => filterExpensesInRange(expenses, dateRange.from, dateRange.to),

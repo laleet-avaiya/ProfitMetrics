@@ -16,18 +16,16 @@ import {
 } from '../../constants/invoicePrintFormats';
 import { useAuth } from '../../hooks/useAuth';
 import { firestoreService } from '../../services/firestore';
-import { buildInvoicePrintProps, buildSalePrintProps } from '../../utils/salesDocumentPrint';
+import { buildSalePrintProps } from '../../utils/salesDocumentPrint';
 
 type PrintProps = Omit<SalesDocumentPrintProps, 'currency'>;
 
 function DocumentPrintShell({
-  kind,
   backTo,
   backLabel,
   loadingLabel,
   notFoundTitle,
 }: {
-  kind: 'sale' | 'invoice';
   backTo: string;
   backLabel: string;
   loadingLabel: string;
@@ -35,8 +33,8 @@ function DocumentPrintShell({
 }) {
   const { company } = useAuth();
   const navigate = useNavigate();
-  const { saleId, invoiceId } = useParams();
-  const id = kind === 'sale' ? saleId : invoiceId;
+  const { saleId } = useParams();
+  const id = saleId;
   const currency = company?.currency ?? 'AED';
 
   const [printProps, setPrintProps] = useState<PrintProps | null>(null);
@@ -50,17 +48,9 @@ function DocumentPrintShell({
     setLoading(true);
 
     const load = async () => {
-      if (kind === 'sale') {
-        const sale = await firestoreService.sales.get(company.id, id);
-        if (!sale || sale.deleted) return null;
-        return buildSalePrintProps(sale, company);
-      }
-      const invoice = await firestoreService.invoices.get(company.id, id);
-      if (!invoice || invoice.deleted) return null;
-      const customer = invoice.customerId
-        ? await firestoreService.customers.get(company.id, invoice.customerId)
-        : null;
-      return buildInvoicePrintProps(invoice, company, customer);
+      const sale = await firestoreService.sales.get(company.id, id);
+      if (!sale || sale.deleted) return null;
+      return buildSalePrintProps(sale, company);
     };
 
     load()
@@ -81,7 +71,7 @@ function DocumentPrintShell({
     return () => {
       cancelled = true;
     };
-  }, [company, id, kind]);
+  }, [company, id]);
 
   if (loading) {
     return (
@@ -140,23 +130,10 @@ function DocumentPrintShell({
 export function SalePrintPage() {
   return (
     <DocumentPrintShell
-      kind="sale"
       backTo="/sales"
       backLabel="Back to sales"
       loadingLabel="Preparing invoice…"
       notFoundTitle="Sale not found."
-    />
-  );
-}
-
-export function InvoicePrintPage() {
-  return (
-    <DocumentPrintShell
-      kind="invoice"
-      backTo="/sales"
-      backLabel="Back to sales"
-      loadingLabel="Preparing invoice…"
-      notFoundTitle="Invoice not found."
     />
   );
 }

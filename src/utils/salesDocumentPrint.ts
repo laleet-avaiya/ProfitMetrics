@@ -1,20 +1,6 @@
-import type { Customer, Invoice, Sale } from '../types';
+import type { Sale } from '../types';
 import type { SalesDocumentPrintLine, SalesDocumentPrintProps } from '../components/SalesDocumentPrint/SalesDocumentPrint';
 import { getSaleLines } from './saleLines';
-
-export function printLinesFromInvoice(invoice: Invoice): SalesDocumentPrintLine[] {
-  return invoice.lines.map((line) => ({
-    productName: line.productName,
-    description: 'ITEM',
-    hsnCode: line.hsnCode,
-    quantity: line.quantity,
-    unitPrice: line.unitPrice,
-    lineSubtotal: line.lineSubtotal,
-    taxPercentage: line.taxPercentage,
-    taxAmount: line.taxAmount,
-    lineTotal: line.lineTotal,
-  }));
-}
 
 export function printLinesFromSale(sale: Sale): SalesDocumentPrintLine[] {
   return getSaleLines(sale).map((line) => {
@@ -32,32 +18,6 @@ export function printLinesFromSale(sale: Sale): SalesDocumentPrintLine[] {
       lineTotal,
     };
   });
-}
-
-export function buildInvoicePrintProps(
-  invoice: Invoice,
-  company: NonNullable<SalesDocumentPrintProps['company']>,
-  customer?: Customer | null
-): Omit<SalesDocumentPrintProps, 'currency'> {
-  return {
-    kind: 'offline',
-    documentNumber: invoice.invoiceNumber,
-    documentDate: invoice.invoiceDate,
-    dueDate: invoice.dueDate,
-    billTo: invoice.customerName ?? customer?.name ?? 'Customer',
-    billToAddress: customer?.address,
-    billToTaxId: customer?.taxId,
-    billToPhone: customer?.phone,
-    billToEmail: customer?.email,
-    lines: printLinesFromInvoice(invoice),
-    subtotal: invoice.subtotal,
-    taxAmount: invoice.taxAmount,
-    total: invoice.total,
-    totalPaid: invoice.totalPaid,
-    balanceDue: invoice.balanceDue,
-    notes: invoice.notes,
-    company,
-  };
 }
 
 export function buildSalePrintProps(

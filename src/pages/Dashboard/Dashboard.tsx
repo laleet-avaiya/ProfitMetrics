@@ -14,7 +14,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { BRAND_NAME } from '../../constants/brand';
 import { emptyStateMessageClass, filterRowClass, sectionDescriptionClass, sectionTitleClass } from '../../constants/ui';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Invoice, Payment, Product, ProductStock, PurchaseOrder, Sale } from '../../types';
+import type { Expense, Payment, Product, ProductStock, PurchaseOrder, Sale } from '../../types';
 import { TaxType } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import { formatExpenseTaxLabel } from '../../utils/expenseHelpers';
@@ -26,7 +26,7 @@ import {
   computeByPlatform,
   computeByProduct,
   computeCashFlowSummary,
-  computeInvoiceReceivables,
+  computeSaleReceivables,
   computeLowStockAlerts,
   computePaymentSummary,
   computePeriodSummary,
@@ -35,7 +35,6 @@ import {
   computeTaxLedger,
   computeTrend,
   filterExpensesInRange,
-  filterInvoicesInRange,
   filterOperatingExpenses,
   filterPaymentsInRange,
   filterSalesInRange,
@@ -90,7 +89,7 @@ const quickLinks = [
     label: 'Sales',
     path: '/sales',
     icon: ShoppingCart,
-    description: 'Marketplace & offline',
+    description: 'Orders & customers',
   },
   {
     label: 'Purchases',
@@ -157,7 +156,6 @@ export function Dashboard() {
   const currency = company?.currency ?? 'AED';
 
   const [sales, setSales] = useState<Sale[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -172,10 +170,9 @@ export function Dashboard() {
     if (!company) return;
     setLoading(true);
     try {
-      const [salesList, invoicesList, paymentsList, purchasesList, expensesList, stockList, productsList] =
+      const [salesList, paymentsList, purchasesList, expensesList, stockList, productsList] =
         await Promise.all([
         firestoreService.sales.getAll(company.id),
-        firestoreService.invoices.getAll(company.id),
         firestoreService.payments.getAll(company.id),
         firestoreService.purchases.getAll(company.id),
         firestoreService.expenses.getAll(company.id),
@@ -183,7 +180,6 @@ export function Dashboard() {
         firestoreService.products.getAll(company.id),
       ]);
       setSales(salesList.filter((s) => !s.deleted));
-      setInvoices(invoicesList.filter((i) => !i.deleted));
       setPayments(paymentsList.filter((p) => !p.deleted));
       setPurchases(purchasesList.filter((p) => !p.deleted));
       setExpenses(expensesList.filter((e) => !e.deleted));
@@ -211,11 +207,6 @@ export function Dashboard() {
     [sales, dateRange]
   );
 
-  const filteredInvoices = useMemo(
-    () => filterInvoicesInRange(invoices, dateRange.from, dateRange.to),
-    [invoices, dateRange]
-  );
-
   const filteredExpenses = useMemo(
     () => filterExpensesInRange(expenses, dateRange.from, dateRange.to),
     [expenses, dateRange]
@@ -237,13 +228,13 @@ export function Dashboard() {
     () =>
       computePeriodSummary(
         filteredSales,
-        filteredInvoices,
+        [],
         filteredExpenses,
         dateRange.label,
         dateRange.from,
         dateRange.to
       ),
-    [filteredSales, filteredInvoices, filteredExpenses, dateRange]
+    [filteredSales, filteredExpenses, dateRange]
   );
 
   const stockSummary = useMemo(() => computeStockSummary(stock), [stock]);
@@ -270,13 +261,13 @@ export function Dashboard() {
     [filteredPayments, purchases, filteredExpenses, dateRange]
   );
 
-  const receivables = useMemo(() => computeInvoiceReceivables(invoices), [invoices]);
+  const receivables = useMemo(() => computeSaleReceivables(sales), [sales]);
 
   const returnStats = useMemo(() => computeReturnStats(filteredSales), [filteredSales]);
 
   const taxLedger = useMemo(
-    () => computeTaxLedger(filteredSales, filteredInvoices, filteredExpenses),
-    [filteredSales, filteredInvoices, filteredExpenses]
+    () => computeTaxLedger(filteredSales, [], filteredExpenses),
+    [filteredSales, filteredExpenses]
   );
 
   const hasTaxActivity =
@@ -293,24 +284,24 @@ export function Dashboard() {
   );
 
   const topProducts = useMemo(
-    () => computeByProduct(filteredSales, filteredInvoices).slice(0, 5),
-    [filteredSales, filteredInvoices]
+    () => computeByProduct(filteredSales).slice(0, 5),
+    [filteredSales]
   );
 
   const topPlatforms = useMemo(
-    () => computeByPlatform(filteredSales, filteredInvoices).slice(0, 5),
-    [filteredSales, filteredInvoices]
+    () => computeByPlatform(filteredSales).slice(0, 5),
+    [filteredSales]
   );
 
   const trendData = useMemo(
     () =>
       computeTrend(
         filteredSales,
-        filteredInvoices,
+        [],
         filteredExpenses,
         trendGranularityForPreset(preset)
       ),
-    [filteredSales, filteredInvoices, filteredExpenses, preset]
+    [filteredSales, filteredExpenses, preset]
   );
 
   const recentSales = useMemo(
@@ -319,14 +310,6 @@ export function Dashboard() {
         .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime())
         .slice(0, RECENT_LIMIT),
     [filteredSales]
-  );
-
-  const recentInvoices = useMemo(
-    () =>
-      [...filteredInvoices]
-        .sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime())
-        .slice(0, RECENT_LIMIT),
-    [filteredInvoices]
   );
 
   const recentExpenses = useMemo(
@@ -347,7 +330,6 @@ export function Dashboard() {
 
   const hasAnyData =
     sales.length > 0 ||
-    invoices.length > 0 ||
     payments.length > 0 ||
     purchases.length > 0 ||
     expenses.length > 0 ||
@@ -360,10 +342,7 @@ export function Dashboard() {
   const hasCashFlowActivity = cashFlow.received > 0 || cashFlow.paid > 0;
   const periodSubtext = dateRange.label;
 
-  const revenueSubtext =
-    summary.invoiceCount > 0
-      ? `${summary.onlineSaleCount} online · ${summary.invoiceCount} offline · ${periodSubtext}`
-      : `${summary.saleCount} order${summary.saleCount === 1 ? '' : 's'} · ${periodSubtext}`;
+  const revenueSubtext = `${summary.saleCount} order${summary.saleCount === 1 ? '' : 's'} · ${periodSubtext}`;
 
   return (
     <Layout>
@@ -376,13 +355,7 @@ export function Dashboard() {
               <Link to="/sales/new">
                 <Button variant="primary" size="sm">
                   <Plus className="w-4 h-4" />
-                  Marketplace sale
-                </Button>
-              </Link>
-              <Link to="/invoices/new">
-                <Button variant="outline" size="sm">
-                  <Plus className="w-4 h-4" />
-                  Offline sale
+                  New sale
                 </Button>
               </Link>
               <Link to="/payments/new">
@@ -678,7 +651,7 @@ export function Dashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
               <StatCard
                 compact
-                label="Invoice payments"
+                label="Sale payments"
                 value={formatMoney(paymentSummary.invoicePayments, currency)}
                 tone="emerald"
                 icon={FileText}
@@ -717,7 +690,7 @@ export function Dashboard() {
                 value={formatMoney(receivables.balanceDue, currency)}
                 subtext={
                   receivables.openCount > 0
-                    ? `${receivables.openCount} open invoice${receivables.openCount === 1 ? '' : 's'}`
+                    ? `${receivables.openCount} open order${receivables.openCount === 1 ? '' : 's'}`
                     : 'Current balance'
                 }
                 tone={receivables.balanceDue > 0 ? 'amber' : 'emerald'}
@@ -730,20 +703,14 @@ export function Dashboard() {
         {!loading && !hasPeriodData && (
           <Card className="py-8 flex flex-col items-center space-y-3">
             <p className={emptyStateMessageClass}>
-              No sales, invoices, payments, or expenses in{' '}
+              No sales, payments, or expenses in{' '}
               <span className="font-medium">{dateRange.label.toLowerCase()}</span>.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <Link to="/sales/new">
                 <Button variant="primary" size="sm">
                   <ShoppingCart className="w-4 h-4" />
-                  Marketplace sale
-                </Button>
-              </Link>
-              <Link to="/invoices/new">
-                <Button variant="outline" size="sm">
-                  <FileText className="w-4 h-4" />
-                  Offline sale
+                  New sale
                 </Button>
               </Link>
               <Link to="/products/new">
@@ -781,11 +748,7 @@ export function Dashboard() {
                   <StatCard
                     label="Output tax"
                     value={formatMoney(taxLedger.outputTax, currency)}
-                    subtext={
-                      taxLedger.offlineOutputTax > 0
-                        ? 'Online + offline invoices'
-                        : 'Collected on sales'
-                    }
+                    subtext="Collected on sales"
                     tone="amber"
                     icon={Receipt}
                   />
@@ -904,8 +867,8 @@ export function Dashboard() {
 
             <Card>
               <CardHeader
-                title="Sales by channel"
-                description="Marketplace vs offline sales"
+                title="Sales by platform"
+                description="Revenue and profit by platform"
                 action={
                   topPlatforms.length > 0 ? (
                     <Link
@@ -930,10 +893,10 @@ export function Dashboard() {
         )}
 
         {!loading && hasPeriodData && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             <Card>
               <CardHeader
-                title="Recent marketplace sales"
+                title="Recent sales"
                 description={`Latest in ${dateRange.label.toLowerCase()}`}
                 action={
                   <Link
@@ -966,44 +929,6 @@ export function Dashboard() {
                           {formatMoney(sale.profit, currency)}
                         </p>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader
-                title="Recent offline sales"
-                description={`Customer invoices · ${dateRange.label.toLowerCase()}`}
-                action={
-                  <Link
-                    to="/sales?channel=offline"
-                    className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    View all
-                  </Link>
-                }
-              />
-              {recentInvoices.length === 0 ? (
-                <p className={`${emptyStateMessageClass} py-4 text-gray-500 dark:text-gray-400`}>
-                  No invoices in this period
-                </p>
-              ) : (
-                <ul className="divide-y divide-gray-100 dark:divide-gray-700 -mx-1">
-                  {recentInvoices.map((inv) => (
-                    <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5 px-1">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {inv.invoiceNumber}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDateLocal(inv.invoiceDate)} · {inv.customerName ?? 'Customer'}
-                        </p>
-                      </div>
-                      <p className={`shrink-0 text-sm font-semibold tabular-nums ${profitClass(inv.profit)}`}>
-                        {formatMoney(inv.profit, currency)}
-                      </p>
                     </li>
                   ))}
                 </ul>
@@ -1116,8 +1041,8 @@ export function Dashboard() {
                   Get started with {BRAND_NAME}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Add products, log marketplace and offline sales, record purchases to build stock,
-                  and track expenses. Your dashboard fills in as you go.
+                  Add products, log sales, record purchases to build stock, and track expenses.
+                  Your dashboard fills in as you go.
                 </p>
               </div>
             </div>

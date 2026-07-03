@@ -12,7 +12,7 @@ import { ProductDetailPage } from './pages/Products/ProductDetailPage';
 import { Products } from './pages/Products/Products';
 import { SaleFormPage } from './pages/Sales/SaleFormPage';
 import { SaleDetailPage } from './pages/Sales/SaleDetailPage';
-import { SalePrintPage, InvoicePrintPage } from './pages/Sales/SalePrintPage';
+import { SalePrintPage } from './pages/Sales/SalePrintPage';
 import { Sales } from './pages/Sales/Sales';
 import { ExpenseFormPage } from './pages/Expenses/ExpenseFormPage';
 import { ExpenseDetailPage } from './pages/Expenses/ExpenseDetailPage';
@@ -23,9 +23,6 @@ import { Vendors } from './pages/Vendors/Vendors';
 import { Customers } from './pages/Customers/Customers';
 import { CustomerFormPage } from './pages/Customers/CustomerFormPage';
 import { CustomerDetailPage } from './pages/Customers/CustomerDetailPage';
-import { InvoiceFormPage } from './pages/Invoices/InvoiceFormPage';
-import { InvoiceDetailPage } from './pages/Invoices/InvoiceDetailPage';
-import { InvoicesRedirect } from './pages/Sales/InvoicesRedirect';
 import { Payments } from './pages/Payments/Payments';
 import { PaymentFormPage } from './pages/Payments/PaymentFormPage';
 import { PaymentDetailPage } from './pages/Payments/PaymentDetailPage';
@@ -83,11 +80,6 @@ function App() {
         <Route path="/sales/:saleId/edit" element={<ModuleWriteRoute module={AppModule.SALES} action="update"><SaleFormPage /></ModuleWriteRoute>} />
         <Route path="/sales/:saleId/print" element={<ModuleRoute module={AppModule.SALES}><SalePrintPage /></ModuleRoute>} />
         <Route path="/sales/:saleId" element={<ModuleRoute module={AppModule.SALES}><SaleDetailPage /></ModuleRoute>} />
-        <Route path="/invoices" element={<ModuleRoute module={AppModule.INVOICES}><InvoicesRedirect /></ModuleRoute>} />
-        <Route path="/invoices/new" element={<ModuleWriteRoute module={AppModule.INVOICES} action="create"><InvoiceFormPage /></ModuleWriteRoute>} />
-        <Route path="/invoices/:invoiceId/edit" element={<ModuleWriteRoute module={AppModule.INVOICES} action="update"><InvoiceFormPage /></ModuleWriteRoute>} />
-        <Route path="/invoices/:invoiceId/print" element={<ModuleRoute module={AppModule.INVOICES}><InvoicePrintPage /></ModuleRoute>} />
-        <Route path="/invoices/:invoiceId" element={<ModuleRoute module={AppModule.INVOICES}><InvoiceDetailPage /></ModuleRoute>} />
         <Route path="/payments" element={<ModuleRoute module={AppModule.PAYMENTS}><Payments /></ModuleRoute>} />
         <Route path="/payments/new" element={<ModuleWriteRoute module={AppModule.PAYMENTS} action="create"><PaymentFormPage /></ModuleWriteRoute>} />
         <Route path="/payments/:paymentId/edit" element={<ModuleWriteRoute module={AppModule.PAYMENTS} action="update"><PaymentFormPage /></ModuleWriteRoute>} />

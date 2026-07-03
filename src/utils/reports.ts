@@ -381,6 +381,29 @@ export function computeInvoiceReceivables(invoices: Invoice[]): InvoiceReceivabl
   };
 }
 
+/** Current outstanding customer balances from sales (not period-filtered). */
+export function computeSaleReceivables(sales: Sale[]): InvoiceReceivablesSummary {
+  let balanceDue = 0;
+  let openCount = 0;
+  let totalInvoiced = 0;
+
+  for (const sale of sales) {
+    if (sale.deleted || sale.status === 'cancelled') continue;
+    totalInvoiced += sale.total ?? sale.grossRevenue;
+    const due = sale.balanceDue ?? 0;
+    if (due > 0) {
+      balanceDue += due;
+      openCount++;
+    }
+  }
+
+  return {
+    balanceDue: roundMoney(balanceDue),
+    openCount,
+    totalInvoiced: roundMoney(totalInvoiced),
+  };
+}
+
 export interface CashFlowSummary {
   received: number;
   receivedCount: number;

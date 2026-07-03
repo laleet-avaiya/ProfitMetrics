@@ -99,11 +99,7 @@ const navSections: NavSection[] = [
 function isNavActive(pathname: string, path: string): boolean {
   if (path === '/') return pathname === '/';
   if (path === '/sales') {
-    return (
-      pathname === '/sales' ||
-      pathname.startsWith('/sales/') ||
-      pathname.startsWith('/invoices')
-    );
+    return pathname === '/sales' || pathname.startsWith('/sales/');
   }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
