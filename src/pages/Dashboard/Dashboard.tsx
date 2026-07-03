@@ -35,9 +35,11 @@ import {
   computeTrend,
   filterExpensesInRange,
   filterInvoicesInRange,
+  filterOperatingExpenses,
   filterPaymentsInRange,
   filterSalesInRange,
   getReportDateRange,
+  isExpenseExcludedFromNetProfit,
   trendGranularityForPreset,
   type ReportPreset,
 } from '../../utils/reports';
@@ -132,6 +134,19 @@ function profitClass(value: number): string {
   return '';
 }
 
+function formatOperatingExpenseSubtext(
+  operatingCount: number,
+  excludedCount: number,
+  periodLabel: string
+): string {
+  const parts = [`${operatingCount} entr${operatingCount === 1 ? 'y' : 'ies'}`];
+  if (excludedCount > 0) {
+    parts.push(`${excludedCount} auto fee${excludedCount === 1 ? '' : 's'} excluded`);
+  }
+  parts.push(periodLabel);
+  return parts.join(' · ');
+}
+
 const RECENT_LIMIT = 5;
 
 export function Dashboard() {
@@ -200,6 +215,13 @@ export function Dashboard() {
     () => filterExpensesInRange(expenses, dateRange.from, dateRange.to),
     [expenses, dateRange]
   );
+
+  const operatingExpenses = useMemo(
+    () => filterOperatingExpenses(filteredExpenses),
+    [filteredExpenses]
+  );
+
+  const excludedExpenseCount = filteredExpenses.length - operatingExpenses.length;
 
   const filteredPayments = useMemo(
     () => filterPaymentsInRange(payments, dateRange.from, dateRange.to),
@@ -423,27 +445,44 @@ export function Dashboard() {
                 <StatCard
                   label="Order profit"
                   value={formatMoney(summary.grossProfit, currency)}
-                  subtext={`Online + offline · ${periodSubtext}`}
+                  subtext={`After COGS & sale fees · ${periodSubtext}`}
                   tone={summary.grossProfit >= 0 ? 'emerald' : 'rose'}
                   icon={Target}
                   valueClassName={profitClass(summary.grossProfit)}
                 />
                 <StatCard
-                  label="Expenses"
+                  label="Operating expenses"
                   value={formatMoney(summary.totalExpenses, currency)}
-                  subtext={`${filteredExpenses.length} entr${filteredExpenses.length === 1 ? 'y' : 'ies'} · ${periodSubtext}`}
+                  subtext={formatOperatingExpenseSubtext(
+                    operatingExpenses.length,
+                    excludedExpenseCount,
+                    periodSubtext
+                  )}
                   tone="amber"
                   icon={Receipt}
                 />
                 <StatCard
                   label="Net profit"
                   value={formatMoney(summary.netProfit, currency)}
-                  subtext={`${formatPercent(summary.netMarginPercent)} margin · ${periodSubtext}`}
+                  subtext={`Order profit − operating expenses · ${formatPercent(summary.netMarginPercent)} margin`}
                   tone={summary.netProfit >= 0 ? 'emerald' : 'rose'}
                   icon={BarChart3}
                   valueClassName={profitClass(summary.netProfit)}
                 />
               </div>
+
+              <p className={sectionDescriptionClass}>
+                Net profit = order profit − operating expenses.
+                {summary.excludedAutoExpenses > 0 ? (
+                  <>
+                    {' '}
+                    {formatMoney(summary.excludedAutoExpenses, currency)} in auto sale fees and
+                    inventory payments is already in order profit or stock — not counted again here.
+                  </>
+                ) : (
+                  ' Manual business costs only; auto fees from sales and purchases are in order profit.'
+                )}
+              </p>
 
               {hasPeriodData && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
@@ -890,7 +929,11 @@ export function Dashboard() {
             <Card>
               <CardHeader
                 title="Recent expenses"
-                description={`Latest in ${dateRange.label.toLowerCase()}`}
+                description={
+                  excludedExpenseCount > 0
+                    ? `Manual costs and auto fees · excluded items are already in order profit`
+                    : `Latest in ${dateRange.label.toLowerCase()}`
+                }
                 action={
                   <Link
                     to="/expenses"
@@ -906,26 +949,36 @@ export function Dashboard() {
                 </p>
               ) : (
                 <ul className="divide-y divide-gray-100 dark:divide-gray-700 -mx-1">
-                  {recentExpenses.map((expense) => (
-                    <li key={expense.id} className="flex items-center justify-between gap-3 py-2.5 px-1">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {expense.description}
+                  {recentExpenses.map((expense) => {
+                    const excludedFromPnl = isExpenseExcludedFromNetProfit(expense);
+                    return (
+                      <li key={expense.id} className="flex items-center justify-between gap-3 py-2.5 px-1">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {expense.description}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatDateLocal(expense.expenseDate)}
+                            {getExpenseVendorDisplay(expense)
+                              ? ` · ${getExpenseVendorDisplay(expense)}`
+                              : ''}
+                            {' · '}
+                            {expense.category}
+                            {excludedFromPnl ? ' · In order profit' : ''}
+                          </p>
+                        </div>
+                        <p
+                          className={`shrink-0 text-sm font-semibold tabular-nums ${
+                            excludedFromPnl
+                              ? 'text-gray-400 dark:text-gray-500'
+                              : 'text-gray-900 dark:text-white'
+                          }`}
+                        >
+                          {formatMoney(expense.amount, currency)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDateLocal(expense.expenseDate)}
-                          {getExpenseVendorDisplay(expense)
-                            ? ` · ${getExpenseVendorDisplay(expense)}`
-                            : ''}
-                          {' · '}
-                          {expense.category}
-                        </p>
-                      </div>
-                      <p className="shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
-                        {formatMoney(expense.amount, currency)}
-                      </p>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Card>

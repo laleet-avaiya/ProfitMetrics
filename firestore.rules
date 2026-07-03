@@ -1,18 +1,428 @@
 rules_version = '2';
 
-// TEMPORARY — permissive rules for development / unblock.
-// Any signed-in user can read and write all Firestore data.
-// Tighten before production (role-based rules).
-
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Auth helpers ──────────────────────────────────────────────────────
 
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    match /{document=**} {
-      allow read, write: if isAuthenticated();
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function authEmail() {
+      return request.auth.token.email;
+    }
+
+    // ── Company membership ────────────────────────────────────────────────
+
+    function memberRef(companyId) {
+      return /databases/$(database)/documents/companyMembers/$(companyId + '_' + uid());
+    }
+
+    function memberSnap(companyId) {
+      return get(memberRef(companyId));
+    }
+
+    function isActiveCompanyMember(companyId) {
+      return exists(memberRef(companyId))
+        && memberSnap(companyId).data.status == 'active'
+        && memberSnap(companyId).data.deleted != true;
+    }
+
+    function companyMemberRole(companyId) {
+      return memberSnap(companyId).data.role;
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isActiveCompanyMember(companyId) && companyMemberRole(companyId) == 'admin';
+    }
+
+    // ── Org membership ────────────────────────────────────────────────────
+
+    function orgMemberRef(orgId) {
+      return /databases/$(database)/documents/orgMembers/$(orgId + '_' + uid());
+    }
+
+    function orgMemberSnap(orgId) {
+      return get(orgMemberRef(orgId));
+    }
+
+    function isActiveOrgMember(orgId) {
+      return exists(orgMemberRef(orgId))
+        && orgMemberSnap(orgId).data.status == 'active';
+    }
+
+    function isOrgAdmin(orgId) {
+      return isActiveOrgMember(orgId) && orgMemberSnap(orgId).data.role == 'admin';
+    }
+
+    function companyRef(companyId) {
+      return /databases/$(database)/documents/companies/$(companyId);
+    }
+
+    function companySnap(companyId) {
+      return get(companyRef(companyId));
+    }
+
+    function companyExists(companyId) {
+      return exists(companyRef(companyId));
+    }
+
+    function companyOrgId(companyId) {
+      return companySnap(companyId).data.orgId;
+    }
+
+    // ── Permission helpers (mirrors constants/permissions.ts) ─────────────
+
+    function isBusinessModule(module) {
+      return module in [
+        'customers', 'sales', 'invoices', 'payments',
+        'purchases', 'expenses', 'vendors', 'products'
+      ];
+    }
+
+    function permissionKey(module, action) {
+      return module + '.' + action;
+    }
+
+    function rolePermissionsRef(companyId, role) {
+      return /databases/$(database)/documents/companyRoles/$(companyId + '_' + role);
+    }
+
+    function defaultPermission(role, module, action) {
+      return (role == 'manager' && (
+          (module == 'dashboard' && action == 'view')
+          || (module == 'reports' && action == 'view')
+          || (module == 'ai_assistant' && (action == 'view' || action == 'create'))
+          || (module == 'settings' && (action == 'view' || action == 'update'))
+          || (module == 'subscription' && action == 'view')
+          || isBusinessModule(module)
+        ))
+        || (role == 'viewer' && (
+          (module == 'dashboard' && action == 'view')
+          || (module == 'reports' && action == 'view')
+          || (module == 'ai_assistant' && (action == 'view' || action == 'create'))
+          || (module == 'settings' && action == 'view')
+          || (module == 'subscription' && action == 'view')
+          || (isBusinessModule(module) && action == 'view')
+        ))
+        || (role == 'accountant' && module == 'reports' && action == 'view');
+    }
+
+    function effectivePermission(companyId, role, module, action) {
+      let key = permissionKey(module, action);
+      let roleDocRef = rolePermissionsRef(companyId, role);
+      return exists(roleDocRef) && key in get(roleDocRef).data.permissions
+        ? get(roleDocRef).data.permissions[key] == true
+        : defaultPermission(role, module, action);
+    }
+
+    function hasModulePermission(companyId, module, action) {
+      let role = companyMemberRole(companyId);
+      return isAuthenticated()
+        && companyExists(companyId)
+        && isActiveCompanyMember(companyId)
+        && (
+          role == 'admin'
+          || (module == 'subscription' && isOrgAdmin(companyOrgId(companyId)))
+          || effectivePermission(companyId, role, module, action)
+        );
+    }
+
+    function canManageCompanyRoles(companyId) {
+      return isCompanyAdmin(companyId)
+        || (companyExists(companyId) && isOrgAdmin(companyOrgId(companyId)));
+    }
+
+    function companyIdUnchanged() {
+      return request.resource.data.companyId == resource.data.companyId;
+    }
+
+    // ── Company-scoped business data (shared pattern) ─────────────────────
+
+    function canReadCompanyData(module) {
+      return hasModulePermission(resource.data.companyId, module, 'view')
+        || hasModulePermission(resource.data.companyId, 'reports', 'view');
+    }
+
+    function canCreateCompanyData(module) {
+      return hasModulePermission(request.resource.data.companyId, module, 'create')
+        && request.resource.data.companyId is string;
+    }
+
+    function canUpdateCompanyData(module) {
+      return hasModulePermission(resource.data.companyId, module, 'update')
+        && companyIdUnchanged();
+    }
+
+    // ── Invite acceptance ─────────────────────────────────────────────────
+
+    function isValidInviteAcceptance(companyId, inviteId, role) {
+      let inviteRef = /databases/$(database)/documents/companyInvites/$(inviteId);
+      return inviteId is string
+        && exists(inviteRef)
+        && get(inviteRef).data.status == 'pending'
+        && get(inviteRef).data.companyId == companyId
+        && get(inviteRef).data.email == authEmail()
+        && get(inviteRef).data.role == role;
+    }
+
+    function isSelfAdminBootstrap(companyId) {
+      return request.resource.data.userId == uid()
+        && request.resource.data.role == 'admin'
+        && request.resource.data.status == 'active'
+        && companyExists(companyId)
+        && companySnap(companyId).data.createdBy == uid()
+        && isOrgAdmin(companyOrgId(companyId));
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && uid() == userId;
+      allow create: if isAuthenticated() && uid() == userId;
+      allow update: if isAuthenticated() && uid() == userId;
+      allow delete: if false;
+    }
+
+    // ── Organizations ─────────────────────────────────────────────────────
+
+    match /orgs/{orgId} {
+      allow read: if isAuthenticated() && isActiveOrgMember(orgId);
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == uid()
+        && request.resource.data.id == orgId;
+      allow update: if isAuthenticated() && isOrgAdmin(orgId);
+      allow delete: if false;
+    }
+
+    // ── Org members ───────────────────────────────────────────────────────
+
+    match /orgMembers/{memberId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == uid()
+        || isOrgAdmin(resource.data.orgId)
+      );
+
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == uid()
+        && request.resource.data.status == 'active'
+        && memberId == request.resource.data.orgId + '_' + uid()
+        && (
+          (
+            request.resource.data.role == 'admin'
+            && exists(/databases/$(database)/documents/orgs/$(request.resource.data.orgId))
+            && get(/databases/$(database)/documents/orgs/$(request.resource.data.orgId)).data.ownerId == uid()
+          )
+          || (
+            request.resource.data.role == 'member'
+            && request.resource.data.bootstrapCompanyId is string
+            && exists(memberRef(request.resource.data.bootstrapCompanyId))
+            && companyOrgId(request.resource.data.bootstrapCompanyId) == request.resource.data.orgId
+          )
+        );
+
+      allow update: if isAuthenticated() && isOrgAdmin(resource.data.orgId);
+      allow delete: if false;
+    }
+
+    // ── Companies ─────────────────────────────────────────────────────────
+
+    match /companies/{companyId} {
+      allow read: if isAuthenticated() && (
+        isActiveCompanyMember(companyId)
+        || isOrgAdmin(resource.data.orgId)
+      );
+
+      allow create: if isAuthenticated()
+        && request.resource.data.orgId is string
+        && request.resource.data.createdBy == uid()
+        && isOrgAdmin(request.resource.data.orgId);
+
+      allow update: if isAuthenticated() && (
+        isCompanyAdmin(companyId)
+        || hasModulePermission(companyId, 'settings', 'update')
+        || hasModulePermission(companyId, 'configuration', 'update')
+      );
+
+      allow delete: if false;
+    }
+
+    // ── Company members ───────────────────────────────────────────────────
+
+    match /companyMembers/{memberId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == uid()
+        || (
+          isActiveCompanyMember(resource.data.companyId)
+          && hasModulePermission(resource.data.companyId, 'team', 'view')
+        )
+      );
+
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == uid()
+        && request.resource.data.status == 'active'
+        && memberId == request.resource.data.companyId + '_' + uid()
+        && (
+          isSelfAdminBootstrap(request.resource.data.companyId)
+          || isValidInviteAcceptance(
+            request.resource.data.companyId,
+            request.resource.data.inviteId,
+            request.resource.data.role
+          )
+        );
+
+      allow update: if isAuthenticated()
+        && companyIdUnchanged()
+        && (
+          isCompanyAdmin(resource.data.companyId)
+          || hasModulePermission(resource.data.companyId, 'team', 'update')
+          || hasModulePermission(resource.data.companyId, 'team', 'delete')
+        );
+
+      allow delete: if false;
+    }
+
+    // ── Company invites ───────────────────────────────────────────────────
+
+    match /companyInvites/{inviteId} {
+      allow read: if isAuthenticated() && (
+        resource.data.email == authEmail()
+        || (
+          isActiveCompanyMember(resource.data.companyId)
+          && hasModulePermission(resource.data.companyId, 'team', 'view')
+        )
+      );
+
+      allow create: if isAuthenticated()
+        && hasModulePermission(request.resource.data.companyId, 'team', 'create')
+        && request.resource.data.status == 'pending';
+
+      allow update: if isAuthenticated() && (
+        (
+          resource.data.email == authEmail()
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.companyId == resource.data.companyId
+        )
+        || (
+          hasModulePermission(resource.data.companyId, 'team', 'delete')
+          && request.resource.data.companyId == resource.data.companyId
+        )
+      );
+
+      allow delete: if false;
+    }
+
+    // ── Role permission definitions ───────────────────────────────────────
+
+    match /companyRoles/{roleDocId} {
+      allow read: if isAuthenticated()
+        && isActiveCompanyMember(resource.data.companyId);
+
+      allow create, update: if isAuthenticated()
+        && canManageCompanyRoles(request.resource.data.companyId);
+
+      allow delete: if false;
+    }
+
+    // ── Audit logs (append-only, no client reads) ─────────────────────────
+
+    match /auditLogs/{logId} {
+      allow read: if false;
+      allow create: if isAuthenticated()
+        && request.resource.data.companyId is string
+        && isActiveCompanyMember(request.resource.data.companyId)
+        && request.resource.data.userId == uid();
+      allow update, delete: if false;
+    }
+
+    // ── Business data collections ─────────────────────────────────────────
+
+    match /products/{docId} {
+      allow read: if canReadCompanyData('products');
+      allow create: if canCreateCompanyData('products');
+      allow update: if canUpdateCompanyData('products');
+      allow delete: if false;
+    }
+
+    match /stock/{docId} {
+      allow read: if canReadCompanyData('products');
+      allow create: if canCreateCompanyData('products');
+      allow update: if canUpdateCompanyData('products');
+      allow delete: if false;
+    }
+
+    match /sales/{docId} {
+      allow read: if canReadCompanyData('sales');
+      allow create: if canCreateCompanyData('sales');
+      allow update: if canUpdateCompanyData('sales');
+      allow delete: if false;
+    }
+
+    match /invoices/{docId} {
+      allow read: if canReadCompanyData('invoices');
+      allow create: if canCreateCompanyData('invoices');
+      allow update: if canUpdateCompanyData('invoices');
+      allow delete: if false;
+    }
+
+    match /payments/{docId} {
+      allow read: if canReadCompanyData('payments');
+      allow create: if canCreateCompanyData('payments');
+      allow update: if canUpdateCompanyData('payments');
+      allow delete: if false;
+    }
+
+    match /purchases/{docId} {
+      allow read: if canReadCompanyData('purchases');
+      allow create: if canCreateCompanyData('purchases');
+      allow update: if canUpdateCompanyData('purchases');
+      allow delete: if false;
+    }
+
+    match /expenses/{docId} {
+      allow read: if canReadCompanyData('expenses');
+      allow create: if canCreateCompanyData('expenses');
+      allow update: if canUpdateCompanyData('expenses');
+      allow delete: if false;
+    }
+
+    match /vendors/{docId} {
+      allow read: if canReadCompanyData('vendors');
+      allow create: if canCreateCompanyData('vendors');
+      allow update: if canUpdateCompanyData('vendors');
+      allow delete: if false;
+    }
+
+    match /customers/{docId} {
+      allow read: if canReadCompanyData('customers');
+      allow create: if canCreateCompanyData('customers');
+      allow update: if canUpdateCompanyData('customers');
+      allow delete: if false;
+    }
+
+    // ── AI chats ──────────────────────────────────────────────────────────
+
+    match /aiChats/{docId} {
+      allow read: if canReadCompanyData('ai_assistant');
+      allow create: if canCreateCompanyData('ai_assistant');
+      allow update: if canUpdateCompanyData('ai_assistant');
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated()
+          && hasModulePermission(
+            get(/databases/$(database)/documents/aiChats/$(docId)).data.companyId,
+            'ai_assistant',
+            'view'
+          );
+        allow write: if false;
+      }
     }
   }
 }
