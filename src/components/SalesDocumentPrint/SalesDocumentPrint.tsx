@@ -1,5 +1,9 @@
 import type { Company } from '../../types';
 import { formatDateLocal } from '../../utils/date';
+import {
+  companyTaxIdPrintLabel,
+  companyTaxName,
+} from '../../utils/companyLocale';
 import { formatMoney } from '../../utils/profit';
 
 function salesKindLabel(kind: 'marketplace' | 'offline'): string {
@@ -58,6 +62,8 @@ export function SalesDocumentPrint({
 }: SalesDocumentPrintProps) {
   const docTitle = kind === 'offline' ? 'Tax Invoice' : 'Sales Invoice';
   const showHsn = lines.some((line) => Boolean(line.hsnCode));
+  const taxIdLabel = companyTaxIdPrintLabel(company);
+  const taxName = companyTaxName(company);
 
   return (
     <div className="print-page mx-auto max-w-[210mm] bg-white text-gray-900 p-6 sm:p-8 print:p-0 print:max-w-none">
@@ -71,7 +77,11 @@ export function SalesDocumentPrint({
           <div className="text-sm mt-2 space-y-0.5">
             {company.phone ? <p>Phone: {company.phone}</p> : null}
             {company.email ? <p>Email: {company.email}</p> : null}
-            {company.trn ? <p>TRN / Tax ID: {company.trn}</p> : null}
+            {company.trn ? (
+              <p>
+                {taxIdLabel}: {company.trn}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="text-right">
@@ -89,7 +99,11 @@ export function SalesDocumentPrint({
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Bill to</p>
         <p className="font-semibold">{billTo}</p>
         {billToAddress ? <p className="text-sm mt-1 whitespace-pre-line">{billToAddress}</p> : null}
-        {billToTaxId ? <p className="text-sm mt-1">Tax ID: {billToTaxId}</p> : null}
+        {billToTaxId ? (
+          <p className="text-sm mt-1">
+            {taxIdLabel}: {billToTaxId}
+          </p>
+        ) : null}
       </section>
 
       <div className="invoice-table-wrap mb-6">
@@ -103,7 +117,7 @@ export function SalesDocumentPrint({
               <th className="border border-gray-300 px-2 py-2 text-right">Qty</th>
               <th className="border border-gray-300 px-2 py-2 text-right">Unit price</th>
               <th className="border border-gray-300 px-2 py-2 text-right invoice-print-th-vat-pct">
-                VAT %
+                {taxName} %
               </th>
               <th className="border border-gray-300 px-2 py-2 text-right">Tax</th>
               <th className="border border-gray-300 px-2 py-2 text-right">Total</th>
@@ -146,7 +160,7 @@ export function SalesDocumentPrint({
             <span className="tabular-nums font-medium">{formatMoney(subtotal, currency)}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-gray-600">Tax</span>
+            <span className="text-gray-600">{taxName}</span>
             <span className="tabular-nums font-medium">{formatMoney(taxAmount, currency)}</span>
           </div>
           <div className="flex justify-between gap-4 border-t border-gray-300 pt-2 text-base font-bold">

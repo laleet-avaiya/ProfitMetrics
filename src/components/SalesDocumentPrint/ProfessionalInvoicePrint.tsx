@@ -1,5 +1,9 @@
 import type { SalesDocumentPrintProps } from './SalesDocumentPrint';
 import { formatDateLocal } from '../../utils/date';
+import {
+  companyTaxColumnLabel,
+  companyTaxIdPrintLabel,
+} from '../../utils/companyLocale';
 import { formatMoney } from '../../utils/profit';
 
 function salesKindLabel(kind: 'marketplace' | 'offline'): string {
@@ -52,9 +56,8 @@ export function ProfessionalInvoicePrint({
   company,
   currency,
 }: SalesDocumentPrintProps) {
-  const vatLabel = company.defaultTaxPercentage
-    ? `VAT ${company.defaultTaxPercentage}%`
-    : 'VAT';
+  const taxColumnLabel = companyTaxColumnLabel(company);
+  const taxIdLabel = companyTaxIdPrintLabel(company);
   const amountPaid = totalPaid ?? (balanceDue != null && balanceDue <= 0 ? total : 0);
   const balance = balanceDue ?? Math.max(0, total - amountPaid);
   const hasBank =
@@ -85,8 +88,7 @@ export function ProfessionalInvoicePrint({
           ) : null}
           <p className="text-base font-bold uppercase">{company.name}</p>
           {company.address ? <p className="whitespace-pre-line">{company.address}</p> : null}
-          <MetaRow label="TRN" value={company.trn} />
-          {company.trn ? <MetaRow label="VAT" value={company.trn} /> : null}
+          <MetaRow label={taxIdLabel} value={company.trn} />
           <MetaRow label="Contact" value={company.phone} />
           <MetaRow label="Email" value={company.email} />
         </GridCell>
@@ -102,7 +104,7 @@ export function ProfessionalInvoicePrint({
       <div className="grid grid-cols-1 sm:grid-cols-2 border border-black border-b-0">
         <GridCell label="Customer">
           <p className="font-semibold">{billTo}</p>
-          <MetaRow label="TRN" value={billToTaxId} />
+          <MetaRow label={taxIdLabel} value={billToTaxId} />
           <MetaRow label="PH" value={billToPhone} />
           <MetaRow label="Email" value={billToEmail} />
           {billToAddress ? <p className="whitespace-pre-line mt-1">{billToAddress}</p> : null}
@@ -132,7 +134,7 @@ export function ProfessionalInvoicePrint({
                 Taxable ({currency})
               </th>
               <th className="border border-black px-1 py-1.5 text-right whitespace-nowrap">
-                {vatLabel} ({currency})
+                {taxColumnLabel} ({currency})
               </th>
               <th className="border border-black px-1 py-1.5 text-right whitespace-nowrap">
                 Total ({currency})
@@ -208,7 +210,7 @@ export function ProfessionalInvoicePrint({
               <span className="tabular-nums font-medium">{formatMoney(subtotal, currency)}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span>{vatLabel} Total</span>
+              <span>{taxColumnLabel} Total</span>
               <span className="tabular-nums font-medium">{formatMoney(taxAmount, currency)}</span>
             </div>
             <div className="flex justify-between gap-2 border-t border-black pt-1 text-base font-bold">
