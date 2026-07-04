@@ -76,6 +76,33 @@ service cloud.firestore {
       return companySnap(companyId).data.orgId;
     }
 
+    /** Doc ids are `{uuid}_{uid}` — allow existence checks on the caller's own row. */
+    function memberDocIdBelongsToUser(memberId) {
+      return memberId.matches('^.*_' + uid() + '$');
+    }
+
+    function canReadOrgMemberDoc(memberId) {
+      // Non-existent doc: only allow existence checks on the caller's own row id.
+      return resource == null
+        ? memberDocIdBelongsToUser(memberId)
+        : resource.data.userId == uid()
+          || isOrgAdmin(resource.data.orgId);
+    }
+
+    function canReadCompanyMemberDoc(memberId) {
+      return resource == null
+        ? memberDocIdBelongsToUser(memberId)
+        : resource.data.userId == uid()
+          || (
+            isActiveCompanyMember(resource.data.companyId)
+            && hasModulePermission(resource.data.companyId, 'team', 'view')
+          );
+    }
+
+    function authEmailLower() {
+      return authEmail().lower();
+    }
+
     // ── Permission helpers (mirrors constants/permissions.ts) ─────────────
 
     function isBusinessModule(module) {
@@ -174,7 +201,7 @@ service cloud.firestore {
         && exists(inviteRef)
         && get(inviteRef).data.status == 'pending'
         && get(inviteRef).data.companyId == companyId
-        && get(inviteRef).data.email == authEmail()
+        && get(inviteRef).data.email.lower() == authEmailLower()
         && get(inviteRef).data.role == role;
     }
 
@@ -196,10 +223,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Email → registered flag (existence only) for team invite guidance.
+    match /userDirectory/{emailKey} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && emailKey == authEmailLower();
+      allow update, delete: if false;
+    }
+
     // ── Organizations ─────────────────────────────────────────────────────
 
     match /orgs/{orgId} {
-      allow read: if isAuthenticated() && isActiveOrgMember(orgId);
+      allow read: if isAuthenticated() && (
+        isActiveOrgMember(orgId)
+        || (
+          exists(/databases/$(database)/documents/orgs/$(orgId))
+          && get(/databases/$(database)/documents/orgs/$(orgId)).data.ownerId == uid()
+        )
+      );
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == uid()
         && request.resource.data.id == orgId;
@@ -210,10 +250,7 @@ service cloud.firestore {
     // ── Org members ───────────────────────────────────────────────────────
 
     match /orgMembers/{memberId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == uid()
-        || isOrgAdmin(resource.data.orgId)
-      );
+      allow read: if isAuthenticated() && canReadOrgMemberDoc(memberId);
 
       allow create: if isAuthenticated()
         && request.resource.data.userId == uid()
@@ -229,6 +266,7 @@ service cloud.firestore {
             request.resource.data.role == 'member'
             && request.resource.data.bootstrapCompanyId is string
             && exists(memberRef(request.resource.data.bootstrapCompanyId))
+            && memberSnap(request.resource.data.bootstrapCompanyId).data.status == 'active'
             && companyOrgId(request.resource.data.bootstrapCompanyId) == request.resource.data.orgId
           )
         );
@@ -262,13 +300,7 @@ service cloud.firestore {
     // ── Company members ───────────────────────────────────────────────────
 
     match /companyMembers/{memberId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == uid()
-        || (
-          isActiveCompanyMember(resource.data.companyId)
-          && hasModulePermission(resource.data.companyId, 'team', 'view')
-        )
-      );
+      allow read: if isAuthenticated() && canReadCompanyMemberDoc(memberId);
 
       allow create: if isAuthenticated()
         && request.resource.data.userId == uid()
@@ -298,7 +330,7 @@ service cloud.firestore {
 
     match /companyInvites/{inviteId} {
       allow read: if isAuthenticated() && (
-        resource.data.email == authEmail()
+        resource.data.email.lower() == authEmailLower()
         || (
           isActiveCompanyMember(resource.data.companyId)
           && hasModulePermission(resource.data.companyId, 'team', 'view')
@@ -311,7 +343,7 @@ service cloud.firestore {
 
       allow update: if isAuthenticated() && (
         (
-          resource.data.email == authEmail()
+          resource.data.email.lower() == authEmailLower()
           && resource.data.status == 'pending'
           && request.resource.data.status == 'accepted'
           && request.resource.data.companyId == resource.data.companyId

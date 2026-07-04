@@ -33,6 +33,12 @@ export function getSubscriptionDaysRemaining(subscriptionEnd: Date): number {
   return Math.max(0, Math.ceil(diff / MS_PER_DAY));
 }
 
+/** True when the org has a subscription end date on or before today. */
+export function isOrgSubscriptionExpired(org: { subscriptionEnd?: Date }): boolean {
+  if (org.subscriptionEnd == null) return false;
+  return getSubscriptionDaysRemaining(org.subscriptionEnd) <= 0;
+}
+
 /**
  * How many days before end we should show the “renew soon” banner.
  * Derived from subscription length (end − start), not a fixed number of days.

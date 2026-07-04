@@ -79,7 +79,16 @@ export const companyService = {
 
   async listForUser(userId: string): Promise<Company[]> {
     const memberships = await membershipService.listMembershipsForUser(userId);
-    const companies = await Promise.all(memberships.map((m) => this.get(m.companyId)));
+    const companies = await Promise.all(
+      memberships.map(async (m) => {
+        try {
+          return await this.get(m.companyId);
+        } catch (err) {
+          console.error('Failed to load company for membership:', m.companyId, err);
+          return null;
+        }
+      })
+    );
     return companies.filter((c): c is Company => c != null);
   },
 

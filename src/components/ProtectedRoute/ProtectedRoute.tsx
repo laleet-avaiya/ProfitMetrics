@@ -28,17 +28,17 @@ export function ProtectedRoute({
   const location = useLocation();
   const defaultAppPath = getDefaultAppPath(membership?.role, rolePermissions);
 
-  if (loading) {
+  const isCompanyPickerRoute = COMPANY_PICKER_PATHS.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
+  );
+
+  if (loading && (!user || !isCompanyPickerRoute)) {
     return <LoadingView message="Loading…" size="lg" className="min-h-screen gap-4" />;
   }
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-
-  const isCompanyPickerRoute = COMPANY_PICKER_PATHS.some(
-    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
-  );
 
   if (requireCompany && (!company || !membership)) {
     if (isCompanyPickerRoute) {

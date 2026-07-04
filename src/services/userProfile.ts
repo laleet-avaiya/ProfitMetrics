@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { UserProfile } from '../models/userProfile';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
+import { userDirectoryService } from './userDirectory';
 
 const COLLECTION = 'users';
 
@@ -35,6 +36,7 @@ export const userProfileService = {
       doc(db, COLLECTION, userId),
       prepareDatesForFirestore(profile as unknown as Record<string, unknown>)
     );
+    await userDirectoryService.register(email);
     return profile;
   },
 

@@ -252,14 +252,19 @@ export const membershipService = {
 
     const inviteDoc = snapshot.docs[0];
     const invite = mapInvite(inviteDoc.id, inviteDoc.data() as Record<string, unknown>);
-    const member = await this.createMemberFromInvite(
-      invite.companyId,
-      userId,
-      normalizedEmail,
-      invite.role,
-      invite.invitedBy,
-      invite.id
-    );
+
+    const existingMember = await this.getMember(invite.companyId, userId);
+    const member =
+      existingMember ??
+      (await this.createMemberFromInvite(
+        invite.companyId,
+        userId,
+        normalizedEmail,
+        invite.role,
+        invite.invitedBy,
+        invite.id
+      ));
+
     await updateDoc(
       doc(db, COLLECTION_INVITES, invite.id),
       prepareDatesForFirestore({ status: 'accepted', updatedAt: nowUtc() })

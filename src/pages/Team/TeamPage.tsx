@@ -21,9 +21,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { useModuleAccess, usePermissions } from '../../hooks/usePermissions';
 import { useNotification } from '../../hooks/useNotification';
 import { membershipService } from '../../services/membership';
+import { userDirectoryService } from '../../services/userDirectory';
 import type { CompanyInvite, CompanyMember } from '../../types';
 import { AppModule } from '../../constants/permissions';
 import { COMPANY_ROLE_OPTIONS, CompanyRole, roleLabel } from '../../constants/roles';
+import { BRAND_NAME } from '../../constants/brand';
+
+function signupUrl(): string {
+  return `${window.location.origin}/signup`;
+}
 
 type TeamTab = 'members' | 'permissions';
 
@@ -38,6 +44,7 @@ export function TeamPage() {
   const [saving, setSaving] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<CompanyMember['role']>(CompanyRole.MANAGER);
+  const [inviteHasAccount, setInviteHasAccount] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<TeamTab>('members');
   const { isAdmin } = usePermissions();
 
@@ -51,6 +58,18 @@ export function TeamPage() {
       ]);
       setMembers(memberList.filter((member) => member.status === 'active'));
       setInvites(inviteList);
+
+      const accountFlags = await Promise.all(
+        inviteList.map(async (invite) => {
+          try {
+            const hasAccount = await userDirectoryService.hasAccount(invite.email);
+            return [invite.id, hasAccount] as const;
+          } catch {
+            return [invite.id, false] as const;
+          }
+        })
+      );
+      setInviteHasAccount(Object.fromEntries(accountFlags));
     } catch (error) {
       console.error('Failed to load team:', error);
       notification.error('Failed to load team members');
@@ -86,9 +105,15 @@ export function TeamPage() {
     setSaving(true);
     try {
       await membershipService.inviteMember(company.id, email, inviteRole, user.uid);
+      const hasAccount = await userDirectoryService.hasAccount(email);
       setInviteEmail('');
       setInviteRole(CompanyRole.MANAGER);
       notification.success(`Invite sent to ${email}`);
+      if (!hasAccount) {
+        notification.info(
+          `This person does not have a ${BRAND_NAME} account yet. Ask them to sign up at ${signupUrl()} using exactly ${email} — they will join your company automatically after signing up.`
+        );
+      }
       await loadTeam();
     } catch (error) {
       console.error('Failed to invite member:', error);
@@ -208,7 +233,11 @@ export function TeamPage() {
             </Button>
           </form>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Invited users sign up or sign in with this email to join your company automatically.
+            Invites are tied to the email address. If someone is new to {BRAND_NAME}, ask them to{' '}
+            <a href="/signup" className="text-indigo-600 dark:text-indigo-400 underline hover:no-underline">
+              sign up
+            </a>{' '}
+            with that same email — existing users can sign in instead.
           </p>
         </Card>
 
@@ -304,14 +333,34 @@ export function TeamPage() {
                   <tr className={tableHeadRowClass}>
                     <th className={tableHeadCellClass}>Email</th>
                     <th className={tableHeadCellClass}>Role</th>
+                    <th className={tableHeadCellClass}>Status</th>
                     <th className={tableHeadCellClass}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invites.map((invite) => (
+                  {invites.map((invite) => {
+                    const hasAccount = inviteHasAccount[invite.id];
+                    return (
                     <tr key={invite.id}>
                       <td className={tableCellClass}>{invite.email}</td>
                       <td className={tableCellClass}>{roleLabel(invite.role)}</td>
+                      <td className={tableCellClass}>
+                        <span
+                          className={
+                            hasAccount === true
+                              ? 'text-gray-600 dark:text-gray-400'
+                              : hasAccount === false
+                                ? 'text-amber-700 dark:text-amber-300'
+                                : 'text-gray-500 dark:text-gray-500'
+                          }
+                        >
+                          {hasAccount === undefined
+                            ? '—'
+                            : hasAccount
+                              ? 'Has account — can sign in'
+                              : 'Needs signup'}
+                        </span>
+                      </td>
                       <td className={tableCellClass}>
                         {canDelete ? (
                           <Button
@@ -325,7 +374,8 @@ export function TeamPage() {
                         ) : null}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

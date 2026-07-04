@@ -63,7 +63,7 @@ export function Signup() {
               Create your account
             </h1>
             <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-              Sign up to create your organization. You can add companies after signing in.
+              Sign up with the same email your team invite was sent to, or create a new organization.
             </p>
           </div>
           <form className="space-y-6" onSubmit={handleSubmit}>

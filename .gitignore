@@ -9,6 +9,8 @@ dist
 .env.test
 .env.production
 .DS_Store
+*.swp
+*~
 META_ADS.md
 meeting.md
 docs/
