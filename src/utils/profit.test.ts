@@ -88,6 +88,31 @@ describe('computeLineEconomics', () => {
     expect(result.profit).toBe(100);
     expect(result.profitWithoutItc).toBe(82);
   });
+
+  it('keeps ex-tax margin when GST is charged on top of selling price', () => {
+    const result = computeLineEconomics({
+      quantity: 1,
+      purchasePrice: 100,
+      sellingPrice: 200,
+      shippingCost: 0,
+      taxType: 'gst',
+      taxPercentage: 18,
+      taxMode: TaxMode.EXCLUSIVE,
+      sellingTaxPercentage: 18,
+      sellingTaxMode: TaxMode.EXCLUSIVE,
+      purchaseTaxPercentage: 18,
+      purchaseTaxMode: TaxMode.EXCLUSIVE,
+    });
+
+    expect(result.cogs).toBe(100);
+    expect(result.grossRevenue).toBe(200);
+    expect(result.netRevenue).toBe(200);
+    expect(result.taxAmount).toBe(36);
+    expect(result.purchaseTaxAmount).toBe(18);
+    expect(result.totalCosts).toBe(100);
+    expect(result.profit).toBe(100);
+    expect(result.profitWithoutItc).toBe(82);
+  });
 });
 
 describe('computeOrderEconomics', () => {

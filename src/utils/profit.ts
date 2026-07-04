@@ -176,12 +176,7 @@ export function computeLineEconomics(input: LineEconomicsInput): LineEconomicsRe
     netRevenue = roundMoney(grossRevenue - taxAmount);
   }
 
-  const totalCosts = roundMoney(
-    cogs +
-      shippingTotal +
-      platformFeesBase +
-      (tax.sellingTaxMode === TaxModeEnum.EXCLUSIVE ? taxAmount : 0)
-  );
+  const totalCosts = roundMoney(cogs + shippingTotal + platformFeesBase);
 
   const profit = roundMoney(netRevenue - totalCosts);
   const profitWithoutItc = roundMoney(profit - inputTaxAmount);
