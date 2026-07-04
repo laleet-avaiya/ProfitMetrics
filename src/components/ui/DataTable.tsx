@@ -9,7 +9,6 @@ import {
   tableHeadCellClass,
   tableHeadRowClass,
   tableTruncateCellClass,
-  tableWrapClass,
 } from '../../constants/ui';
 
 export interface DataTableColumn<T> {
@@ -148,6 +147,3 @@ export function DataTable<T>({
     </div>
   );
 }
-
-/** Embedded tables (team, settings) without the list-page responsive wrapper */
-export const embeddedTableWrapClass = tableWrapClass;

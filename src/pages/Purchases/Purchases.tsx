@@ -150,8 +150,7 @@ export function Purchases() {
     });
   };
 
-  const columns = useMemo<DataTableColumn<PurchaseOrder>[]>(
-    () => [
+  const columns: DataTableColumn<PurchaseOrder>[] = [
       {
         key: 'date',
         header: 'Date',
@@ -270,9 +269,7 @@ export function Purchases() {
           </div>
         ),
       },
-    ],
-    [currency, canUpdate, canDelete, navigate]
-  );
+];
 
   return (
     <SectionPage

@@ -140,8 +140,7 @@ export function Sales() {
     [company, notification, reload, user]
   );
 
-  const columns = useMemo((): DataTableColumn<Sale>[] => {
-    return [
+  const columns: DataTableColumn<Sale>[] = [
       {
         key: 'date',
         header: 'Date',
@@ -260,8 +259,7 @@ export function Sales() {
           </div>
         ),
       },
-    ];
-  }, [currency, canUpdateSale, canDeleteSale, navigate, handleDelete]);
+];
 
   return (
     <SectionPage

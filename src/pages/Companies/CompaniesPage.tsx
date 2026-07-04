@@ -86,6 +86,24 @@ export function CompaniesPage() {
   refreshCompaniesRef.current = refreshCompanies;
   const orgRepairAttemptedRef = useRef(false);
   const preferActiveOrgHandledRef = useRef(false);
+  const emptyCompaniesRefreshRef = useRef(false);
+
+  // Recover if auth finished before invite membership was visible (e.g. race on first signup).
+  useEffect(() => {
+    if (
+      loading ||
+      emptyCompaniesRefreshRef.current ||
+      !user ||
+      userCompanies.length > 0
+    ) {
+      return;
+    }
+    emptyCompaniesRefreshRef.current = true;
+    void refreshCompaniesRef.current().catch((err) => {
+      console.error(err);
+      emptyCompaniesRefreshRef.current = false;
+    });
+  }, [loading, user, userCompanies.length]);
 
   // From subscription-expired: auto-select first org with an active subscription.
   useEffect(() => {

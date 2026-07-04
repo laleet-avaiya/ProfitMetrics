@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import { PageHeader, PageShell } from "../../components/PageShell/PageShell";
 import { Button } from "../../components/Button/Button";
@@ -11,9 +11,9 @@ import { FormTabs } from "../../components/ui/FormTabs";
 import { RolePermissionsEditor } from "../../components/Team/RolePermissionsEditor";
 import {
   DataTable,
-  embeddedTableWrapClass,
   type DataTableColumn,
 } from "../../components/ui/DataTable";
+import { embeddedTableWrapClass } from "../../constants/ui";
 import { useAuth } from "../../hooks/useAuth";
 import { useModuleAccess, usePermissions } from "../../hooks/usePermissions";
 import { useNotification } from "../../hooks/useNotification";
@@ -193,8 +193,7 @@ export function TeamPage() {
     }
   };
 
-  const memberColumns = useMemo<DataTableColumn<CompanyMember>[]>(
-    () => [
+  const memberColumns: DataTableColumn<CompanyMember>[] = [
       {
         key: "email",
         header: "Member",
@@ -277,12 +276,9 @@ export function TeamPage() {
           );
         },
       },
-    ],
-    [user?.uid, canUpdate, canDelete],
-  );
+    ];
 
-  const inviteColumns = useMemo<DataTableColumn<CompanyInvite>[]>(
-    () => [
+  const inviteColumns: DataTableColumn<CompanyInvite>[] = [
       {
         key: "email",
         header: "Email",
@@ -342,9 +338,7 @@ export function TeamPage() {
             </Button>
           ) : null,
       },
-    ],
-    [inviteHasAccount, canDelete],
-  );
+    ];
 
   if (loading) {
     return (

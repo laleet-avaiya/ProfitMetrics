@@ -158,8 +158,7 @@ export function Vendors() {
     });
   };
 
-  const columns = useMemo<DataTableColumn<Vendor>[]>(
-    () => [
+  const columns: DataTableColumn<Vendor>[] = [
       {
         key: 'name',
         header: 'Vendor',
@@ -302,9 +301,7 @@ export function Vendors() {
           );
         },
       },
-    ],
-    [canUpdate, canDelete, currency, expenseTotals, purchaseTotals]
-  );
+];
 
   return (
     <SectionPage

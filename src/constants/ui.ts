@@ -69,6 +69,9 @@ export const tableWrapClass =
 export const listTableWrapClass =
   'hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700';
 
+/** Embedded tables (team, settings) without the list-page responsive wrapper */
+export const embeddedTableWrapClass = tableWrapClass;
+
 export const tableClass = 'w-full text-sm';
 
 export const tableHeadRowClass =

@@ -100,8 +100,7 @@ export function Payments() {
     });
   };
 
-  const columns = useMemo<DataTableColumn<Payment>[]>(
-    () => [
+  const columns: DataTableColumn<Payment>[] = [
       {
         key: 'date',
         header: 'Date',
@@ -174,9 +173,7 @@ export function Payments() {
           </div>
         ),
       },
-    ],
-    [canUpdate, canDelete, currency, navigate]
-  );
+];
 
   return (
     <SectionPage

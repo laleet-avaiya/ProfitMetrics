@@ -149,8 +149,7 @@ export function Products() {
 
   const openEdit = (product: Product) => navigate(`/products/${product.id}/edit`);
 
-  const columns = useMemo<DataTableColumn<Product>[]>(
-    () => [
+  const columns: DataTableColumn<Product>[] = [
       {
         key: 'name',
         header: 'Product',
@@ -285,9 +284,7 @@ export function Products() {
           </div>
         ),
       },
-    ],
-    [canUpdate, quantityStats, stockMap, stockTotals]
-  );
+];
 
   return (
     <SectionPage

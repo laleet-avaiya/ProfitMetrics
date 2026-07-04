@@ -88,8 +88,7 @@ export function StockReconciliationPanel({
     [summary]
   );
 
-  const mismatchColumns = useMemo<DataTableColumn<StockReconciliationRow>[]>(
-    () => [
+  const mismatchColumns: DataTableColumn<StockReconciliationRow>[] = [
       {
         key: 'product',
         header: 'Product',
@@ -167,9 +166,7 @@ export function StockReconciliationPanel({
           </span>
         ),
       },
-    ],
-    []
-  );
+];
 
   const handleReconcile = () => {
     if (!company || !summary || !user) return;

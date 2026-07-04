@@ -33,6 +33,20 @@ import { CompanyRole } from '../constants/roles';
 const COMPANY_COLLECTION = 'companies';
 const ORG_COLLECTION = 'orgs';
 
+type LoadSessionOptions = {
+  /** Companies already known (e.g. right after invite accept) when membership queries are still catching up */
+  seedCompanies?: Company[];
+};
+
+function mergeCompanies(primary: Company[], seed: Company[] | undefined): Company[] {
+  if (!seed?.length) return primary;
+  const byId = new Map(primary.map((company) => [company.id, company]));
+  for (const company of seed) {
+    byId.set(company.id, company);
+  }
+  return [...byId.values()];
+}
+
 /** One org-membership row per org; bootstrap from the first company in that org. */
 async function syncMissingOrgMemberships(
   userId: string,
@@ -161,6 +175,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const orgRef = useRef(org);
   orgRef.current = org;
   const refreshCompaniesInFlightRef = useRef<Promise<number> | null>(null);
+  const authBootstrapRef = useRef<'idle' | 'signup'>('idle');
+  const sessionLoadIdRef = useRef(0);
+
+  const isActiveSessionLoad = (loadId: number) => loadId === sessionLoadIdRef.current;
 
   const loadOrgContext = async (orgId: string, userId: string): Promise<void> => {
     const [loadedOrg, loadedOrgMember] = await Promise.all([
@@ -207,7 +225,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadSession = async (firebaseUser: User): Promise<void> => {
+  const loadSession = async (
+    firebaseUser: User,
+    options?: LoadSessionOptions
+  ): Promise<void> => {
+    const loadId = ++sessionLoadIdRef.current;
     const email = firebaseUser.email ?? '';
     const uid = firebaseUser.uid;
     const displayName = firebaseUser.displayName ?? undefined;
@@ -217,6 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Failed to accept pending invites:', err);
     }
+
+    if (!isActiveSessionLoad(loadId)) return;
 
     const [userProfileResult, companiesResult, orgMembershipsResult] = await Promise.all([
       userProfileService.get(uid).catch((err) => {
@@ -233,8 +257,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     ]);
 
+    if (!isActiveSessionLoad(loadId)) return;
+
     let userProfile = userProfileResult;
-    const companies = companiesResult;
+    const companies = mergeCompanies(companiesResult, options?.seedCompanies);
     setUserCompanies(companies);
 
     let orgMemberships = orgMembershipsResult;
@@ -249,6 +275,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Failed to sync org memberships:', err);
     }
+
+    if (!isActiveSessionLoad(loadId)) return;
 
     if (!userProfile && orgMemberships.length === 0 && companies.length === 0) {
       setProfile(null);
@@ -277,6 +305,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     if (!userProfile) return;
+
+    if (!isActiveSessionLoad(loadId)) return;
 
     setProfile(userProfile);
 
@@ -351,6 +381,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Unblock company picker before loading full company context (permissions, etc.).
+    if (!isActiveSessionLoad(loadId)) return;
     setLoading(false);
 
     if (activeCompanyId) {
@@ -371,55 +402,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, details: SignUpDetails): Promise<void> => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const { uid } = userCredential.user;
-    const normalizedEmail = email.trim().toLowerCase();
-    const displayName = details.displayName.trim();
+    authBootstrapRef.current = 'signup';
+    sessionLoadIdRef.current += 1;
+    setLoading(true);
 
-    const accepted = await membershipService.acceptPendingInvites(uid, normalizedEmail);
-    if (accepted) {
-      const invitedCompany = await companyService.get(accepted.companyId);
-      if (invitedCompany) {
-        const existingProfile = await userProfileService.get(uid);
-        if (!existingProfile) {
-          await userProfileService.create(uid, normalizedEmail, displayName, invitedCompany.orgId);
-        } else {
-          await userProfileService.setActiveOrg(uid, invitedCompany.orgId);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const { uid } = userCredential.user;
+      const normalizedEmail = email.trim().toLowerCase();
+      const displayName = details.displayName.trim();
+
+      const accepted = await membershipService.acceptPendingInvites(uid, normalizedEmail);
+      if (accepted) {
+        const invitedCompany = await companyService.get(accepted.companyId);
+        if (invitedCompany) {
+          const existingProfile = await userProfileService.get(uid);
+          if (!existingProfile) {
+            await userProfileService.create(uid, normalizedEmail, displayName, invitedCompany.orgId);
+          } else {
+            await userProfileService.setActiveOrg(uid, invitedCompany.orgId);
+          }
+          await userProfileService.setActiveCompany(uid, accepted.companyId);
         }
-        await userProfileService.setActiveCompany(uid, accepted.companyId);
+        try {
+          await loadSession(userCredential.user, {
+            seedCompanies: invitedCompany ? [invitedCompany] : undefined,
+          });
+        } catch (err) {
+          console.error('Failed to load session after invite signup:', err);
+          throw new Error(
+            'Your account was created, but loading your company failed. Please sign in again.'
+          );
+        }
+        return;
       }
-      try {
-        await loadSession(userCredential.user);
-      } catch (err) {
-        console.error('Failed to load session after invite signup:', err);
-        throw new Error(
-          'Your account was created, but loading your company failed. Please sign in again.'
-        );
-      }
-      return;
+
+      const createdOrg = await orgService.createForOwner(uid, displayName);
+      const createdOrgMember = await orgMembershipService.createAdmin(
+        createdOrg.id,
+        uid,
+        normalizedEmail,
+        displayName
+      );
+      const createdProfile = await userProfileService.create(
+        uid,
+        normalizedEmail,
+        displayName,
+        createdOrg.id
+      );
+
+      setProfile(createdProfile);
+      setOrg(createdOrg);
+      setOrgMembership(createdOrgMember);
+      setUserCompanies([]);
+      setAccessibleOrgs([
+        { org: createdOrg, membership: createdOrgMember, companyCount: 0 },
+      ]);
+      setCompany(null);
+      setMembership(null);
+      setRolePermissions(null);
+      setLoading(false);
+    } finally {
+      authBootstrapRef.current = 'idle';
     }
-
-    const createdOrg = await orgService.createForOwner(uid, displayName);
-    const createdOrgMember = await orgMembershipService.createAdmin(
-      createdOrg.id,
-      uid,
-      normalizedEmail,
-      displayName
-    );
-    const createdProfile = await userProfileService.create(
-      uid,
-      normalizedEmail,
-      displayName,
-      createdOrg.id
-    );
-
-    setProfile(createdProfile);
-    setOrg(createdOrg);
-    setOrgMembership(createdOrgMember);
-    setUserCompanies([]);
-    setCompany(null);
-    setMembership(null);
-    setRolePermissions(null);
   };
 
   const signIn = async (email: string, password: string): Promise<void> => {
@@ -744,20 +789,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (!firebaseUser) {
+        setProfile(null);
+        setOrg(null);
+        setOrgMembership(null);
+        setCompany(null);
+        setMembership(null);
+        setRolePermissions(null);
+        setUserCompanies([]);
+        setAccessibleOrgs([]);
+        setCompanyContextLoading(false);
+        setLoading(false);
+        return;
+      }
+
+      if (authBootstrapRef.current === 'signup') {
+        return;
+      }
+
       try {
-        if (firebaseUser) {
-          await loadSession(firebaseUser);
-        } else {
-          setProfile(null);
-          setOrg(null);
-          setOrgMembership(null);
-          setCompany(null);
-          setMembership(null);
-          setRolePermissions(null);
-          setUserCompanies([]);
-          setAccessibleOrgs([]);
-          setCompanyContextLoading(false);
-        }
+        await loadSession(firebaseUser);
       } catch (err) {
         console.error('Failed to load auth session:', err);
       } finally {

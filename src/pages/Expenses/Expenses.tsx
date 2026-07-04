@@ -128,8 +128,7 @@ export function Expenses() {
     });
   };
 
-  const columns = useMemo<DataTableColumn<Expense>[]>(
-    () => [
+  const columns: DataTableColumn<Expense>[] = [
       {
         key: 'date',
         header: 'Date',
@@ -249,9 +248,7 @@ export function Expenses() {
           </div>
         ),
       },
-    ],
-    [currency, canUpdate, canDelete]
-  );
+];
 
   return (
     <SectionPage

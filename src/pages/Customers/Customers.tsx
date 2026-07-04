@@ -111,8 +111,7 @@ export function Customers() {
     });
   };
 
-  const columns = useMemo<DataTableColumn<Customer>[]>(
-    () => [
+  const columns: DataTableColumn<Customer>[] = [
       {
         key: 'name',
         header: 'Customer',
@@ -200,9 +199,7 @@ export function Customers() {
           </div>
         ),
       },
-    ],
-    [canUpdate, canDelete, currency, invoiceStats, navigate]
-  );
+];
 
   return (
     <SectionPage
