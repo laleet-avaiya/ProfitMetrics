@@ -102,7 +102,7 @@ function resolveActiveOrgId(
     orgMemberships.some((m) => m.orgId === orgId) ||
     companies.some((c) => c.orgId === orgId);
 
-  let orgId =
+  const orgId =
     userProfile.activeOrgId && isKnownOrg(userProfile.activeOrgId)
       ? userProfile.activeOrgId
       : orgMemberships[0]?.orgId ?? companies[0]?.orgId;
@@ -132,6 +132,19 @@ function canOpenCompanyInOrg(
   return !isOrgSubscriptionExpired(orgEntry.org);
 }
 
+function applyOrgFromAccessible(
+  orgId: string,
+  accessible: UserOrgAccess[],
+  setOrg: (org: Organization | null) => void,
+  setOrgMembership: (member: OrgMember | null) => void
+): boolean {
+  const entry = accessible.find((item) => item.org.id === orgId);
+  if (!entry) return false;
+  setOrg(entry.org);
+  setOrgMembership(entry.membership.status === 'active' ? entry.membership : null);
+  return true;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -143,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userCompanies, setUserCompanies] = useState<Company[]>([]);
   const [accessibleOrgs, setAccessibleOrgs] = useState<UserOrgAccess[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companyContextLoading, setCompanyContextLoading] = useState(false);
   const orgRef = useRef(org);
   orgRef.current = org;
   const refreshCompaniesInFlightRef = useRef<Promise<number> | null>(null);
@@ -194,36 +208,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadSession = async (firebaseUser: User): Promise<void> => {
     const email = firebaseUser.email ?? '';
+    const uid = firebaseUser.uid;
+    const displayName = firebaseUser.displayName ?? undefined;
 
     try {
-      await membershipService.acceptPendingInvites(firebaseUser.uid, email);
+      await membershipService.acceptPendingInvites(uid, email);
     } catch (err) {
       console.error('Failed to accept pending invites:', err);
     }
 
-    let userProfile: UserProfile | null = null;
-    try {
-      userProfile = await userProfileService.get(firebaseUser.uid);
-    } catch (err) {
-      console.error('Failed to load user profile:', err);
-    }
+    const [userProfileResult, companiesResult, orgMembershipsResult] = await Promise.all([
+      userProfileService.get(uid).catch((err) => {
+        console.error('Failed to load user profile:', err);
+        return null;
+      }),
+      companyService.listForUser(uid).catch((err) => {
+        console.error('Failed to list companies:', err);
+        return [] as Company[];
+      }),
+      orgMembershipService.listForUser(uid).catch((err) => {
+        console.error('Failed to list org memberships:', err);
+        return [] as OrgMember[];
+      }),
+    ]);
 
-    let companies: Company[] = [];
-    try {
-      companies = await companyService.listForUser(firebaseUser.uid);
-      setUserCompanies(companies);
-    } catch (err) {
-      console.error('Failed to list companies:', err);
-      setUserCompanies([]);
-    }
+    let userProfile = userProfileResult;
+    const companies = companiesResult;
+    setUserCompanies(companies);
 
-    let orgMemberships: OrgMember[] = [];
+    let orgMemberships = orgMembershipsResult;
     try {
       orgMemberships = await syncMissingOrgMemberships(
-        firebaseUser.uid,
+        uid,
         email,
         companies,
-        userProfile?.displayName ?? firebaseUser.displayName ?? undefined
+        userProfile?.displayName ?? displayName,
+        orgMemberships
       );
     } catch (err) {
       console.error('Failed to sync org memberships:', err);
@@ -245,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!fallbackOrgId) return;
       try {
         userProfile = await userProfileService.create(
-          firebaseUser.uid,
+          uid,
           email,
           email.split('@')[0] ?? 'User',
           fallbackOrgId
@@ -288,9 +308,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionProfile.activeOrgId !== activeOrgId || autoSwitchedFromExpired;
       if (profileNeedsOrgUpdate) {
         try {
-          await userProfileService.setActiveOrg(firebaseUser.uid, activeOrgId);
+          await userProfileService.setActiveOrg(uid, activeOrgId);
           if (autoSwitchedFromExpired) {
-            await userProfileService.clearActiveCompany(firebaseUser.uid);
+            await userProfileService.clearActiveCompany(uid);
           }
           sessionProfile = {
             ...sessionProfile,
@@ -302,10 +322,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Failed to set active org on profile:', err);
         }
       }
-      try {
-        await loadOrgContext(activeOrgId, firebaseUser.uid);
-      } catch (err) {
-        console.error('Failed to load org context:', err);
+
+      if (!applyOrgFromAccessible(activeOrgId, accessible, setOrg, setOrgMembership)) {
+        try {
+          await loadOrgContext(activeOrgId, uid);
+        } catch (err) {
+          console.error('Failed to load org context:', err);
+        }
       }
     }
 
@@ -315,13 +338,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? sessionProfile.activeCompanyId
         : undefined;
 
-    if (
-      activeCompanyId &&
-      !canOpenCompanyInOrg(activeCompanyId, companies, accessible)
-    ) {
+    if (activeCompanyId && !canOpenCompanyInOrg(activeCompanyId, companies, accessible)) {
       activeCompanyId = undefined;
       try {
-        await userProfileService.clearActiveCompany(firebaseUser.uid);
+        await userProfileService.clearActiveCompany(uid);
         sessionProfile = { ...sessionProfile, activeCompanyId: undefined };
         setProfile(sessionProfile);
       } catch (err) {
@@ -329,16 +349,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Unblock company picker before loading full company context (permissions, etc.).
+    setLoading(false);
+
     if (activeCompanyId) {
-      try {
-        await loadCompanyContext(activeCompanyId, firebaseUser.uid);
-      } catch (err) {
-        console.error('Failed to load company context:', err);
-      }
+      setCompanyContextLoading(true);
+      void loadCompanyContext(activeCompanyId, uid)
+        .catch((err) => {
+          console.error('Failed to load company context:', err);
+        })
+        .finally(() => {
+          setCompanyContextLoading(false);
+        });
     } else {
       setCompany(null);
       setMembership(null);
       setRolePermissions(null);
+      setCompanyContextLoading(false);
     }
   };
 
@@ -420,6 +447,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRolePermissions(null);
     setUserCompanies([]);
     setAccessibleOrgs([]);
+    setCompanyContextLoading(false);
   };
 
   const selectCompany = async (companyId: string): Promise<void> => {
@@ -460,7 +488,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await userProfileService.setActiveOrg(user.uid, orgId);
     await userProfileService.clearActiveCompany(user.uid);
-    await loadOrgContext(orgId, user.uid);
+    if (!applyOrgFromAccessible(orgId, accessibleOrgs, setOrg, setOrgMembership)) {
+      await loadOrgContext(orgId, user.uid);
+    }
     setProfile((prev) =>
       prev ? { ...prev, activeOrgId: orgId, activeCompanyId: undefined } : prev
     );
@@ -618,19 +648,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const run = async (): Promise<number> => {
       const email = user.email ?? '';
-      const companies = await companyService.listForUser(user.uid);
+      const [companies, memberships] = await Promise.all([
+        companyService.listForUser(user.uid),
+        orgMembershipService.listForUser(user.uid),
+      ]);
 
-      await syncMissingOrgMemberships(
+      void syncMissingOrgMemberships(
         user.uid,
         email,
         companies,
-        profile?.displayName ?? user.displayName ?? undefined
-      );
+        profile?.displayName ?? user.displayName ?? undefined,
+        memberships
+      ).catch((err) => {
+        console.error('Failed to sync org memberships while refreshing:', err);
+      });
 
       setUserCompanies(companies);
 
-      const memberships = await orgMembershipService.listForUser(user.uid);
-      setAccessibleOrgs(await loadAccessibleOrgs(memberships, companies));
+      const accessible = await loadAccessibleOrgs(memberships, companies);
+      setAccessibleOrgs(accessible);
 
       const activeOrgId =
         profile?.activeOrgId &&
@@ -641,10 +677,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const currentOrg = orgRef.current;
       if (activeOrgId && (!currentOrg || currentOrg.id !== activeOrgId)) {
-        try {
-          await loadOrgContext(activeOrgId, user.uid);
-        } catch (err) {
-          console.error('Failed to load org context while refreshing companies:', err);
+        if (!applyOrgFromAccessible(activeOrgId, accessible, setOrg, setOrgMembership)) {
+          try {
+            await loadOrgContext(activeOrgId, user.uid);
+          } catch (err) {
+            console.error('Failed to load org context while refreshing companies:', err);
+          }
         }
       }
 
@@ -684,6 +722,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userCompanies,
     accessibleOrgs,
     loading,
+    companyContextLoading,
     signUp,
     signIn,
     sendPasswordReset,
@@ -715,6 +754,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRolePermissions(null);
           setUserCompanies([]);
           setAccessibleOrgs([]);
+          setCompanyContextLoading(false);
         }
       } catch (err) {
         console.error('Failed to load auth session:', err);

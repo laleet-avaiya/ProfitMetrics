@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, documentId, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Company } from '../models/company';
 import type { CreateCompanyDetails } from '../contexts/AuthContext.types';
@@ -21,6 +21,24 @@ import {
 } from '../utils/firestoreDates';
 
 const COLLECTION = 'companies';
+const FIRESTORE_IN_QUERY_LIMIT = 30;
+
+async function getCompaniesByIds(companyIds: string[]): Promise<Company[]> {
+  if (companyIds.length === 0) return [];
+
+  const companies: Company[] = [];
+  for (let i = 0; i < companyIds.length; i += FIRESTORE_IN_QUERY_LIMIT) {
+    const chunk = companyIds.slice(i, i + FIRESTORE_IN_QUERY_LIMIT);
+    const q = query(collection(db, COLLECTION), where(documentId(), 'in', chunk));
+    const snapshot = await getDocs(q);
+    companies.push(
+      ...snapshot.docs.map((companyDoc) =>
+        mapCompany(companyDoc.id, companyDoc.data() as Record<string, unknown>)
+      )
+    );
+  }
+  return companies;
+}
 
 function mapCompany(id: string, data: Record<string, unknown>): Company {
   const converted = convertTimestamps<Record<string, unknown>>(data);
@@ -79,17 +97,8 @@ export const companyService = {
 
   async listForUser(userId: string): Promise<Company[]> {
     const memberships = await membershipService.listMembershipsForUser(userId);
-    const companies = await Promise.all(
-      memberships.map(async (m) => {
-        try {
-          return await this.get(m.companyId);
-        } catch (err) {
-          console.error('Failed to load company for membership:', m.companyId, err);
-          return null;
-        }
-      })
-    );
-    return companies.filter((c): c is Company => c != null);
+    if (memberships.length === 0) return [];
+    return getCompaniesByIds(memberships.map((m) => m.companyId));
   },
 
   async create(

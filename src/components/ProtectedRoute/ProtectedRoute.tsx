@@ -23,7 +23,7 @@ export function ProtectedRoute({
   module,
   action = 'view',
 }: ProtectedRouteProps) {
-  const { user, org, company, membership, rolePermissions, loading } = useAuth();
+  const { user, org, company, membership, rolePermissions, loading, companyContextLoading } = useAuth();
   const { can } = usePermissions();
   const location = useLocation();
   const defaultAppPath = getDefaultAppPath(membership?.role, rolePermissions);
@@ -43,6 +43,9 @@ export function ProtectedRoute({
   if (requireCompany && (!company || !membership)) {
     if (isCompanyPickerRoute) {
       return <>{children}</>;
+    }
+    if (companyContextLoading) {
+      return <LoadingView message="Loading…" size="lg" className="min-h-screen gap-4" />;
     }
     return <Navigate to="/companies" replace />;
   }

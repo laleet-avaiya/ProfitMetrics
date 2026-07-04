@@ -35,6 +35,8 @@ export interface AuthContextType {
   userCompanies: Company[];
   accessibleOrgs: UserOrgAccess[];
   loading: boolean;
+  /** True while restoring the last-opened company (app routes only; picker does not wait). */
+  companyContextLoading: boolean;
   signUp: (email: string, password: string, details: SignUpDetails) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
