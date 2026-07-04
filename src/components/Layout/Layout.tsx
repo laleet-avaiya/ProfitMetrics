@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -166,6 +166,17 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
 
   const toggleSidebarCollapsed = () => setSidebarCollapsed((prev) => !prev);
 
+  const visibleNavSections = useMemo(
+    () =>
+      navSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => !item.module || can(item.module, 'view')),
+        }))
+        .filter((section) => section.items.length > 0),
+    [can]
+  );
+
   const navLinkClass = (active: boolean, highlighted = false) => {
     const layout = `flex items-center ${
       sidebarCollapsed ? 'lg:justify-center lg:px-2 lg:space-x-0' : 'space-x-3 px-3'
@@ -254,7 +265,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
 
         <nav className={`flex-1 min-h-0 overflow-y-auto py-3 ${sidebarCollapsed ? 'lg:px-2 px-2' : 'px-2'}`}>
           <div className="space-y-1">
-            {navSections.map((section, sectionIndex) => (
+            {visibleNavSections.map((section, sectionIndex) => (
               <div
                 key={section.title ?? `section-${sectionIndex}`}
                 className={sectionIndex > 0 ? 'pt-3 mt-3 border-t border-gray-200 dark:border-gray-700' : ''}
@@ -268,9 +279,7 @@ export function Layout({ children, fullBleed = false }: LayoutProps) {
                     {section.title}
                   </p>
                 ) : null}
-                {section.items
-                  .filter((item) => !item.module || can(item.module, 'view'))
-                  .map((item) => (
+                {section.items.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
