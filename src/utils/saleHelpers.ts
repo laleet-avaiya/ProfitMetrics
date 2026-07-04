@@ -21,6 +21,7 @@ import { normalizeDeliveryMode } from '../constants/deliveryModes';
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { normalizeSalePaymentStatus } from '../constants/purchaseStatuses';
 import { derivePaymentStatus } from './purchaseHelpers';
+import { customerSnapshotFromCustomer } from './customerHelpers';
 import { resolveListingTax, defaultPurchaseTaxFromSelling } from './listingTax';
 import {
   computeLineEconomics,
@@ -323,6 +324,8 @@ export function saleToForm(sale: Sale): SaleFormState {
   const firstLine = lines[0];
   const firstEconomics = firstLine?.economics ?? sale.economics;
 
+  const snapshot = sale.customer;
+
   return {
     orderId: sale.orderId ?? '',
     orderDate: utcToLocalDateInput(sale.orderDate),
@@ -331,8 +334,11 @@ export function saleToForm(sale: Sale): SaleFormState {
     customer: {
       ...emptySaleCustomerForm(),
       mode: 'existing',
-      customerId: sale.customerId ?? '',
-      name: sale.customerName ?? '',
+      customerId: sale.customerId ?? snapshot?.id ?? '',
+      name: snapshot?.name ?? sale.customerName ?? '',
+      email: snapshot?.email ?? '',
+      phone: snapshot?.phone ?? '',
+      taxId: snapshot?.taxId ?? '',
     },
     deliveryMode: normalizeDeliveryMode(sale.deliveryMode),
     orderShippingCost: sale.orderShippingCost ?? 0,
@@ -669,6 +675,18 @@ export function buildSaleFromForm(
   const totalPaid = roundMoney(existing?.totalPaid ?? 0);
   const balanceDue = roundMoney(Math.max(0, total - totalPaid));
   const paymentStatus = derivePaymentStatus(total, totalPaid);
+  let customerSnapshot = customer ? customerSnapshotFromCustomer(customer) : undefined;
+  if (
+    !customerSnapshot &&
+    form.customer.customerId &&
+    existing?.customerId === form.customer.customerId
+  ) {
+    customerSnapshot =
+      existing.customer ??
+      (existing.customerName
+        ? { id: existing.customerId, name: existing.customerName }
+        : undefined);
+  }
 
   return {
     id: existing?.id ?? createListingId(),
@@ -687,8 +705,9 @@ export function buildSaleFromForm(
     platform: form.platform.trim(),
     platformListingId: firstLine.platformListingId,
     quantity: totalQty,
-    customerId: customer?.id,
-    customerName: customer?.name,
+    customerId: customerSnapshot?.id,
+    customerName: customerSnapshot?.name,
+    customer: customerSnapshot,
     status: normalizeSaleStatus(form.status),
     paymentMode: form.paymentMode,
     paymentStatus,

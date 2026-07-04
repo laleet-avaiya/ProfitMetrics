@@ -205,8 +205,10 @@ export interface Sale {
   quantity: number;
   /** Optional linked customer (marketplace buyer) */
   customerId?: string;
-  /** Denormalized customer name for list views */
+  /** Denormalized customer name for list views and legacy reads */
   customerName?: string;
+  /** Copy of customer fields at time of sale — avoids lookups in lists, print, and reports */
+  customer?: CustomerSnapshot;
   /** pending · shipped · delivered · returned · cancelled — omitted on legacy records */
   status?: SaleStatus;
   /** Tracking only — how marketplace payout was received */
@@ -493,6 +495,19 @@ export interface PurchaseOrder {
 }
 
 // ─── Customers (offline sales) ───────────────────────────────────────────────
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+/** Denormalized customer fields captured at document write time */
+export interface CustomerSnapshot {
+  id: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxId?: string;
+}
 
 export interface Customer {
   id: string;

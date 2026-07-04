@@ -36,6 +36,7 @@ import { amountIncludesTaxLabel, taxPercentLabel } from '../../utils/listingTax'
 import { formatMoney, formatPercent } from '../../utils/profit';
 import { computeStoredSaleEconomics } from '../../utils/saleHelpers';
 import { formatDateLocal } from '../../utils/date';
+import { getSaleCustomerName } from '../../utils/customerHelpers';
 import { deliveryModeLabel } from '../../constants/deliveryModes';
 import {
   getSaleDeliveryTotal,
@@ -202,17 +203,17 @@ export function SaleDetailPage() {
               <DetailField label="Platform" value={sale.platform} />
               <DetailField
                 label="Customer"
-                value={
-                  sale.customerName ? (
-                    sale.customerId ? (
-                      <Link to={`/customers/${sale.customerId}`} className={`text-sm ${detailLinkClass}`}>
-                        {sale.customerName} →
-                      </Link>
-                    ) : (
-                      sale.customerName
-                    )
-                  ) : null
-                }
+                value={(() => {
+                  const customerName = getSaleCustomerName(sale);
+                  if (!customerName) return null;
+                  return sale.customerId ? (
+                    <Link to={`/customers/${sale.customerId}`} className={`text-sm ${detailLinkClass}`}>
+                      {customerName} →
+                    </Link>
+                  ) : (
+                    customerName
+                  );
+                })()}
               />
               <DetailField label="Status" value={<SaleStatusBadge status={sale.status} />} />
               <DetailField label="Payment mode" value={paymentModeLabel(sale.paymentMode)} />

@@ -27,7 +27,7 @@ import { useCompanyMarketplaces } from "../../hooks/useCompanyMarketplaces";
 import { firestoreService } from "../../services/firestore";
 import type { Customer, Payment, Sale } from "../../types";
 import { PaymentKind, PaymentMode } from "../../types";
-import { getActiveCustomers } from "../../utils/customerHelpers";
+import { getActiveCustomers, getSaleCustomerName } from "../../utils/customerHelpers";
 import {
   buildPaymentFromForm,
   emptyPaymentForm,
@@ -326,7 +326,7 @@ export function PaymentFormPage() {
                         { value: "", label: "Select order…" },
                         ...openSales.map((s) => ({
                           value: s.id,
-                          label: `${saleReferenceLabel(s)}${s.customerName ? ` — ${s.customerName}` : ""} (${saleBalanceDue(s)} due)`,
+                          label: `${saleReferenceLabel(s)}${getSaleCustomerName(s) ? ` — ${getSaleCustomerName(s)}` : ""} (${saleBalanceDue(s)} due)`,
                         })),
                       ]}
                     />

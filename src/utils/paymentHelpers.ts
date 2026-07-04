@@ -3,6 +3,7 @@ import { PaymentKind, PaymentMode } from '../types';
 import { paymentKindLabel as paymentKindLabelFromConstants } from '../constants/paymentKinds';
 import { derivePaymentStatus } from './purchaseHelpers';
 import { deriveInvoiceStatusFromPayment } from './invoiceHelpers';
+import { getSaleCustomerName } from './customerHelpers';
 import { createListingId } from './productDefaults';
 import { localDateInputToUtc, nowUtc, utcToLocalDateInput } from './firestoreDates';
 import { firestoreService } from '../services/firestore';
@@ -87,7 +88,8 @@ export function buildPaymentFromForm(
     saleOrderNumber: form.kind === PaymentKind.SALE ? saleReference(sale) : undefined,
     customerId:
       (customer?.id ?? invoice?.customerId ?? sale?.customerId ?? form.customerId) || undefined,
-    customerName: customer?.name ?? invoice?.customerName ?? sale?.customerName,
+    customerName:
+      customer?.name ?? invoice?.customerName ?? (sale ? getSaleCustomerName(sale) : undefined),
     platform:
       form.kind === PaymentKind.MARKETPLACE_PAYOUT
         ? form.platform.trim() || undefined

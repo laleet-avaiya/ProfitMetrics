@@ -24,7 +24,7 @@ import {
   purchaseStatusLabel,
 } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
-import type { PurchaseOrder, Vendor } from '../../types';
+import type { PurchaseOrder } from '../../types';
 import { PurchaseOrderStatus } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import {
@@ -33,6 +33,7 @@ import {
   type DateFilter,
 } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
+import { vendorFilterOptions } from '../../utils/vendorHelpers';
 import { deletePurchaseLinkedExpenses } from '../../utils/purchaseExpenses';
 import { reverseAllPurchaseStock } from '../../utils/purchaseStock';
 
@@ -71,27 +72,26 @@ export function Purchases() {
 
   const [vendorFilter, setVendorFilter] = useState(() => searchParams.get('vendor') ?? '');
 
-  const emptyData = useMemo(
-    () => ({ purchases: [] as PurchaseOrder[], vendors: [] as Vendor[] }),
-    []
-  );
+  const emptyData = useMemo(() => [] as PurchaseOrder[], []);
 
-  const { data, loading, reload } = useEntityList({
+  const { data: purchases, loading, reload } = useEntityList({
     initialData: emptyData,
     errorMessage: 'Failed to load purchase orders',
     fetch: async (companyId) => {
-      const [purchaseList, vendorList] = await Promise.all([
-        firestoreService.purchases.getAll(companyId),
-        firestoreService.vendors.getAll(companyId),
-      ]);
-      return {
-        purchases: purchaseList.filter(notDeleted),
-        vendors: vendorList.filter(notDeleted),
-      };
+      const purchaseList = await firestoreService.purchases.getAll(companyId);
+      return purchaseList.filter(notDeleted);
     },
   });
 
-  const { purchases, vendors } = data;
+  const vendorOptions = useMemo(
+    () =>
+      vendorFilterOptions(
+        purchases,
+        (p) => p.vendorName,
+        vendorFilter || undefined
+      ),
+    [purchases, vendorFilter]
+  );
 
   useEffect(() => {
     setVendorFilter(searchParams.get('vendor') ?? '');
@@ -210,7 +210,7 @@ export function Purchases() {
                 aria-label="Vendor"
               >
                 <option value="">All vendors</option>
-                {vendors.map((v) => (
+                {vendorOptions.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                   </option>

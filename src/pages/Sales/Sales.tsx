@@ -29,8 +29,9 @@ import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { purchasePaymentStatusLabel, normalizeSalePaymentStatus } from '../../constants/purchaseStatuses';
 import { firestoreService } from '../../services/firestore';
-import type { Customer, Sale } from '../../types';
+import type { Sale } from '../../types';
 import { formatDateLocal } from '../../utils/date';
+import { customerFilterOptionsFromSales, getSaleCustomerName } from '../../utils/customerHelpers';
 import { dateFilterRange, isDateInRange, type DateFilter } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
 import { getSaleProfit } from '../../utils/saleHelpers';
@@ -43,7 +44,7 @@ function saleReference(sale: Sale): string {
 }
 
 function saleSubtitle(sale: Sale): string {
-  return sale.customerName ?? sale.productName ?? '—';
+  return getSaleCustomerName(sale) ?? sale.productName ?? '—';
 }
 
 function saleRevenue(sale: Sale): number {
@@ -64,30 +65,21 @@ export function Sales() {
 
   const customerFilter = searchParams.get('customer') ?? '';
 
-  const emptyData = useMemo(
-    () => ({
-      sales: [] as Sale[],
-      customers: [] as Customer[],
-    }),
-    []
-  );
+  const emptyData = useMemo(() => [] as Sale[], []);
 
-  const { data, loading, reload } = useEntityList({
+  const { data: sales, loading, reload } = useEntityList({
     initialData: emptyData,
     errorMessage: 'Failed to load sales',
     fetch: async (companyId) => {
-      const [salesList, customerList] = await Promise.all([
-        firestoreService.sales.getAll(companyId),
-        firestoreService.customers.getAll(companyId),
-      ]);
-      return {
-        sales: salesList.filter(notDeleted),
-        customers: customerList.filter(notDeleted),
-      };
+      const salesList = await firestoreService.sales.getAll(companyId);
+      return salesList.filter(notDeleted);
     },
   });
 
-  const { sales, customers } = data;
+  const customerOptions = useMemo(
+    () => customerFilterOptionsFromSales(sales, customerFilter || undefined),
+    [sales, customerFilter]
+  );
 
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('30d');
@@ -107,6 +99,7 @@ export function Sales() {
           (sale.trackingId?.toLowerCase().includes(q) ?? false) ||
           sale.productName.toLowerCase().includes(q) ||
           sale.platform.toLowerCase().includes(q) ||
+          (sale.customer?.name?.toLowerCase().includes(q) ?? false) ||
           (sale.customerName?.toLowerCase().includes(q) ?? false) ||
           (sale.notes?.toLowerCase().includes(q) ?? false)
         );
@@ -212,7 +205,7 @@ export function Sales() {
                 aria-label="Customer"
               >
                 <option value="">All customers</option>
-                {customers.map((c) => (
+                {customerOptions.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>

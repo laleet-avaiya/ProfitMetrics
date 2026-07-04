@@ -20,7 +20,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { EXPENSE_CATEGORIES } from '../../constants/expenseCategories';
 import { firestoreService } from '../../services/firestore';
-import type { Expense, Vendor } from '../../types';
+import type { Expense } from '../../types';
 import { formatDateLocal } from '../../utils/date';
 import {
   dateFilterRange,
@@ -30,7 +30,7 @@ import {
   type DateFilter,
 } from '../../utils/expenseHelpers';
 import { formatMoney } from '../../utils/profit';
-import { getExpenseVendorDisplay } from '../../utils/vendorHelpers';
+import { getExpenseVendorDisplay, vendorFilterOptions } from '../../utils/vendorHelpers';
 
 export function Expenses() {
   const navigate = useNavigate();
@@ -45,24 +45,22 @@ export function Expenses() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState(() => searchParams.get('vendor') ?? '');
 
-  const emptyData = useMemo(() => ({ expenses: [] as Expense[], vendors: [] as Vendor[] }), []);
+  const emptyData = useMemo(() => [] as Expense[], []);
 
-  const { data, loading, reload } = useEntityList({
+  const { data: expenses, loading, reload } = useEntityList({
     initialData: emptyData,
     errorMessage: 'Failed to load expenses',
     fetch: async (companyId) => {
-      const [list, vendorList] = await Promise.all([
-        firestoreService.expenses.getAll(companyId),
-        firestoreService.vendors.getAll(companyId),
-      ]);
-      return {
-        expenses: list.filter(notDeleted),
-        vendors: vendorList.filter(notDeleted),
-      };
+      const list = await firestoreService.expenses.getAll(companyId);
+      return list.filter(notDeleted);
     },
   });
 
-  const { expenses, vendors } = data;
+  const vendorOptions = useMemo(
+    () =>
+      vendorFilterOptions(expenses, getExpenseVendorDisplay, vendorFilter || undefined),
+    [expenses, vendorFilter]
+  );
 
   useEffect(() => {
     const vendorFromUrl = searchParams.get('vendor') ?? '';
@@ -203,7 +201,7 @@ export function Expenses() {
                 aria-label="Vendor"
               >
                 <option value="">All vendors</option>
-                {vendors.map((v) => (
+                {vendorOptions.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                   </option>

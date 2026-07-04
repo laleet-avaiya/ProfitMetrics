@@ -1,4 +1,4 @@
-import type { Customer, Payment, Sale } from '../types';
+import type { Customer, CustomerSnapshot, Payment, Sale } from '../types';
 import { SaleStatus } from '../types';
 import { getSaleDisplayProductName } from './saleLines';
 import { createListingId } from './productDefaults';
@@ -65,6 +65,52 @@ export function buildCustomerFromForm(
 
 export function getActiveCustomers(customers: Customer[]): Customer[] {
   return customers.filter((c) => !c.deleted && c.status === 'active');
+}
+
+export function customerSnapshotFromCustomer(customer: Customer): CustomerSnapshot {
+  return {
+    id: customer.id,
+    name: customer.name,
+    contactName: customer.contactName,
+    email: customer.email,
+    phone: customer.phone,
+    address: customer.address,
+    taxId: customer.taxId,
+  };
+}
+
+/** Display name from denormalized sale fields — no customer collection lookup. */
+export function getSaleCustomerName(sale: Sale): string | undefined {
+  const name = sale.customer?.name ?? sale.customerName;
+  return name?.trim() || undefined;
+}
+
+export function uniqueCustomerRefsFromSales(
+  sales: Sale[]
+): Array<{ id: string; name: string }> {
+  const map = new Map<string, string>();
+  for (const sale of sales) {
+    if (!sale.customerId) continue;
+    const name = getSaleCustomerName(sale);
+    if (!name) continue;
+    map.set(sale.customerId, name);
+  }
+  return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
+export function customerFilterOptionsFromSales(
+  sales: Sale[],
+  selectedId?: string
+): Array<{ id: string; name: string }> {
+  const options = uniqueCustomerRefsFromSales(sales);
+  if (!selectedId || options.some((o) => o.id === selectedId)) {
+    return options;
+  }
+  const match = sales.find((s) => s.customerId === selectedId);
+  const name = match ? (getSaleCustomerName(match) ?? 'Customer') : 'Customer';
+  return [...options, { id: selectedId, name }].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function roundMoney(value: number): number {

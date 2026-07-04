@@ -1,6 +1,7 @@
 import type { Sale } from '../types';
 import { TaxMode } from '../types';
 import type { SalesDocumentPrintLine, SalesDocumentPrintProps } from '../components/SalesDocumentPrint/SalesDocumentPrint';
+import { getSaleCustomerName } from './customerHelpers';
 import { getSaleLines } from './saleLines';
 
 function roundMoney(value: number): number {
@@ -43,7 +44,7 @@ export function buildSalePrintProps(
     kind: 'marketplace',
     documentNumber: sale.orderNumber ?? sale.orderId ?? '',
     documentDate: sale.orderDate,
-    billTo: sale.customerName ?? `${sale.platform} customer`,
+    billTo: getSaleCustomerName(sale) ?? `${sale.platform} customer`,
     lines: printLinesFromSale(sale),
     subtotal,
     taxAmount,

@@ -66,6 +66,31 @@ export function getExpenseVendorDisplay(expense: Expense): string | undefined {
   return name?.trim() || undefined;
 }
 
+export function vendorFilterOptions<T extends { vendorId?: string }>(
+  items: T[],
+  getName: (item: T) => string | undefined,
+  selectedId?: string
+): Array<{ id: string; name: string }> {
+  const map = new Map<string, string>();
+  for (const item of items) {
+    if (!item.vendorId) continue;
+    const name = getName(item)?.trim();
+    if (!name) continue;
+    map.set(item.vendorId, name);
+  }
+  const options = Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+  if (!selectedId || options.some((o) => o.id === selectedId)) {
+    return options;
+  }
+  const match = items.find((i) => i.vendorId === selectedId);
+  const name = match ? getName(match) : 'Vendor';
+  return [...options, { id: selectedId, name: name ?? 'Vendor' }].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
 export function sumExpensesByVendor(
   expenses: Expense[]
 ): Map<string, { count: number; total: number }> {
