@@ -1,12 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Layout } from '../../components/Layout/Layout';
-import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
-import { Input } from '../../components/Input/Input';
-import { Select } from '../../components/Select/Select';
-import { TaxModeField } from '../../components/TaxModeField/TaxModeField';
-import { Button } from '../../components/Button/Button';
-import { FormStickyActions } from '../../components/FormStickyActions/FormStickyActions';
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { PageHeader, PageShell } from "../../components/PageShell/PageShell";
+import { Input } from "../../components/Input/Input";
+import { Select } from "../../components/Select/Select";
+import { TaxModeField } from "../../components/TaxModeField/TaxModeField";
+import { Button } from "../../components/Button/Button";
+import { FormStickyActions } from "../../components/FormStickyActions/FormStickyActions";
 import {
   FormFieldGroup,
   FormFieldGroupDivider,
@@ -14,31 +13,30 @@ import {
   FormPageGrid,
   FormPageLoading,
   FormPanel,
-} from '../../components/FormPage';
-import { FormTabs } from '../../components/ui/FormTabs';
-import { useAuth } from '../../hooks/useAuth';
-import { useNotification } from '../../hooks/useNotification';
+} from "../../components/FormPage";
+import { FormTabs } from "../../components/ui/FormTabs";
+import { useAuth } from "../../hooks/useAuth";
+import { useNotification } from "../../hooks/useNotification";
 import {
   BusinessCountry,
   COUNTRY_OPTIONS,
   countryDefaultsForCompany,
   getCountryProfile,
   isBusinessCountry,
-} from '../../constants/countries';
-import { TaxMode, TaxType } from '../../types';
-import {
-  Building2,
-  Upload,
-  X,
-  Eye,
-  EyeOff,
-  UserCircle,
-} from 'lucide-react';
+} from "../../constants/countries";
+import { TaxMode, TaxType } from "../../types";
+import { Building2, Upload, X, Eye, EyeOff, UserCircle } from "lucide-react";
 
-type SettingsTab = 'company' | 'account';
+type SettingsTab = "company" | "account";
 
 const LOGO_MAX_SIZE_BYTES = 1024 * 1024;
-const ALLOWED_LOGO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const ALLOWED_LOGO_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+];
 
 export function Settings() {
   const { user, company, updateCompany, changePassword } = useAuth();
@@ -46,11 +44,13 @@ export function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab: SettingsTab =
-    searchParams.get('tab') === 'account' && user?.email ? 'account' : 'company';
+    searchParams.get("tab") === "account" && user?.email
+      ? "account"
+      : "company";
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'account' && !user?.email) return;
-    setSearchParams(tab === 'company' ? {} : { tab: 'account' });
+    if (tab === "account" && !user?.email) return;
+    setSearchParams(tab === "company" ? {} : { tab: "account" });
   };
 
   const [isLoading, setIsLoading] = useState(false);
@@ -58,9 +58,9 @@ export function Settings() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -69,27 +69,30 @@ export function Settings() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    name: "",
     country: BusinessCountry.UAE as BusinessCountry,
-    trn: '',
-    address: '',
-    phone: '',
-    phone2: '',
-    email: '',
-    logo: '',
+    trn: "",
+    address: "",
+    phone: "",
+    phone2: "",
+    email: "",
+    logo: "",
     defaultTaxType: TaxType.VAT as (typeof TaxType)[keyof typeof TaxType],
     defaultTaxMode: TaxMode.INCLUSIVE as (typeof TaxMode)[keyof typeof TaxMode],
-    defaultTaxPercentage: '5',
+    defaultTaxPercentage: "5",
   });
 
-  const localeProfile = useMemo(() => getCountryProfile(formData.country), [formData.country]);
+  const localeProfile = useMemo(
+    () => getCountryProfile(formData.country),
+    [formData.country],
+  );
 
   const formTabs = useMemo(() => {
     const tabs: { id: SettingsTab; label: string; icon: typeof Building2 }[] = [
-      { id: 'company', label: 'Company', icon: Building2 },
+      { id: "company", label: "Company", icon: Building2 },
     ];
     if (user?.email) {
-      tabs.push({ id: 'account', label: 'Account', icon: UserCircle });
+      tabs.push({ id: "account", label: "Account", icon: UserCircle });
     }
     return tabs;
   }, [user?.email]);
@@ -97,14 +100,16 @@ export function Settings() {
   useEffect(() => {
     if (company) {
       setFormData({
-        name: company.name || '',
-        country: isBusinessCountry(company.country) ? company.country : BusinessCountry.UAE,
-        trn: company.trn || '',
-        address: company.address || '',
-        phone: company.phone || '',
-        phone2: company.phone2 || '',
-        email: company.email || '',
-        logo: company.logo || '',
+        name: company.name || "",
+        country: isBusinessCountry(company.country)
+          ? company.country
+          : BusinessCountry.UAE,
+        trn: company.trn || "",
+        address: company.address || "",
+        phone: company.phone || "",
+        phone2: company.phone2 || "",
+        email: company.email || "",
+        logo: company.logo || "",
         defaultTaxType: company.defaultTaxType ?? TaxType.VAT,
         defaultTaxMode: company.defaultTaxMode ?? TaxMode.INCLUSIVE,
         defaultTaxPercentage: String(company.defaultTaxPercentage ?? 5),
@@ -133,10 +138,10 @@ export function Settings() {
         defaultTaxMode: formData.defaultTaxMode,
         defaultTaxPercentage: parseFloat(formData.defaultTaxPercentage) || 0,
       });
-      notification.success('Settings saved successfully!');
+      notification.success("Settings saved successfully!");
     } catch (error) {
-      console.error('Error saving settings:', error);
-      notification.error('Failed to save settings. Please try again.');
+      console.error("Error saving settings:", error);
+      notification.error("Failed to save settings. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +150,7 @@ export function Settings() {
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === 'country' && isBusinessCountry(value)) {
+      if (field === "country" && isBusinessCountry(value)) {
         const defaults = countryDefaultsForCompany(value);
         next.defaultTaxType = defaults.defaultTaxType;
         next.defaultTaxMode = defaults.defaultTaxMode;
@@ -160,13 +165,15 @@ export function Settings() {
     if (!file) return;
     setLogoError(null);
     if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
-      setLogoError('Invalid file type. Use JPEG, PNG, GIF, WebP or SVG.');
-      e.target.value = '';
+      setLogoError("Invalid file type. Use JPEG, PNG, GIF, WebP or SVG.");
+      e.target.value = "";
       return;
     }
     if (file.size > LOGO_MAX_SIZE_BYTES) {
-      setLogoError('File too large. Maximum size is 1MB for storage in company document.');
-      e.target.value = '';
+      setLogoError(
+        "File too large. Maximum size is 1MB for storage in company document.",
+      );
+      e.target.value = "";
       return;
     }
     setLogoUploading(true);
@@ -176,26 +183,30 @@ export function Settings() {
       setLogoUploading(false);
     };
     reader.onerror = () => {
-      setLogoError('Failed to read file.');
+      setLogoError("Failed to read file.");
       setLogoUploading(false);
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const handleRemoveLogo = () => {
     notification.confirm({
-      title: 'Remove logo?',
-      message: 'Your company logo will be cleared. You can upload a new one anytime.',
-      confirmLabel: 'Remove',
+      title: "Remove logo?",
+      message:
+        "Your company logo will be cleared. You can upload a new one anytime.",
+      confirmLabel: "Remove",
       onConfirm: () => {
-        setFormData((prev) => ({ ...prev, logo: '' }));
+        setFormData((prev) => ({ ...prev, logo: "" }));
         setLogoError(null);
       },
     });
   };
 
-  const handlePasswordChange = (field: keyof typeof passwordForm, value: string) => {
+  const handlePasswordChange = (
+    field: keyof typeof passwordForm,
+    value: string,
+  ) => {
     setPasswordForm((prev) => ({ ...prev, [field]: value }));
     setPasswordError(null);
     setPasswordSuccess(false);
@@ -206,24 +217,33 @@ export function Settings() {
     setPasswordError(null);
     setPasswordSuccess(false);
     if (passwordForm.newPassword.length < 5) {
-      setPasswordError('New password must be at least 5 characters.');
+      setPasswordError("New password must be at least 5 characters.");
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError('New password and confirmation do not match.');
+      setPasswordError("New password and confirmation do not match.");
       return;
     }
     if (!passwordForm.currentPassword) {
-      setPasswordError('Please enter your current password.');
+      setPasswordError("Please enter your current password.");
       return;
     }
     setChangingPassword(true);
     try {
-      await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      await changePassword(
+        passwordForm.currentPassword,
+        passwordForm.newPassword,
+      );
       setPasswordSuccess(true);
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : 'Failed to change password.');
+      setPasswordError(
+        err instanceof Error ? err.message : "Failed to change password.",
+      );
     } finally {
       setChangingPassword(false);
     }
@@ -231,301 +251,363 @@ export function Settings() {
 
   if (!company) {
     return (
-      <Layout>
-        <PageShell>
-          <FormPageLoading message="Loading settings…" />
-        </PageShell>
-      </Layout>
+      <PageShell>
+        <FormPageLoading message="Loading settings…" />
+      </PageShell>
     );
   }
 
   return (
-    <Layout>
-      <PageShell>
-        <PageHeader
-          title="Settings"
-          description={
-            activeTab === 'company'
-              ? 'Company profile, tax defaults, and branding.'
-              : 'Update your account password.'
-          }
-          actions={
-            activeTab === 'company' ? (
-              <div className="hidden lg:flex">
-                <Button type="submit" form="company-settings-form" variant="primary" loading={isLoading}>
-                  Save settings
-                </Button>
-              </div>
-            ) : user?.email ? (
-              <div className="hidden lg:flex">
-                <Button
-                  type="submit"
-                  form="account-password-form"
-                  variant="primary"
-                  loading={changingPassword}
+    <PageShell>
+      <PageHeader
+        title="Settings"
+        description={
+          activeTab === "company"
+            ? "Company profile, tax defaults, and branding."
+            : "Update your account password."
+        }
+        actions={
+          activeTab === "company" ? (
+            <div className="hidden lg:flex">
+              <Button
+                type="submit"
+                form="company-settings-form"
+                variant="primary"
+                loading={isLoading}
+              >
+                Save settings
+              </Button>
+            </div>
+          ) : user?.email ? (
+            <div className="hidden lg:flex">
+              <Button
+                type="submit"
+                form="account-password-form"
+                variant="primary"
+                loading={changingPassword}
+              >
+                Update password
+              </Button>
+            </div>
+          ) : null
+        }
+      />
+
+      <FormTabs
+        tabs={formTabs}
+        active={activeTab}
+        onChange={(id) => setActiveTab(id as SettingsTab)}
+        ariaLabel="Settings sections"
+      />
+
+      {activeTab === "company" ? (
+        <FormPageBody id="company-settings-form" onSubmit={handleSubmit}>
+          <FormPageGrid>
+            <FormPanel role="tabpanel">
+              <fieldset
+                disabled={isLoading}
+                className="min-w-0 border-0 p-0 m-0"
+              >
+                <FormFieldGroup
+                  title="Company profile"
+                  description="Legal name, country, and tax registration."
                 >
-                  Update password
-                </Button>
-              </div>
-            ) : null
-          }
-        />
-
-        <FormTabs
-          tabs={formTabs}
-          active={activeTab}
-          onChange={(id) => setActiveTab(id as SettingsTab)}
-          ariaLabel="Settings sections"
-        />
-
-        {activeTab === 'company' ? (
-          <FormPageBody id="company-settings-form" onSubmit={handleSubmit}>
-            <FormPageGrid>
-              <FormPanel role="tabpanel">
-                <fieldset disabled={isLoading} className="min-w-0 border-0 p-0 m-0">
-                  <FormFieldGroup
-                    title="Company profile"
-                    description="Legal name, country, and tax registration."
-                  >
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                      <div className="lg:col-span-4">
-                        <Input
-                          label="Company name"
-                          name="name"
-                          value={formData.name}
-                          onChange={(e) => handleChange('name', e.target.value)}
-                          required
-                          placeholder="Enter company name"
-                        />
-                      </div>
-                      <div className="lg:col-span-4">
-                        <Select
-                          label="Business country"
-                          name="country"
-                          value={formData.country}
-                          onChange={(e) => handleChange('country', e.target.value)}
-                          options={COUNTRY_OPTIONS}
-                          required
-                          helperText="Updates currency and suggested tax defaults"
-                        />
-                      </div>
-                      <div className="lg:col-span-4">
-                        <Input
-                          label={localeProfile.taxIdLabel}
-                          name="trn"
-                          value={formData.trn}
-                          onChange={(e) => handleChange('trn', e.target.value)}
-                          placeholder={localeProfile.taxIdPlaceholder}
-                          maxLength={localeProfile.taxIdMaxLength}
-                        />
-                      </div>
-                      <div className="lg:col-span-12">
-                        <Input
-                          label="Address"
-                          name="address"
-                          value={formData.address}
-                          onChange={(e) => handleChange('address', e.target.value)}
-                          placeholder="Enter complete address"
-                        />
-                      </div>
-                    </div>
-                  </FormFieldGroup>
-
-                  <FormFieldGroupDivider />
-
-                  <FormFieldGroup
-                    title="Tax defaults"
-                    description="Applied to new product listings and sales."
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Select
-                        label="Default tax type"
-                        name="defaultTaxType"
-                        value={formData.defaultTaxType}
-                        onChange={(e) => handleChange('defaultTaxType', e.target.value)}
-                        options={[
-                          { value: TaxType.NONE, label: 'None' },
-                          { value: TaxType.VAT, label: 'VAT (UAE)' },
-                          { value: TaxType.GST, label: 'GST (India)' },
-                          { value: TaxType.SALES_TAX, label: 'Sales tax' },
-                        ]}
-                      />
-                      <TaxModeField
-                        label="Tax on price"
-                        value={formData.defaultTaxMode}
-                        onChange={(mode) => handleChange('defaultTaxMode', mode)}
-                      />
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                    <div className="lg:col-span-4">
                       <Input
-                        label="Default tax %"
-                        name="defaultTaxPercentage"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={formData.defaultTaxPercentage}
-                        onChange={(e) => handleChange('defaultTaxPercentage', e.target.value)}
+                        label="Company name"
+                        name="name"
+                        value={formData.name}
+                        onChange={(e) => handleChange("name", e.target.value)}
+                        required
+                        placeholder="Enter company name"
                       />
                     </div>
-                  </FormFieldGroup>
-
-                  <FormFieldGroupDivider />
-
-                  <FormFieldGroup
-                    title="Contact & branding"
-                    description="Phone, email, and logo shown in the sidebar."
-                  >
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                      <div className="lg:col-span-4">
-                        <Input
-                          label="Phone"
-                          name="phone"
-                          type="tel"
-                          value={formData.phone}
-                          onChange={(e) => handleChange('phone', e.target.value)}
-                          placeholder={localeProfile.phonePlaceholder}
-                        />
-                      </div>
-                      <div className="lg:col-span-4">
-                        <Input
-                          label="Phone 2"
-                          name="phone2"
-                          type="tel"
-                          value={formData.phone2}
-                          onChange={(e) => handleChange('phone2', e.target.value)}
-                          placeholder={localeProfile.phonePlaceholder}
-                        />
-                      </div>
-                      <div className="lg:col-span-4">
-                        <Input
-                          label="Company email"
-                          name="email"
-                          type="email"
-                          value={formData.email}
-                          onChange={(e) => handleChange('email', e.target.value)}
-                          placeholder="company@example.com"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Logo <span className="font-normal text-gray-500">(optional)</span>
-                      </label>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
-                        className="hidden"
-                        onChange={handleLogoFileSelect}
-                        disabled={logoUploading}
+                    <div className="lg:col-span-4">
+                      <Select
+                        label="Business country"
+                        name="country"
+                        value={formData.country}
+                        onChange={(e) =>
+                          handleChange("country", e.target.value)
+                        }
+                        options={COUNTRY_OPTIONS}
+                        required
+                        helperText="Updates currency and suggested tax defaults"
                       />
-                      <div className="flex flex-wrap items-center gap-3">
+                    </div>
+                    <div className="lg:col-span-4">
+                      <Input
+                        label={localeProfile.taxIdLabel}
+                        name="trn"
+                        value={formData.trn}
+                        onChange={(e) => handleChange("trn", e.target.value)}
+                        placeholder={localeProfile.taxIdPlaceholder}
+                        maxLength={localeProfile.taxIdMaxLength}
+                      />
+                    </div>
+                    <div className="lg:col-span-12">
+                      <Input
+                        label="Address"
+                        name="address"
+                        value={formData.address}
+                        onChange={(e) =>
+                          handleChange("address", e.target.value)
+                        }
+                        placeholder="Enter complete address"
+                      />
+                    </div>
+                  </div>
+                </FormFieldGroup>
+
+                <FormFieldGroupDivider />
+
+                <FormFieldGroup
+                  title="Tax defaults"
+                  description="Applied to new product listings and sales."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Select
+                      label="Default tax type"
+                      name="defaultTaxType"
+                      value={formData.defaultTaxType}
+                      onChange={(e) =>
+                        handleChange("defaultTaxType", e.target.value)
+                      }
+                      options={[
+                        { value: TaxType.NONE, label: "None" },
+                        { value: TaxType.VAT, label: "VAT (UAE)" },
+                        { value: TaxType.GST, label: "GST (India)" },
+                        { value: TaxType.SALES_TAX, label: "Sales tax" },
+                      ]}
+                    />
+                    <TaxModeField
+                      label="Tax on price"
+                      value={formData.defaultTaxMode}
+                      onChange={(mode) => handleChange("defaultTaxMode", mode)}
+                    />
+                    <Input
+                      label="Default tax %"
+                      name="defaultTaxPercentage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={formData.defaultTaxPercentage}
+                      onChange={(e) =>
+                        handleChange("defaultTaxPercentage", e.target.value)
+                      }
+                    />
+                  </div>
+                </FormFieldGroup>
+
+                <FormFieldGroupDivider />
+
+                <FormFieldGroup
+                  title="Contact & branding"
+                  description="Phone, email, and logo shown in the sidebar."
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                    <div className="lg:col-span-4">
+                      <Input
+                        label="Phone"
+                        name="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => handleChange("phone", e.target.value)}
+                        placeholder={localeProfile.phonePlaceholder}
+                      />
+                    </div>
+                    <div className="lg:col-span-4">
+                      <Input
+                        label="Phone 2"
+                        name="phone2"
+                        type="tel"
+                        value={formData.phone2}
+                        onChange={(e) => handleChange("phone2", e.target.value)}
+                        placeholder={localeProfile.phonePlaceholder}
+                      />
+                    </div>
+                    <div className="lg:col-span-4">
+                      <Input
+                        label="Company email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleChange("email", e.target.value)}
+                        placeholder="company@example.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Logo{" "}
+                      <span className="font-normal text-gray-500">
+                        (optional)
+                      </span>
+                    </label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                      className="hidden"
+                      onChange={handleLogoFileSelect}
+                      disabled={logoUploading}
+                    />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        loading={logoUploading}
+                      >
+                        <Upload className="w-4 h-4" />
+                        {formData.logo ? "Change logo" : "Upload logo"}
+                      </Button>
+                      {formData.logo && (
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => fileInputRef.current?.click()}
-                          loading={logoUploading}
+                          onClick={handleRemoveLogo}
+                          disabled={logoUploading}
                         >
-                          <Upload className="w-4 h-4" />
-                          {formData.logo ? 'Change logo' : 'Upload logo'}
+                          <X className="w-4 h-4" />
+                          Remove logo
                         </Button>
-                        {formData.logo && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleRemoveLogo}
-                            disabled={logoUploading}
-                          >
-                            <X className="w-4 h-4" />
-                            Remove logo
-                          </Button>
-                        )}
-                      </div>
-                      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        JPEG, PNG, GIF, WebP or SVG. Max 1MB.
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      JPEG, PNG, GIF, WebP or SVG. Max 1MB.
+                    </p>
+                    {logoError && (
+                      <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
+                        {logoError}
                       </p>
-                      {logoError && (
-                        <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{logoError}</p>
-                      )}
-                      {formData.logo && (
-                        <div className="mt-3 w-32 h-32 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700 flex items-center justify-center">
-                          <img
-                            src={formData.logo}
-                            alt="Logo preview"
-                            className="max-w-full max-h-full object-contain"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </FormFieldGroup>
-
-                  <FormFieldGroupDivider />
-
-                  <FormFieldGroup
-                    title="Locale"
-                    description="Derived from business country — updates when country changes."
-                  >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Currency
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-                          {localeProfile.currencyLabel}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          All amounts in reports & forms
-                        </p>
+                    )}
+                    {formData.logo && (
+                      <div className="mt-3 w-32 h-32 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700 flex items-center justify-center">
+                        <img
+                          src={formData.logo}
+                          alt="Logo preview"
+                          className="max-w-full max-h-full object-contain"
+                        />
                       </div>
-                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          Timezone
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-                          {localeProfile.timezone}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          For daily sales & reports
-                        </p>
-                      </div>
-                    </div>
-                  </FormFieldGroup>
-                </fieldset>
-              </FormPanel>
-            </FormPageGrid>
+                    )}
+                  </div>
+                </FormFieldGroup>
 
-            <FormStickyActions className="lg:hidden">
-              <Button type="submit" variant="primary" loading={isLoading} className="w-full sm:w-auto">
-                Save settings
-              </Button>
-            </FormStickyActions>
-          </FormPageBody>
-        ) : null}
+                <FormFieldGroupDivider />
 
-        {activeTab === 'account' && user?.email ? (
-          <FormPageBody id="account-password-form" onSubmit={handleChangePasswordSubmit}>
-            <FormPageGrid>
-              <FormPanel role="tabpanel">
                 <FormFieldGroup
-                  title="Change password"
-                  description={`Signed in as ${user.email}`}
+                  title="Locale"
+                  description="Derived from business country — updates when country changes."
                 >
-                  <fieldset disabled={changingPassword} className="min-w-0 border-0 p-0 m-0 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        Currency
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                        {localeProfile.currencyLabel}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        All amounts in reports & forms
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        Timezone
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                        {localeProfile.timezone}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        For daily sales & reports
+                      </p>
+                    </div>
+                  </div>
+                </FormFieldGroup>
+              </fieldset>
+            </FormPanel>
+          </FormPageGrid>
+
+          <FormStickyActions className="lg:hidden">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isLoading}
+              className="w-full sm:w-auto"
+            >
+              Save settings
+            </Button>
+          </FormStickyActions>
+        </FormPageBody>
+      ) : null}
+
+      {activeTab === "account" && user?.email ? (
+        <FormPageBody
+          id="account-password-form"
+          onSubmit={handleChangePasswordSubmit}
+        >
+          <FormPageGrid>
+            <FormPanel role="tabpanel">
+              <FormFieldGroup
+                title="Change password"
+                description={`Signed in as ${user.email}`}
+              >
+                <fieldset
+                  disabled={changingPassword}
+                  className="min-w-0 border-0 p-0 m-0 space-y-3"
+                >
+                  <Input
+                    label="Current password"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={passwordForm.currentPassword}
+                    onChange={(e) =>
+                      handlePasswordChange("currentPassword", e.target.value)
+                    }
+                    autoComplete="current-password"
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword((prev) => !prev)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                        aria-label={
+                          showCurrentPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
+                        tabIndex={-1}
+                      >
+                        {showCurrentPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
+                    }
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
-                      label="Current password"
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      value={passwordForm.currentPassword}
-                      onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
-                      autoComplete="current-password"
+                      label="New password"
+                      type={showNewPassword ? "text" : "password"}
+                      value={passwordForm.newPassword}
+                      onChange={(e) =>
+                        handlePasswordChange("newPassword", e.target.value)
+                      }
+                      autoComplete="new-password"
                       rightIcon={
                         <button
                           type="button"
-                          onClick={() => setShowCurrentPassword((prev) => !prev)}
+                          onClick={() => setShowNewPassword((prev) => !prev)}
                           className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                          aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                          aria-label={
+                            showNewPassword ? "Hide password" : "Show password"
+                          }
                           tabIndex={-1}
                         >
-                          {showCurrentPassword ? (
+                          {showNewPassword ? (
                             <EyeOff className="w-5 h-5" />
                           ) : (
                             <Eye className="w-5 h-5" />
@@ -533,78 +615,64 @@ export function Settings() {
                         </button>
                       }
                     />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Input
-                        label="New password"
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={passwordForm.newPassword}
-                        onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
-                        autoComplete="new-password"
-                        rightIcon={
-                          <button
-                            type="button"
-                            onClick={() => setShowNewPassword((prev) => !prev)}
-                            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                            aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                            tabIndex={-1}
-                          >
-                            {showNewPassword ? (
-                              <EyeOff className="w-5 h-5" />
-                            ) : (
-                              <Eye className="w-5 h-5" />
-                            )}
-                          </button>
-                        }
-                      />
-                      <Input
-                        label="Confirm new password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={passwordForm.confirmPassword}
-                        onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
-                        autoComplete="new-password"
-                        rightIcon={
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmPassword((prev) => !prev)}
-                            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                            tabIndex={-1}
-                          >
-                            {showConfirmPassword ? (
-                              <EyeOff className="w-5 h-5" />
-                            ) : (
-                              <Eye className="w-5 h-5" />
-                            )}
-                          </button>
-                        }
-                      />
-                    </div>
-                    {passwordError && (
-                      <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
-                    )}
-                    {passwordSuccess && (
-                      <p className="text-sm text-green-600 dark:text-green-400">
-                        Password changed successfully.
-                      </p>
-                    )}
-                  </fieldset>
-                </FormFieldGroup>
-              </FormPanel>
-            </FormPageGrid>
+                    <Input
+                      label="Confirm new password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) =>
+                        handlePasswordChange("confirmPassword", e.target.value)
+                      }
+                      autoComplete="new-password"
+                      rightIcon={
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword((prev) => !prev)
+                          }
+                          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                          aria-label={
+                            showConfirmPassword
+                              ? "Hide password"
+                              : "Show password"
+                          }
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="w-5 h-5" />
+                          ) : (
+                            <Eye className="w-5 h-5" />
+                          )}
+                        </button>
+                      }
+                    />
+                  </div>
+                  {passwordError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      {passwordError}
+                    </p>
+                  )}
+                  {passwordSuccess && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Password changed successfully.
+                    </p>
+                  )}
+                </fieldset>
+              </FormFieldGroup>
+            </FormPanel>
+          </FormPageGrid>
 
-            <FormStickyActions className="lg:hidden">
-              <Button
-                type="submit"
-                variant="primary"
-                loading={changingPassword}
-                className="w-full sm:w-auto"
-              >
-                Update password
-              </Button>
-            </FormStickyActions>
-          </FormPageBody>
-        ) : null}
-      </PageShell>
-    </Layout>
+          <FormStickyActions className="lg:hidden">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={changingPassword}
+              className="w-full sm:w-auto"
+            >
+              Update password
+            </Button>
+          </FormStickyActions>
+        </FormPageBody>
+      ) : null}
+    </PageShell>
   );
 }

@@ -27,6 +27,11 @@ import type {
 } from '../types';
 import { isNotDeleted } from '../models/softDelete';
 import { convertTimestamps, nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
+import {
+  getCachedList,
+  invalidateCollectionCache,
+  setCachedList,
+} from '../utils/companyDataCache';
 
 const COLLECTION_PRODUCTS = 'products';
 const COLLECTION_SALES = 'sales';
@@ -81,6 +86,9 @@ async function getAll<T extends { createdAt?: Date; deleted?: boolean }>(
   companyId: string,
   collectionName: string
 ): Promise<T[]> {
+  const cached = getCachedList<T>(companyId, collectionName);
+  if (cached) return cached;
+
   const q = query(collection(db, collectionName), where('companyId', '==', companyId));
   const querySnapshot = await getDocs(q);
 
@@ -99,6 +107,7 @@ async function getAll<T extends { createdAt?: Date; deleted?: boolean }>(
     return bMs - aMs;
   });
 
+  setCachedList(companyId, collectionName, list);
   return list;
 }
 
@@ -122,6 +131,7 @@ async function create<T extends { id: string; createdAt?: Date; updatedAt?: Date
   } as Record<string, unknown>);
 
   await setDoc(docRef, prepared);
+  invalidateCollectionCache(companyId, collectionName);
   return { ...data, createdBy: userId, updatedBy: userId };
 }
 
@@ -142,6 +152,7 @@ async function update<T extends { id: string; updatedAt?: Date }>(
     updatedAt: safeUpdates.updatedAt ?? new Date(),
   } as Record<string, unknown>);
   await updateDoc(docRef, prepared as DocumentData);
+  invalidateCollectionCache(companyId, collectionName);
 }
 
 async function softDelete(

@@ -1,6 +1,5 @@
-import type { ReactNode } from 'react';
-import { Layout } from '../Layout/Layout';
-import { PageHeader, PageShell } from '../PageShell/PageShell';
+import type { ReactNode } from "react";
+import { PageHeader, PageShell } from "../PageShell/PageShell";
 
 interface SectionPageProps {
   title: string;
@@ -8,13 +7,15 @@ interface SectionPageProps {
   children?: ReactNode;
 }
 
-export function SectionPage({ title, description, children }: SectionPageProps) {
+export function SectionPage({
+  title,
+  description,
+  children,
+}: SectionPageProps) {
   return (
-    <Layout>
-      <PageShell>
-        <PageHeader title={title} description={description} />
-        {children}
-      </PageShell>
-    </Layout>
+    <PageShell>
+      <PageHeader title={title} description={description} />
+      {children}
+    </PageShell>
   );
 }

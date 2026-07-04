@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   BarChart3,
   CalendarRange,
@@ -12,26 +12,28 @@ import {
   Receipt,
   Store,
   Warehouse,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { Layout } from '../../components/Layout/Layout';
-import { PageHeader, PageShell } from '../../components/PageShell/PageShell';
-import { Button } from '../../components/Button/Button';
-import { LoadingView } from '../../components/AppLoader/AppLoader';
-import { ReportDateFilters } from '../../components/ReportDateFilters/ReportDateFilters';
-import { FormTabs } from '../../components/ui/FormTabs';
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { PageHeader, PageShell } from "../../components/PageShell/PageShell";
+import { Button } from "../../components/Button/Button";
+import { LoadingView } from "../../components/AppLoader/AppLoader";
+import { ReportDateFilters } from "../../components/ReportDateFilters/ReportDateFilters";
+import { FormTabs } from "../../components/ui/FormTabs";
 import {
   getReportDefinition,
   REPORT_CATALOG,
   ReportId,
   type ReportId as ReportIdType,
-} from '../../constants/reportCatalog';
-import { useNotification } from '../../hooks/useNotification';
-import { useReportData } from '../../hooks/useReportData';
-import { buildReportCompanyInfo, canExportReport } from '../../utils/reportExport';
-import type { ProfitLossBasis } from '../../utils/reports';
-import { useAuth } from '../../hooks/useAuth';
-import { ReportContent } from './ReportContent';
+} from "../../constants/reportCatalog";
+import { useNotification } from "../../hooks/useNotification";
+import { useReportData } from "../../hooks/useReportData";
+import {
+  buildReportCompanyInfo,
+  canExportReport,
+} from "../../utils/reportExport";
+import type { ProfitLossBasis } from "../../utils/reports";
+import { useAuth } from "../../hooks/useAuth";
+import { ReportContent } from "./ReportContent";
 
 const DEFAULT_REPORT_ID = ReportId.PROFIT_LOSS;
 
@@ -49,16 +51,16 @@ const REPORT_ICONS: Record<ReportIdType, LucideIcon> = {
 };
 
 const REPORT_TAB_LABELS: Record<ReportIdType, string> = {
-  [ReportId.PROFIT_LOSS]: 'P&L',
-  [ReportId.GROSS_PROFIT]: 'Gross profit',
-  [ReportId.SALES_BY_PRODUCT]: 'By product',
-  [ReportId.SALES_BY_PLATFORM]: 'By channel',
-  [ReportId.EXPENSE_BREAKDOWN]: 'Expenses',
-  [ReportId.TAX_SUMMARY]: 'Tax',
-  [ReportId.TREND]: 'Trend',
-  [ReportId.STOCK_ON_HAND]: 'Stock',
-  [ReportId.PURCHASE_ORDERS]: 'Purchases',
-  [ReportId.PURCHASE_TREND]: 'Purchase trend',
+  [ReportId.PROFIT_LOSS]: "P&L",
+  [ReportId.GROSS_PROFIT]: "Gross profit",
+  [ReportId.SALES_BY_PRODUCT]: "By product",
+  [ReportId.SALES_BY_PLATFORM]: "By channel",
+  [ReportId.EXPENSE_BREAKDOWN]: "Expenses",
+  [ReportId.TAX_SUMMARY]: "Tax",
+  [ReportId.TREND]: "Trend",
+  [ReportId.STOCK_ON_HAND]: "Stock",
+  [ReportId.PURCHASE_ORDERS]: "Purchases",
+  [ReportId.PURCHASE_TREND]: "Purchase trend",
 };
 
 export function Reports() {
@@ -90,7 +92,7 @@ export function Reports() {
     hasData,
   } = useReportData();
 
-  const [plBasis, setPlBasis] = useState<ProfitLossBasis>('paid');
+  const [plBasis, setPlBasis] = useState<ProfitLossBasis>("paid");
 
   const reportTabs = useMemo(
     () =>
@@ -99,7 +101,7 @@ export function Reports() {
         label: REPORT_TAB_LABELS[item.id],
         icon: REPORT_ICONS[item.id],
       })),
-    []
+    [],
   );
 
   const exportContext = useMemo(() => {
@@ -110,7 +112,7 @@ export function Reports() {
       company: buildReportCompanyInfo(company),
       currency,
       dateRangeLabel:
-        report.id === ReportId.STOCK_ON_HAND ? 'As of today' : dateRange.label,
+        report.id === ReportId.STOCK_ON_HAND ? "As of today" : dateRange.label,
       filteredSales,
       filteredInvoices,
       filteredExpenses,
@@ -135,14 +137,20 @@ export function Reports() {
     plBasis,
   ]);
 
-  const canDownload = Boolean(!loading && exportContext && canExportReport(exportContext));
+  const canDownload = Boolean(
+    !loading && exportContext && canExportReport(exportContext),
+  );
   const isStockReport = activeReportId === ReportId.STOCK_ON_HAND;
   const activeReport = report ?? getReportDefinition(DEFAULT_REPORT_ID)!;
 
   const handleDownload = async () => {
     if (!exportContext) return;
-    const { downloadReportWorkbook } = await import('../../utils/downloadReport');
-    const result = await downloadReportWorkbook(exportContext, activeReport.title);
+    const { downloadReportWorkbook } =
+      await import("../../utils/downloadReport");
+    const result = await downloadReportWorkbook(
+      exportContext,
+      activeReport.title,
+    );
     if (!result.ok) {
       notification.error(result.reason);
     }
@@ -150,7 +158,7 @@ export function Reports() {
 
   const setActiveReport = (id: string) => {
     if (id !== ReportId.PROFIT_LOSS) {
-      setPlBasis('paid');
+      setPlBasis("paid");
     }
     navigate(`/reports/${id}`, { replace: true });
   };
@@ -164,65 +172,73 @@ export function Reports() {
   }
 
   return (
-    <Layout>
-      <PageShell>
-        <PageHeader
-          title="Reports"
-          description={activeReport.description}
-          actions={
-            canDownload ? (
-              <Button type="button" variant="outline" size="sm" onClick={handleDownload}>
-                <Download className="w-4 h-4" />
-                Download XLS
-              </Button>
-            ) : undefined
-          }
+    <PageShell>
+      <PageHeader
+        title="Reports"
+        description={activeReport.description}
+        actions={
+          canDownload ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDownload}
+            >
+              <Download className="w-4 h-4" />
+              Download XLS
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <div className="space-y-3">
+        {isStockReport ? (
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+            Snapshot report — shows current stock on hand (not filtered by
+            date).
+          </div>
+        ) : (
+          <ReportDateFilters
+            preset={preset}
+            onPresetChange={setPreset}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={setCustomFrom}
+            onCustomToChange={setCustomTo}
+            rangeLabel={dateRange.label}
+          />
+        )}
+
+        <FormTabs
+          tabs={reportTabs}
+          active={activeReportId}
+          onChange={setActiveReport}
+          ariaLabel="Report type"
         />
 
-        <div className="space-y-3">
-          {isStockReport ? (
-            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-              Snapshot report — shows current stock on hand (not filtered by date).
-            </div>
-          ) : (
-            <ReportDateFilters
-              preset={preset}
-              onPresetChange={setPreset}
-              customFrom={customFrom}
-              customTo={customTo}
-              onCustomFromChange={setCustomFrom}
-              onCustomToChange={setCustomTo}
-              rangeLabel={dateRange.label}
-            />
-          )}
-
-          <FormTabs
-            tabs={reportTabs}
-            active={activeReportId}
-            onChange={setActiveReport}
-            ariaLabel="Report type"
+        {loading ? (
+          <LoadingView
+            message="Generating report…"
+            size="md"
+            className="py-12"
           />
-
-          {loading ? (
-            <LoadingView message="Generating report…" size="md" className="py-12" />
-          ) : (
-            <ReportContent
-              reportId={activeReportId}
-              currency={currency}
-              filteredSales={filteredSales}
-              filteredInvoices={filteredInvoices}
-              filteredExpenses={filteredExpenses}
-              filteredPurchases={filteredPurchases}
-              stock={stock}
-              products={products}
-              summary={summary}
-              hasData={hasData}
-              plBasis={plBasis}
-              onPlBasisChange={setPlBasis}
-            />
-          )}
-        </div>
-      </PageShell>
-    </Layout>
+        ) : (
+          <ReportContent
+            reportId={activeReportId}
+            currency={currency}
+            filteredSales={filteredSales}
+            filteredInvoices={filteredInvoices}
+            filteredExpenses={filteredExpenses}
+            filteredPurchases={filteredPurchases}
+            stock={stock}
+            products={products}
+            summary={summary}
+            hasData={hasData}
+            plBasis={plBasis}
+            onPlBasisChange={setPlBasis}
+          />
+        )}
+      </div>
+    </PageShell>
   );
 }

@@ -1,24 +1,23 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer } from 'lucide-react';
-import { Layout } from '../../components/Layout/Layout';
-import { PageShell } from '../../components/PageShell/PageShell';
-import { Button } from '../../components/Button/Button';
-import { Select } from '../../components/Select/Select';
-import { LoadingView } from '../../components/AppLoader/AppLoader';
-import { InvoicePrintView } from '../../components/SalesDocumentPrint/InvoicePrintView';
-import type { SalesDocumentPrintProps } from '../../components/SalesDocumentPrint/SalesDocumentPrint';
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Printer } from "lucide-react";
+import { PageShell } from "../../components/PageShell/PageShell";
+import { Button } from "../../components/Button/Button";
+import { Select } from "../../components/Select/Select";
+import { LoadingView } from "../../components/AppLoader/AppLoader";
+import { InvoicePrintView } from "../../components/SalesDocumentPrint/InvoicePrintView";
+import type { SalesDocumentPrintProps } from "../../components/SalesDocumentPrint/SalesDocumentPrint";
 import {
   getStoredInvoicePrintFormat,
   INVOICE_PRINT_FORMAT_OPTIONS,
   type InvoicePrintFormat,
   storeInvoicePrintFormat,
-} from '../../constants/invoicePrintFormats';
-import { useAuth } from '../../hooks/useAuth';
-import { firestoreService } from '../../services/firestore';
-import { buildSalePrintProps } from '../../utils/salesDocumentPrint';
+} from "../../constants/invoicePrintFormats";
+import { useAuth } from "../../hooks/useAuth";
+import { firestoreService } from "../../services/firestore";
+import { buildSalePrintProps } from "../../utils/salesDocumentPrint";
 
-type PrintProps = Omit<SalesDocumentPrintProps, 'currency'>;
+type PrintProps = Omit<SalesDocumentPrintProps, "currency">;
 
 function DocumentPrintShell({
   backTo,
@@ -35,12 +34,14 @@ function DocumentPrintShell({
   const navigate = useNavigate();
   const { saleId } = useParams();
   const id = saleId;
-  const currency = company?.currency ?? 'AED';
+  const currency = company?.currency ?? "AED";
 
   const [printProps, setPrintProps] = useState<PrintProps | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [printFormat, setPrintFormat] = useState<InvoicePrintFormat>(getStoredInvoicePrintFormat);
+  const [printFormat, setPrintFormat] = useState<InvoicePrintFormat>(
+    getStoredInvoicePrintFormat,
+  );
 
   useEffect(() => {
     if (!company || !id) return;
@@ -75,55 +76,58 @@ function DocumentPrintShell({
 
   if (loading) {
     return (
-      <Layout>
-        <PageShell>
-          <LoadingView message={loadingLabel} size="xl" className="py-20" />
-        </PageShell>
-      </Layout>
+      <PageShell>
+        <LoadingView message={loadingLabel} size="xl" className="py-20" />
+      </PageShell>
     );
   }
 
   if (notFound || !printProps || !company) {
     return (
-      <Layout>
-        <PageShell>
-          <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">{notFoundTitle}</p>
-          <Button variant="outline" onClick={() => navigate(backTo)}>
-            {backLabel}
-          </Button>
-        </PageShell>
-      </Layout>
+      <PageShell>
+        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+          {notFoundTitle}
+        </p>
+        <Button variant="outline" onClick={() => navigate(backTo)}>
+          {backLabel}
+        </Button>
+      </PageShell>
     );
   }
 
   return (
-    <Layout>
-      <PageShell className="print:space-y-0">
-        <div className="print:hidden flex flex-wrap items-end gap-3 mb-4">
-          <Button variant="outline" onClick={() => navigate(backTo)}>
-            <ArrowLeft className="w-4 h-4" />
-            {backLabel}
-          </Button>
-          <div className="w-52">
-            <Select
-              label="Invoice layout"
-              value={printFormat}
-              options={INVOICE_PRINT_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-              onChange={(e) => {
-                const next = e.target.value as InvoicePrintFormat;
-                setPrintFormat(next);
-                storeInvoicePrintFormat(next);
-              }}
-            />
-          </div>
-          <Button variant="primary" onClick={() => window.print()}>
-            <Printer className="w-4 h-4" />
-            Print invoice
-          </Button>
+    <PageShell className="print:space-y-0">
+      <div className="print:hidden flex flex-wrap items-end gap-3 mb-4">
+        <Button variant="outline" onClick={() => navigate(backTo)}>
+          <ArrowLeft className="w-4 h-4" />
+          {backLabel}
+        </Button>
+        <div className="w-52">
+          <Select
+            label="Invoice layout"
+            value={printFormat}
+            options={INVOICE_PRINT_FORMAT_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))}
+            onChange={(e) => {
+              const next = e.target.value as InvoicePrintFormat;
+              setPrintFormat(next);
+              storeInvoicePrintFormat(next);
+            }}
+          />
         </div>
-        <InvoicePrintView format={printFormat} {...printProps} currency={currency} />
-      </PageShell>
-    </Layout>
+        <Button variant="primary" onClick={() => window.print()}>
+          <Printer className="w-4 h-4" />
+          Print invoice
+        </Button>
+      </div>
+      <InvoicePrintView
+        format={printFormat}
+        {...printProps}
+        currency={currency}
+      />
+    </PageShell>
   );
 }
 

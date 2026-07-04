@@ -1,7 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 import { FIREBASE_FUNCTIONS_REGION } from '../constants/firebase';
@@ -34,7 +38,9 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_FIREBASE_MEASUREMENT_I
 }
 
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 const functions = getFunctions(app, FIREBASE_FUNCTIONS_REGION);
 const storage = getStorage(app);
 

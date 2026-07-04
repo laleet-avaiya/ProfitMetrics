@@ -22,6 +22,7 @@ import { orgMembershipService } from '../services/orgMembership';
 import { companyService } from '../services/companyService';
 import { nowUtc, prepareDatesForFirestore } from '../utils/firestoreDates';
 import { isOrgSubscriptionExpired } from '../utils/subscription';
+import { clearCompanyDataCache } from '../utils/companyDataCache';
 import { AuthContext } from './AuthContextInstance';
 import type { AuthContextType, CreateCompanyDetails, SignUpDetails, UserOrgAccess } from './AuthContext.types';
 import type { Company, CompanyMember, Organization, OrgMember, UserProfile } from '../types';
@@ -439,6 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
     await firebaseSignOut(auth);
+    clearCompanyDataCache();
     setProfile(null);
     setOrg(null);
     setOrgMembership(null);
