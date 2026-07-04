@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye,
@@ -17,11 +17,7 @@ import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableTruncateCellClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -103,8 +99,7 @@ export function Sales() {
           (sale.customerName?.toLowerCase().includes(q) ?? false) ||
           (sale.notes?.toLowerCase().includes(q) ?? false)
         );
-      })
-      .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime());
+      });
   }, [sales, search, dateFilter, customerFilter]);
 
   const summary = useMemo(
@@ -120,27 +115,153 @@ export function Sales() {
     [filtered]
   );
 
-  const handleDelete = (sale: Sale) => {
-    if (!company) return;
-    notification.confirm({
-      title: 'Delete sale?',
-      message: `Remove ${saleReference(sale)}? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          await firestoreService.sales.delete(company.id, sale.id, user!.uid);
-          await deleteSaleLinkedExpenses(company.id, sale.id, user!.uid);
-          await restoreSaleStock(company.id, sale, user!.uid);
-          notification.success('Sale deleted');
-          await reload();
-        } catch (err) {
-          console.error(err);
-          notification.error('Failed to delete');
-        }
+  const handleDelete = useCallback(
+    (sale: Sale) => {
+      if (!company) return;
+      notification.confirm({
+        title: 'Delete sale?',
+        message: `Remove ${saleReference(sale)}? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+        onConfirm: async () => {
+          try {
+            await firestoreService.sales.delete(company.id, sale.id, user!.uid);
+            await deleteSaleLinkedExpenses(company.id, sale.id, user!.uid);
+            await restoreSaleStock(company.id, sale, user!.uid);
+            notification.success('Sale deleted');
+            await reload();
+          } catch (err) {
+            console.error(err);
+            notification.error('Failed to delete');
+          }
+        },
+      });
+    },
+    [company, notification, reload, user]
+  );
+
+  const columns = useMemo((): DataTableColumn<Sale>[] => {
+    return [
+      {
+        key: 'date',
+        header: 'Date',
+        sortable: true,
+        sortValue: (sale) => sale.orderDate,
+        render: (sale) => formatDateLocal(sale.orderDate),
       },
-    });
-  };
+      {
+        key: 'order',
+        header: 'Order',
+        sortable: true,
+        sortValue: (sale) => sale.orderNumber ?? sale.orderId ?? '',
+        render: (sale) => (
+          <Link
+            to={`/sales/${sale.id}`}
+            className="font-medium text-indigo-600 hover:underline"
+          >
+            {saleReference(sale)}
+          </Link>
+        ),
+      },
+      {
+        key: 'customer',
+        header: 'Customer / Product',
+        sortable: true,
+        sortValue: (sale) => saleSubtitle(sale),
+        truncate: true,
+        render: (sale) => saleSubtitle(sale),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortable: true,
+        sortValue: (sale) => sale.status,
+        render: (sale) => <SaleStatusBadge status={sale.status} />,
+      },
+      {
+        key: 'payment',
+        header: 'Payment',
+        sortable: true,
+        sortValue: (sale) => normalizeSalePaymentStatus(sale.paymentStatus),
+        render: (sale) =>
+          purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus)),
+      },
+      {
+        key: 'amount',
+        header: 'Amount',
+        align: 'right',
+        sortable: true,
+        sortValue: (sale) => saleRevenue(sale),
+        render: (sale) => formatMoney(saleRevenue(sale), currency),
+      },
+      {
+        key: 'profit',
+        header: 'Profit',
+        align: 'right',
+        sortable: true,
+        sortValue: (sale) => getSaleProfit(sale),
+        render: (sale) => {
+          const profit = getSaleProfit(sale);
+          return (
+            <span
+              className={`font-medium ${
+                profit >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {formatMoney(profit, currency)}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (sale) => (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => navigate(`/sales/${sale.id}`)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="View"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/sales/${sale.id}/print`)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Print invoice"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+            {canUpdateSale ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/sales/${sale.id}/edit`)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Edit"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            ) : null}
+            {canDeleteSale ? (
+              <button
+                type="button"
+                onClick={() => handleDelete(sale)}
+                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Delete"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ];
+  }, [currency, canUpdateSale, canDeleteSale, navigate, handleDelete]);
 
   return (
     <SectionPage
@@ -233,96 +354,12 @@ export function Sales() {
           />
         ) : (
           <>
-            <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-500">
-                    <th className={tableHeadCellClass}>Date</th>
-                    <th className={tableHeadCellClass}>Order</th>
-                    <th className={tableHeadCellClass}>Customer / Product</th>
-                    <th className={tableHeadCellClass}>Status</th>
-                    <th className={tableHeadCellClass}>Payment</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Amount</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Profit</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filtered.map((sale) => (
-                    <tr key={sale.id}>
-                      <td className={tableCellClass}>{formatDateLocal(sale.orderDate)}</td>
-                      <td className={tableCellClass}>
-                        <Link
-                          to={`/sales/${sale.id}`}
-                          className="font-medium text-indigo-600 hover:underline"
-                        >
-                          {saleReference(sale)}
-                        </Link>
-                      </td>
-                      <td className={tableTruncateCellClass}>{saleSubtitle(sale)}</td>
-                      <td className={tableCellClass}>
-                        <SaleStatusBadge status={sale.status} />
-                      </td>
-                      <td className={tableCellClass}>
-                        {purchasePaymentStatusLabel(normalizeSalePaymentStatus(sale.paymentStatus))}
-                      </td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>
-                        {formatMoney(saleRevenue(sale), currency)}
-                      </td>
-                      <td
-                        className={`${tableCellClass} text-right tabular-nums font-medium ${
-                          getSaleProfit(sale) >= 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-red-600 dark:text-red-400'
-                        }`}
-                      >
-                        {formatMoney(getSaleProfit(sale), currency)}
-                      </td>
-                      <td className={tableCellClass}>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/sales/${sale.id}`)}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                            aria-label="View"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/sales/${sale.id}/print`)}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                            aria-label="Print invoice"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-                          {canUpdateSale ? (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/sales/${sale.id}/edit`)}
-                              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                              aria-label="Edit"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          ) : null}
-                          {canDeleteSale ? (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(sale)}
-                              className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              aria-label="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              rows={filtered}
+              rowKey={(sale) => sale.id}
+              defaultSort={{ key: 'date', direction: 'desc' }}
+            />
 
             <div className="md:hidden space-y-3">
               {filtered.map((sale) => (

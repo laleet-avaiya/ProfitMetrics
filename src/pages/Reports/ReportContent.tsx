@@ -248,29 +248,39 @@ export function ReportContent({
                 {
                   key: 'product',
                   header: 'Product',
+                  sortable: true,
+                  sortValue: (row) => row.productName,
                   render: (row) => row.productName,
                 },
                 {
                   key: 'sku',
                   header: 'SKU',
+                  sortable: true,
+                  sortValue: (row) => row.sku ?? '',
                   render: (row) => row.sku ?? '—',
                 },
                 {
                   key: 'qty',
                   header: 'Qty on hand',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.quantityOnHand,
                   render: (row) => row.quantityOnHand,
                 },
                 {
                   key: 'cost',
                   header: 'Avg cost',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.avgPurchasePrice,
                   render: (row) => formatMoney(row.avgPurchasePrice, currency),
                 },
                 {
                   key: 'sell',
                   header: 'Avg selling price',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.avgSellingPrice,
                   render: (row) => formatMoney(row.avgSellingPrice, currency),
                 },
                 {
@@ -278,12 +288,16 @@ export function ReportContent({
                   header: 'Stock value',
                   align: 'right',
                   className: 'font-semibold',
+                  sortable: true,
+                  sortValue: (row) => row.totalValue,
                   render: (row) => formatMoney(row.totalValue, currency),
                 },
                 {
                   key: 'received',
                   header: 'Last received',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.lastReceivedAt,
                   render: (row) =>
                     row.lastReceivedAt ? formatDateLocal(row.lastReceivedAt) : '—',
                 },
@@ -365,6 +379,8 @@ export function ReportContent({
                 {
                   key: 'label',
                   header: 'Line item',
+                  sortable: true,
+                  sortValue: (line) => line.label,
                   render: (line) => (
                     <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
                   ),
@@ -374,6 +390,8 @@ export function ReportContent({
                   header: 'Amount',
                   align: 'right',
                   className: 'font-medium',
+                  sortable: true,
+                  sortValue: (line) => line.value,
                   render: (line) => (
                     <span className={profitClass(line.value)}>
                       {line.value < 0 ? '−' : ''}
@@ -468,6 +486,8 @@ export function ReportContent({
                 {
                   key: 'label',
                   header: 'Line item',
+                  sortable: true,
+                  sortValue: (line) => line.label,
                   render: (line) => (
                     <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
                   ),
@@ -477,6 +497,8 @@ export function ReportContent({
                   header: 'Amount',
                   align: 'right',
                   className: 'font-medium',
+                  sortable: true,
+                  sortValue: (line) => line.value,
                   render: (line) => (
                     <span className={profitClass(line.value)}>
                       {line.value < 0 ? '−' : ''}
@@ -502,17 +524,27 @@ export function ReportContent({
             >
               <SpreadsheetTable
                 columns={[
-                  { key: 'channel', header: 'Channel', render: (row) => row.channel },
+                  {
+                    key: 'channel',
+                    header: 'Channel',
+                    sortable: true,
+                    sortValue: (row) => row.channel,
+                    render: (row) => row.channel,
+                  },
                   {
                     key: 'revenue',
                     header: 'Revenue',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.revenue,
                     render: (row) => formatMoney(row.revenue, currency),
                   },
                   {
                     key: 'cogs',
                     header: 'COGS',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.cogs,
                     render: (row) => formatMoney(row.cogs, currency),
                   },
                   {
@@ -520,6 +552,8 @@ export function ReportContent({
                     header: 'Gross profit',
                     align: 'right',
                     className: 'font-medium',
+                    sortable: true,
+                    sortValue: (row) => row.gp,
                     render: (row) => (
                       <span className={profitClass(row.gp)}>{formatMoney(row.gp, currency)}</span>
                     ),
@@ -528,6 +562,8 @@ export function ReportContent({
                     key: 'margin',
                     header: 'Margin',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.margin,
                     render: (row) => (
                       <span className={profitClass(row.gp)}>{formatPercent(row.margin)}</span>
                     ),
@@ -565,18 +601,35 @@ export function ReportContent({
         >
           <SpreadsheetTable
             columns={[
-              { key: 'product', header: 'Product', render: (row) => row.productName },
-              { key: 'units', header: 'Units', align: 'right', render: (row) => row.unitsSold },
+              {
+                key: 'product',
+                header: 'Product',
+                sortable: true,
+                sortValue: (row) => row.productName,
+                render: (row) => row.productName,
+              },
+              {
+                key: 'units',
+                header: 'Units',
+                align: 'right',
+                sortable: true,
+                sortValue: (row) => row.unitsSold,
+                render: (row) => row.unitsSold,
+              },
               {
                 key: 'cogs',
                 header: 'COGS',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) => row.cogs,
                 render: (row) => formatMoney(row.cogs, currency),
               },
               {
                 key: 'revenue',
                 header: 'Revenue',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) => row.revenue,
                 render: (row) => formatMoney(row.revenue, currency),
               },
               {
@@ -584,6 +637,8 @@ export function ReportContent({
                 header: 'Profit',
                 align: 'right',
                 className: 'font-medium',
+                sortable: true,
+                sortValue: (row) => row.profit,
                 render: (row) => (
                   <span className={profitClass(row.profit)}>
                     {formatMoney(row.profit, currency)}
@@ -594,6 +649,8 @@ export function ReportContent({
                 key: 'margin',
                 header: 'Margin',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) => row.marginPercent,
                 render: (row) => (
                   <span className={profitClass(row.profit)}>
                     {formatPercent(row.marginPercent)}
@@ -613,12 +670,27 @@ export function ReportContent({
         <ReportSection title="Sales by channel" description="Online marketplaces vs invoices.">
           <SpreadsheetTable
             columns={[
-              { key: 'channel', header: 'Channel', render: (row) => row.platform },
-              { key: 'count', header: 'Count', align: 'right', render: (row) => row.saleCount },
+              {
+                key: 'channel',
+                header: 'Channel',
+                sortable: true,
+                sortValue: (row) => row.platform,
+                render: (row) => row.platform,
+              },
+              {
+                key: 'count',
+                header: 'Count',
+                align: 'right',
+                sortable: true,
+                sortValue: (row) => row.saleCount,
+                render: (row) => row.saleCount,
+              },
               {
                 key: 'revenue',
                 header: 'Revenue',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) => row.revenue,
                 render: (row) => formatMoney(row.revenue, currency),
               },
               {
@@ -626,6 +698,8 @@ export function ReportContent({
                 header: 'Profit',
                 align: 'right',
                 className: 'font-medium',
+                sortable: true,
+                sortValue: (row) => row.profit,
                 render: (row) => (
                   <span className={profitClass(row.profit)}>
                     {formatMoney(row.profit, currency)}
@@ -636,6 +710,8 @@ export function ReportContent({
                 key: 'margin',
                 header: 'Margin',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) => row.marginPercent,
                 render: (row) => (
                   <span className={profitClass(row.profit)}>
                     {formatPercent(row.marginPercent)}
@@ -661,6 +737,8 @@ export function ReportContent({
               {
                 key: 'category',
                 header: 'Category',
+                sortable: true,
+                sortValue: (row) => row.category,
                 render: (row) => (
                   <>
                     {row.category}
@@ -670,18 +748,32 @@ export function ReportContent({
                   </>
                 ),
               },
-              { key: 'count', header: 'Count', align: 'right', render: (row) => row.count },
+              {
+                key: 'count',
+                header: 'Count',
+                align: 'right',
+                sortable: true,
+                sortValue: (row) => row.count,
+                render: (row) => row.count,
+              },
               {
                 key: 'total',
                 header: 'Total',
                 align: 'right',
                 className: 'font-medium',
+                sortable: true,
+                sortValue: (row) => row.total,
                 render: (row) => formatMoney(row.total, currency),
               },
               {
                 key: 'share',
                 header: 'Share',
                 align: 'right',
+                sortable: true,
+                sortValue: (row) =>
+                  operatingExpenseTotal > 0 && !row.excludedFromNetProfit
+                    ? (row.total / operatingExpenseTotal) * 100
+                    : null,
                 render: (row) =>
                   operatingExpenseTotal > 0 && !row.excludedFromNetProfit
                     ? formatPercent((row.total / operatingExpenseTotal) * 100)
@@ -746,6 +838,8 @@ export function ReportContent({
                 {
                   key: 'label',
                   header: 'Line item',
+                  sortable: true,
+                  sortValue: (line) => line.label,
                   render: (line) => (
                     <span className={line.emphasize ? 'font-semibold' : ''}>{line.label}</span>
                   ),
@@ -755,6 +849,8 @@ export function ReportContent({
                   header: 'Amount',
                   align: 'right',
                   className: 'font-medium',
+                  sortable: true,
+                  sortValue: (line) => line.value,
                   render: (line) => (
                     <span className={profitClass(line.value)}>
                       {line.value < 0 ? '−' : ''}
@@ -828,26 +924,36 @@ export function ReportContent({
                 {
                   key: 'date',
                   header: 'Date',
+                  sortable: true,
+                  sortValue: (row) => row.purchaseDate,
                   render: (row) => formatDateLocal(row.purchaseDate),
                 },
                 {
                   key: 'po',
                   header: 'PO #',
+                  sortable: true,
+                  sortValue: (row) => row.poNumber,
                   render: (row) => <span className="font-medium">{row.poNumber}</span>,
                 },
                 {
                   key: 'vendor',
                   header: 'Vendor',
+                  sortable: true,
+                  sortValue: (row) => row.vendorName,
                   render: (row) => row.vendorName,
                 },
                 {
                   key: 'reference',
                   header: 'Reference',
+                  sortable: true,
+                  sortValue: (row) => row.reference,
                   render: (row) => row.reference || '—',
                 },
                 {
                   key: 'status',
                   header: 'Status',
+                  sortable: true,
+                  sortValue: (row) => row.status,
                   render: (row) => (
                     <span
                       className={`inline-flex text-xs px-2 py-0.5 rounded-full ${purchaseStatusBadgeClass(row.status)}`}
@@ -859,6 +965,8 @@ export function ReportContent({
                 {
                   key: 'payment',
                   header: 'Payment',
+                  sortable: true,
+                  sortValue: (row) => row.paymentStatus,
                   render: (row) => (
                     <span
                       className={`inline-flex text-xs px-2 py-0.5 rounded-full ${salePaymentStatusBadgeClass(row.paymentStatus)}`}
@@ -871,6 +979,8 @@ export function ReportContent({
                   key: 'lines',
                   header: 'Lines',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.lineCount,
                   render: (row) => row.lineCount,
                 },
                 {
@@ -878,18 +988,24 @@ export function ReportContent({
                   header: 'Total',
                   align: 'right',
                   className: 'font-medium',
+                  sortable: true,
+                  sortValue: (row) => row.total,
                   render: (row) => formatMoney(row.total, currency),
                 },
                 {
                   key: 'paid',
                   header: 'Paid',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.totalPaid,
                   render: (row) => formatMoney(row.totalPaid, currency),
                 },
                 {
                   key: 'balance',
                   header: 'Balance',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.balanceDue,
                   render: (row) =>
                     row.balanceDue > 0 ? (
                       <span className="text-rose-600 dark:text-rose-400">
@@ -953,25 +1069,44 @@ export function ReportContent({
           ) : (
             <SpreadsheetTable
               columns={[
-                { key: 'period', header: 'Period', render: (row) => row.label },
-                { key: 'count', header: 'POs', align: 'right', render: (row) => row.count },
+                {
+                  key: 'period',
+                  header: 'Period',
+                  sortable: true,
+                  sortValue: (row) => row.key,
+                  render: (row) => row.label,
+                },
+                {
+                  key: 'count',
+                  header: 'POs',
+                  align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.count,
+                  render: (row) => row.count,
+                },
                 {
                   key: 'total',
                   header: 'Total value',
                   align: 'right',
                   className: 'font-medium',
+                  sortable: true,
+                  sortValue: (row) => row.totalValue,
                   render: (row) => formatMoney(row.totalValue, currency),
                 },
                 {
                   key: 'paid',
                   header: 'Paid',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.totalPaid,
                   render: (row) => formatMoney(row.totalPaid, currency),
                 },
                 {
                   key: 'balance',
                   header: 'Balance due',
                   align: 'right',
+                  sortable: true,
+                  sortValue: (row) => row.balanceDue,
                   render: (row) =>
                     row.balanceDue > 0 ? (
                       <span className="text-rose-600 dark:text-rose-400">
@@ -1042,23 +1177,35 @@ export function ReportContent({
 
               <SpreadsheetTable
                 columns={[
-                  { key: 'period', header: 'Period', render: (row) => row.label },
+                  {
+                    key: 'period',
+                    header: 'Period',
+                    sortable: true,
+                    sortValue: (row) => row.key,
+                    render: (row) => row.label,
+                  },
                   {
                     key: 'revenue',
                     header: 'Revenue',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.revenue,
                     render: (row) => formatMoney(row.revenue, currency),
                   },
                   {
                     key: 'orderProfit',
                     header: 'Order profit',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.orderProfit,
                     render: (row) => formatMoney(row.orderProfit, currency),
                   },
                   {
                     key: 'expenses',
                     header: 'Operating expenses',
                     align: 'right',
+                    sortable: true,
+                    sortValue: (row) => row.expenses,
                     render: (row) => formatMoney(row.expenses, currency),
                   },
                   {
@@ -1066,6 +1213,8 @@ export function ReportContent({
                     header: 'Net profit',
                     align: 'right',
                     className: 'font-medium',
+                    sortable: true,
+                    sortValue: (row) => row.netProfit,
                     render: (row) => (
                       <span className={profitClass(row.netProfit)}>
                         {formatMoney(row.netProfit, currency)}

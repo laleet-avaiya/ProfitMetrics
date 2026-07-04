@@ -15,14 +15,7 @@ import { Card, StatCard } from '../../components/ui/Card';
 import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
-import {
-  tableCellClass,
-  tableClass,
-  tableHeadCellClass,
-  tableHeadRowClass,
-  tableTruncateCellClass,
-  tableWrapClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useCompanyMarketplaces } from '../../hooks/useCompanyMarketplaces';
@@ -30,6 +23,7 @@ import { notDeleted, useEntityList } from '../../hooks/useEntityList';
 import { firestoreService } from '../../services/firestore';
 import type { Product, ProductStock } from '../../types';
 import { computeLineEconomics, formatPercent, lineEconomicsInputFromListing } from '../../utils/profit';
+import { computeProductQuantityStats } from '../../utils/productQuantityStats';
 import { getStockMap } from '../../utils/stockHelpers';
 
 
@@ -45,6 +39,16 @@ function averageListingMargin(product: Product): number | null {
   return total / listings.length;
 }
 
+function productOnHand(
+  product: Product,
+  stockMap: Map<string, ProductStock>,
+  stockTotals: Map<string, number>
+): number {
+  const variantCount = product.variants?.length ?? 0;
+  const stock = stockMap.get(product.id);
+  return variantCount > 0 ? stockTotals.get(product.id) ?? 0 : stock?.quantityOnHand ?? 0;
+}
+
 export function Products() {
   const navigate = useNavigate();
   const { canCreate, canUpdate } = useModuleAccess(AppModule.PRODUCTS);
@@ -55,6 +59,7 @@ export function Products() {
       products: [] as Product[],
       stockMap: new Map<string, ProductStock>(),
       stockTotals: new Map<string, number>(),
+      quantityStats: new Map<string, { purchased: number; sold: number }>(),
     }),
     []
   );
@@ -63,9 +68,11 @@ export function Products() {
     initialData: emptyData,
     errorMessage: 'Failed to load products',
     fetch: async (companyId) => {
-      const [list, stockList] = await Promise.all([
+      const [list, stockList, purchaseList, saleList] = await Promise.all([
         firestoreService.products.getAll(companyId),
         firestoreService.stock.getAll(companyId),
+        firestoreService.purchases.getAll(companyId),
+        firestoreService.sales.getAll(companyId),
       ]);
       // For variant products only count buckets for variants that still exist,
       // so orphaned stock (from renamed/removed options, or a leftover base
@@ -91,11 +98,15 @@ export function Products() {
         products: list.filter(notDeleted),
         stockMap: getStockMap(stockList),
         stockTotals,
+        quantityStats: computeProductQuantityStats(
+          purchaseList.filter(notDeleted),
+          saleList.filter(notDeleted)
+        ),
       };
     },
   });
 
-  const { products, stockMap, stockTotals } = data;
+  const { products, stockMap, stockTotals, quantityStats } = data;
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -137,6 +148,146 @@ export function Products() {
   const openView = (product: Product) => navigate(`/products/${product.id}`);
 
   const openEdit = (product: Product) => navigate(`/products/${product.id}/edit`);
+
+  const columns = useMemo<DataTableColumn<Product>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Product',
+        sortable: true,
+        sortValue: (product) => product.name,
+        truncate: true,
+        className: 'font-medium text-gray-900 dark:text-white',
+        render: (product) => (
+          <Link
+            to={`/products/${product.id}`}
+            className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+          >
+            {product.name}
+          </Link>
+        ),
+      },
+      {
+        key: 'sku',
+        header: 'SKU',
+        className: 'text-gray-600 dark:text-gray-400',
+        render: (product) => product.sku ?? '—',
+      },
+      {
+        key: 'platforms',
+        header: 'Platforms',
+        truncate: true,
+        className: 'text-gray-700 dark:text-gray-300',
+        render: (product) => {
+          const platforms = product.platformListings.map((l) => l.platform).join(', ') || '—';
+          return (
+            <span title={platforms !== '—' ? platforms : undefined}>{platforms}</span>
+          );
+        },
+      },
+      {
+        key: 'purchased',
+        header: 'Purchased',
+        align: 'right',
+        sortable: true,
+        sortValue: (product) => quantityStats.get(product.id)?.purchased ?? 0,
+        className: 'text-gray-700 dark:text-gray-300',
+        render: (product) => quantityStats.get(product.id)?.purchased ?? 0,
+      },
+      {
+        key: 'sold',
+        header: 'Sold',
+        align: 'right',
+        sortable: true,
+        sortValue: (product) => quantityStats.get(product.id)?.sold ?? 0,
+        render: (product) => {
+          const sold = quantityStats.get(product.id)?.sold ?? 0;
+          return (
+            <span
+              className={
+                sold > 0
+                  ? 'font-medium text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-700 dark:text-gray-300'
+              }
+            >
+              {sold}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'onHand',
+        header: 'On hand',
+        align: 'right',
+        sortable: true,
+        sortValue: (product) => productOnHand(product, stockMap, stockTotals),
+        render: (product) => {
+          const onHand = productOnHand(product, stockMap, stockTotals);
+          const variantCount = product.variants?.length ?? 0;
+          return (
+            <>
+              <span className="font-medium">{onHand}</span>
+              {variantCount > 0 ? (
+                <span className="ml-1.5 text-[11px] font-normal text-gray-400 dark:text-gray-500">
+                  {variantCount} var
+                </span>
+              ) : null}
+            </>
+          );
+        },
+      },
+      {
+        key: 'avgMargin',
+        header: 'Avg margin',
+        align: 'right',
+        sortable: true,
+        sortValue: (product) => averageListingMargin(product),
+        render: (product) => {
+          const avgMargin = averageListingMargin(product);
+          if (avgMargin == null) return '—';
+          return (
+            <span
+              className={
+                avgMargin >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400'
+              }
+            >
+              {formatPercent(avgMargin)}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (product) => (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => openView(product)}
+              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label={`View ${product.name}`}
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            {canUpdate ? (
+              <button
+                type="button"
+                onClick={() => openEdit(product)}
+                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={`Edit ${product.name}`}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [canUpdate, quantityStats, stockMap, stockTotals]
+  );
 
   return (
     <SectionPage
@@ -198,102 +349,23 @@ export function Products() {
             />
           ) : (
             <>
-              <div className={`hidden md:block ${tableWrapClass}`}>
-                <table className={tableClass}>
-                  <thead>
-                    <tr className={tableHeadRowClass}>
-                      <th className={tableHeadCellClass}>Product</th>
-                      <th className={tableHeadCellClass}>SKU</th>
-                      <th className={tableHeadCellClass}>Platforms</th>
-                      <th className={`${tableHeadCellClass} text-right`}>Stock</th>
-                      <th className={`${tableHeadCellClass} text-right`}>Avg margin</th>
-                      <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {filtered.map((product) => {
-                      const avgMargin = averageListingMargin(product);
-                      const stock = stockMap.get(product.id);
-                      const variantCount = product.variants?.length ?? 0;
-                      const onHand = variantCount > 0 ? stockTotals.get(product.id) ?? 0 : stock?.quantityOnHand ?? 0;
-
-                      return (
-                        <tr
-                          key={product.id}
-                          className="bg-white dark:bg-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-750"
-                        >
-                          <td className={`${tableTruncateCellClass} font-medium text-gray-900 dark:text-white`}>
-                            <Link
-                              to={`/products/${product.id}`}
-                              className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
-                            >
-                              {product.name}
-                            </Link>
-                          </td>
-                          <td className={`${tableCellClass} text-gray-600 dark:text-gray-400`}>
-                            {product.sku ?? '—'}
-                          </td>
-                          <td
-                            className={`${tableTruncateCellClass} text-gray-700 dark:text-gray-300`}
-                            title={product.platformListings.map((l) => l.platform).join(', ')}
-                          >
-                            {product.platformListings.map((l) => l.platform).join(', ') || '—'}
-                          </td>
-                          <td className={`${tableCellClass} text-right tabular-nums font-medium`}>
-                            {onHand}
-                            {variantCount > 0 ? (
-                              <span className="ml-1.5 text-[11px] font-normal text-gray-400 dark:text-gray-500">
-                                {variantCount} var
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className={`${tableCellClass} text-right tabular-nums`}>
-                            {avgMargin != null ? (
-                              <span
-                                className={
-                                  avgMargin >= 0
-                                    ? 'text-emerald-600 dark:text-emerald-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }
-                              >
-                                {formatPercent(avgMargin)}
-                              </span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td className={tableCellClass}>
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openView(product)}
-                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                aria-label={`View ${product.name}`}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              {canUpdate ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openEdit(product)}
-                                  className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  aria-label={`Edit ${product.name}`}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={columns}
+                rows={filtered}
+                rowKey={(product) => product.id}
+                defaultSort={{ key: 'name', direction: 'asc' }}
+                rowClassName="bg-white dark:bg-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-750"
+              />
 
               <div className="md:hidden space-y-3">
                 {filtered.map((product) => {
                   const avgMargin = averageListingMargin(product);
+                  const stock = stockMap.get(product.id);
+                  const variantCount = product.variants?.length ?? 0;
+                  const onHand = variantCount > 0 ? stockTotals.get(product.id) ?? 0 : stock?.quantityOnHand ?? 0;
+                  const stats = quantityStats.get(product.id);
+                  const purchased = stats?.purchased ?? 0;
+                  const sold = stats?.sold ?? 0;
 
                   return (
                     <div
@@ -327,6 +399,27 @@ export function Products() {
                             {l.platform}
                           </span>
                         ))}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/50 px-2 py-1.5">
+                          <p className="text-gray-500 dark:text-gray-400">Purchased</p>
+                          <p className="mt-0.5 tabular-nums font-semibold text-gray-900 dark:text-white">
+                            {purchased}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/50 px-2 py-1.5">
+                          <p className="text-gray-500 dark:text-gray-400">Sold</p>
+                          <p className="mt-0.5 tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
+                            {sold}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/50 px-2 py-1.5">
+                          <p className="text-gray-500 dark:text-gray-400">On hand</p>
+                          <p className="mt-0.5 tabular-nums font-semibold text-gray-900 dark:text-white">
+                            {onHand}
+                          </p>
+                        </div>
                       </div>
 
                       {avgMargin != null && (

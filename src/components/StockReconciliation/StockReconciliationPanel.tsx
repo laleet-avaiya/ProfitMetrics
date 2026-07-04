@@ -2,12 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Scale, Warehouse } from 'lucide-react';
 import { Button } from '../Button/Button';
 import { Card } from '../ui/Card';
+import { DataTable, type DataTableColumn } from '../ui/DataTable';
 import { LoadingView } from '../AppLoader/AppLoader';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableWrapClass,
-} from '../../constants/ui';
+import { tableWrapClass } from '../../constants/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { firestoreService } from '../../services/firestore';
@@ -15,6 +12,7 @@ import { notDeleted } from '../../hooks/useEntityList';
 import {
   applyStockReconciliation,
   computeStockReconciliation,
+  type StockReconciliationRow,
   type StockReconciliationSummary,
 } from '../../utils/stockReconciliation';
 
@@ -88,6 +86,89 @@ export function StockReconciliationPanel({
   const mismatchRows = useMemo(
     () => summary?.rows.filter((row) => row.difference !== 0) ?? [],
     [summary]
+  );
+
+  const mismatchColumns = useMemo<DataTableColumn<StockReconciliationRow>[]>(
+    () => [
+      {
+        key: 'product',
+        header: 'Product',
+        sortable: true,
+        sortValue: (row) =>
+          `${row.productName}${row.variantLabel ? ` ${row.variantLabel}` : ''}`,
+        render: (row) => (
+          <>
+            {row.productName}
+            {row.variantLabel ? (
+              <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {row.variantLabel}
+              </span>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: 'received',
+        header: 'Received',
+        align: 'right',
+        sortable: true,
+        sortValue: (row) => row.receivedQty,
+        render: (row) => row.receivedQty,
+      },
+      {
+        key: 'sold',
+        header: 'Sold',
+        align: 'right',
+        sortable: true,
+        sortValue: (row) => row.soldQty,
+        render: (row) => row.soldQty,
+      },
+      {
+        key: 'expected',
+        header: 'Expected',
+        align: 'right',
+        sortable: true,
+        sortValue: (row) => row.expectedOnHand,
+        render: (row) => (
+          <>
+            <span className="font-medium">{Math.max(0, row.expectedOnHand)}</span>
+            {row.oversoldBy > 0 ? (
+              <span className="block text-xs text-rose-600 dark:text-rose-400">
+                oversold by {row.oversoldBy}
+              </span>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: 'recorded',
+        header: 'Recorded',
+        align: 'right',
+        sortable: true,
+        sortValue: (row) => row.recordedOnHand,
+        render: (row) => row.recordedOnHand,
+      },
+      {
+        key: 'diff',
+        header: 'Diff',
+        align: 'right',
+        sortable: true,
+        sortValue: (row) => row.difference,
+        render: (row) => (
+          <span
+            className={`font-semibold ${
+              row.difference > 0
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-rose-600 dark:text-rose-400'
+            }`}
+          >
+            {row.difference > 0 ? '+' : ''}
+            {row.difference}
+          </span>
+        ),
+      },
+    ],
+    []
   );
 
   const handleReconcile = () => {
@@ -198,55 +279,14 @@ export function StockReconciliationPanel({
       ) : null}
 
       {expanded && mismatchRows.length > 0 ? (
-        <div className={`${tableWrapClass} max-h-80 overflow-y-auto`}>
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-amber-50 dark:bg-amber-950/40">
-              <tr>
-                <th className={tableHeadCellClass}>Product</th>
-                <th className={`${tableHeadCellClass} text-right`}>Received</th>
-                <th className={`${tableHeadCellClass} text-right`}>Sold</th>
-                <th className={`${tableHeadCellClass} text-right`}>Expected</th>
-                <th className={`${tableHeadCellClass} text-right`}>Recorded</th>
-                <th className={`${tableHeadCellClass} text-right`}>Diff</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-amber-200/60 dark:divide-amber-800/60">
-              {mismatchRows.map((row) => (
-                <tr key={row.key}>
-                  <td className={tableCellClass}>
-                    {row.productName}
-                    {row.variantLabel ? (
-                      <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        {row.variantLabel}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className={`${tableCellClass} text-right tabular-nums`}>{row.receivedQty}</td>
-                  <td className={`${tableCellClass} text-right tabular-nums`}>{row.soldQty}</td>
-                  <td className={`${tableCellClass} text-right tabular-nums font-medium`}>
-                    {Math.max(0, row.expectedOnHand)}
-                    {row.oversoldBy > 0 ? (
-                      <span className="block text-xs text-rose-600 dark:text-rose-400">
-                        oversold by {row.oversoldBy}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className={`${tableCellClass} text-right tabular-nums`}>{row.recordedOnHand}</td>
-                  <td
-                    className={`${tableCellClass} text-right tabular-nums font-semibold ${
-                      row.difference > 0
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-rose-600 dark:text-rose-400'
-                    }`}
-                  >
-                    {row.difference > 0 ? '+' : ''}
-                    {row.difference}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={mismatchColumns}
+          rows={mismatchRows}
+          rowKey={(row) => row.key}
+          defaultSort={{ key: 'diff', direction: 'desc' }}
+          wrapClassName={`${tableWrapClass} max-h-80 overflow-y-auto`}
+          rowClassName="bg-amber-50/30 dark:bg-amber-950/10"
+        />
       ) : null}
     </Card>
   );

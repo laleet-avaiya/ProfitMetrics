@@ -8,11 +8,7 @@ import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableTruncateCellClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -115,6 +111,99 @@ export function Customers() {
     });
   };
 
+  const columns = useMemo<DataTableColumn<Customer>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Customer',
+        sortable: true,
+        sortValue: (c) => c.name,
+        truncate: true,
+        className: 'font-medium',
+        render: (customer) => (
+          <Link to={`/customers/${customer.id}`} className="hover:text-indigo-600 hover:underline">
+            {customer.name}
+          </Link>
+        ),
+      },
+      {
+        key: 'contact',
+        header: 'Contact',
+        sortable: true,
+        sortValue: (c) => c.contactName ?? c.phone ?? '',
+        truncate: true,
+        render: (customer) => customer.contactName ?? customer.phone ?? '—',
+      },
+      {
+        key: 'email',
+        header: 'Email',
+        sortable: true,
+        sortValue: (c) => c.email ?? '',
+        truncate: true,
+        render: (customer) => customer.email ?? '—',
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortable: true,
+        sortValue: (c) => c.status,
+        render: (customer) => (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700">
+            {customer.status}
+          </span>
+        ),
+      },
+      {
+        key: 'orders',
+        header: 'Orders',
+        align: 'right',
+        sortable: true,
+        sortValue: (c) => invoiceStats.get(c.id)?.count ?? 0,
+        render: (customer) => invoiceStats.get(customer.id)?.count ?? 0,
+      },
+      {
+        key: 'balance',
+        header: 'Balance',
+        align: 'right',
+        sortable: true,
+        sortValue: (c) => invoiceStats.get(c.id)?.balanceDue ?? 0,
+        className: 'text-rose-600',
+        render: (customer) => {
+          const balance = invoiceStats.get(customer.id)?.balanceDue ?? 0;
+          return balance > 0 ? formatMoney(balance, currency) : '—';
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (customer) => (
+          <div className="flex justify-end gap-1">
+            <button type="button" onClick={() => navigate(`/customers/${customer.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View customer">
+              <Eye className="w-4 h-4" />
+            </button>
+            {canUpdate ? (
+              <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit customer">
+                <Pencil className="w-4 h-4" />
+              </button>
+            ) : null}
+            {canUpdate ? (
+              <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}>
+                {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
+              </button>
+            ) : null}
+            {canDelete ? (
+              <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete customer">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [canUpdate, canDelete, currency, invoiceStats, navigate]
+  );
+
   return (
     <SectionPage
       title="Customers"
@@ -179,68 +268,12 @@ export function Customers() {
           />
         ) : (
           <>
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 uppercase">
-                  <th className={tableHeadCellClass}>Customer</th>
-                  <th className={tableHeadCellClass}>Contact</th>
-                  <th className={tableHeadCellClass}>Email</th>
-                  <th className={tableHeadCellClass}>Status</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Orders</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Balance</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filtered.map((customer) => {
-                  const stats = invoiceStats.get(customer.id);
-                  return (
-                    <tr key={customer.id} className="bg-white dark:bg-gray-800">
-                      <td className={`${tableTruncateCellClass} font-medium`}>
-                        <Link to={`/customers/${customer.id}`} className="hover:text-indigo-600 hover:underline">
-                          {customer.name}
-                        </Link>
-                      </td>
-                      <td className={tableTruncateCellClass}>{customer.contactName ?? customer.phone ?? '—'}</td>
-                      <td className={tableTruncateCellClass}>{customer.email ?? '—'}</td>
-                      <td className={tableCellClass}>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700">
-                          {customer.status}
-                        </span>
-                      </td>
-                      <td className={`${tableCellClass} text-right tabular-nums`}>{stats?.count ?? 0}</td>
-                      <td className={`${tableCellClass} text-right tabular-nums text-rose-600`}>
-                        {(stats?.balanceDue ?? 0) > 0 ? formatMoney(stats!.balanceDue, currency) : '—'}
-                      </td>
-                      <td className={tableCellClass}>
-                        <div className="flex justify-end gap-1">
-                          <button type="button" onClick={() => navigate(`/customers/${customer.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View customer">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {canUpdate ? (
-                            <button type="button" onClick={() => navigate(`/customers/${customer.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit customer">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          ) : null}
-                          {canUpdate ? (
-                            <button type="button" onClick={() => toggleArchive(customer)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label={customer.status === 'active' ? 'Archive customer' : 'Restore customer'}>
-                              {customer.status === 'active' ? <Archive className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />}
-                            </button>
-                          ) : null}
-                          {canDelete ? (
-                            <button type="button" onClick={() => handleDelete(customer)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete customer">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(c) => c.id}
+            defaultSort={{ key: 'name', direction: 'asc' }}
+          />
 
           <div className="md:hidden space-y-3">
             {filtered.map((customer) => {

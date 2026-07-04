@@ -18,11 +18,7 @@ import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableTruncateCellClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -162,6 +158,154 @@ export function Vendors() {
     });
   };
 
+  const columns = useMemo<DataTableColumn<Vendor>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Vendor',
+        sortable: true,
+        sortValue: (v) => v.name,
+        truncate: true,
+        className: 'font-medium text-gray-900 dark:text-white',
+        render: (vendor) => (
+          <Link
+            to={`/vendors/${vendor.id}`}
+            className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+          >
+            {vendor.name}
+          </Link>
+        ),
+      },
+      {
+        key: 'email',
+        header: 'Email',
+        sortable: true,
+        sortValue: (v) => v.email ?? '',
+        truncate: true,
+        className: 'text-gray-600 dark:text-gray-400',
+        render: (vendor) => vendor.email ?? '—',
+      },
+      {
+        key: 'contact',
+        header: 'Contact',
+        sortable: true,
+        sortValue: (v) => v.contactName ?? v.phone ?? '',
+        truncate: true,
+        className: 'text-gray-600 dark:text-gray-400',
+        render: (vendor) => vendor.contactName ?? vendor.phone ?? '—',
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortable: true,
+        sortValue: (v) => v.status,
+        render: (vendor) => (
+          <span
+            className={`inline-flex text-xs px-2 py-0.5 rounded-full ${
+              vendor.status === 'active'
+                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            {vendor.status === 'active' ? 'Active' : 'Archived'}
+          </span>
+        ),
+      },
+      {
+        key: 'expenses',
+        header: 'Expenses',
+        align: 'right',
+        sortable: true,
+        sortValue: (v) => expenseTotals.get(v.id)?.count ?? 0,
+        render: (vendor) => expenseTotals.get(vendor.id)?.count ?? 0,
+      },
+      {
+        key: 'totalPaid',
+        header: 'Total paid',
+        align: 'right',
+        sortable: true,
+        sortValue: (v) => expenseTotals.get(v.id)?.total ?? 0,
+        className: 'font-medium text-gray-900 dark:text-white',
+        render: (vendor) => formatMoney(expenseTotals.get(vendor.id)?.total ?? 0, currency),
+      },
+      {
+        key: 'poBalance',
+        header: 'PO balance',
+        align: 'right',
+        sortable: true,
+        sortValue: (v) => purchaseTotals.get(v.id)?.balanceDue ?? 0,
+        className: 'text-rose-600 dark:text-rose-400',
+        render: (vendor) => {
+          const balance = purchaseTotals.get(vendor.id)?.balanceDue ?? 0;
+          return balance > 0 ? formatMoney(balance, currency) : '—';
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (vendor) => {
+          const totals = expenseTotals.get(vendor.id);
+          return (
+            <div className="flex items-center justify-end gap-1">
+              {totals && totals.count > 0 && (
+                <Link
+                  to={`/expenses?vendor=${vendor.id}`}
+                  className="px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Expenses
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => openView(vendor)}
+                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={`View ${vendor.name}`}
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              {canUpdate ? (
+                <button
+                  type="button"
+                  onClick={() => openEdit(vendor)}
+                  className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  aria-label={`Edit ${vendor.name}`}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              ) : null}
+              {canUpdate ? (
+                <button
+                  type="button"
+                  onClick={() => handleArchiveToggle(vendor)}
+                  className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  aria-label={vendor.status === 'active' ? 'Archive' : 'Restore'}
+                >
+                  {vendor.status === 'active' ? (
+                    <Archive className="w-4 h-4" />
+                  ) : (
+                    <ArchiveRestore className="w-4 h-4" />
+                  )}
+                </button>
+              ) : null}
+              {canDelete ? (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(vendor)}
+                  className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  aria-label={`Delete ${vendor.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ],
+    [canUpdate, canDelete, currency, expenseTotals, purchaseTotals]
+  );
+
   return (
     <SectionPage
       title="Vendors"
@@ -226,122 +370,12 @@ export function Vendors() {
           />
         ) : (
           <>
-            <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    <th className={tableHeadCellClass}>Vendor</th>
-                    <th className={tableHeadCellClass}>Email</th>
-                    <th className={tableHeadCellClass}>Contact</th>
-                    <th className={tableHeadCellClass}>Status</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Expenses</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Total paid</th>
-                    <th className={`${tableHeadCellClass} text-right`}>PO balance</th>
-                    <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filtered.map((vendor) => {
-                    const totals = expenseTotals.get(vendor.id);
-                    const poTotals = purchaseTotals.get(vendor.id);
-                    return (
-                      <tr key={vendor.id} className="bg-white dark:bg-gray-800">
-                        <td className={`${tableTruncateCellClass} font-medium text-gray-900 dark:text-white`}>
-                          <Link
-                            to={`/vendors/${vendor.id}`}
-                            className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
-                          >
-                            {vendor.name}
-                          </Link>
-                        </td>
-                        <td className={`${tableTruncateCellClass} text-gray-600 dark:text-gray-400`}>
-                          {vendor.email ?? '—'}
-                        </td>
-                        <td className={`${tableTruncateCellClass} text-gray-600 dark:text-gray-400`}>
-                          {vendor.contactName ?? vendor.phone ?? '—'}
-                        </td>
-                        <td className={tableCellClass}>
-                          <span
-                            className={`inline-flex text-xs px-2 py-0.5 rounded-full ${
-                              vendor.status === 'active'
-                                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                            }`}
-                          >
-                            {vendor.status === 'active' ? 'Active' : 'Archived'}
-                          </span>
-                        </td>
-                        <td className={`${tableCellClass} text-right tabular-nums`}>
-                          {totals?.count ?? 0}
-                        </td>
-                        <td className={`${tableCellClass} text-right tabular-nums font-medium text-gray-900 dark:text-white`}>
-                          {formatMoney(totals?.total ?? 0, currency)}
-                        </td>
-                        <td className={`${tableCellClass} text-right tabular-nums text-rose-600 dark:text-rose-400`}>
-                          {(poTotals?.balanceDue ?? 0) > 0
-                            ? formatMoney(poTotals!.balanceDue, currency)
-                            : '—'}
-                        </td>
-                        <td className={tableCellClass}>
-                          <div className="flex items-center justify-end gap-1">
-                            {totals && totals.count > 0 && (
-                              <Link
-                                to={`/expenses?vendor=${vendor.id}`}
-                                className="px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                              >
-                                Expenses
-                              </Link>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => openView(vendor)}
-                              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                              aria-label={`View ${vendor.name}`}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {canUpdate ? (
-                              <button
-                                type="button"
-                                onClick={() => openEdit(vendor)}
-                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                aria-label={`Edit ${vendor.name}`}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            ) : null}
-                            {canUpdate ? (
-                              <button
-                                type="button"
-                                onClick={() => handleArchiveToggle(vendor)}
-                                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                aria-label={vendor.status === 'active' ? 'Archive' : 'Restore'}
-                              >
-                                {vendor.status === 'active' ? (
-                                  <Archive className="w-4 h-4" />
-                                ) : (
-                                  <ArchiveRestore className="w-4 h-4" />
-                                )}
-                              </button>
-                            ) : null}
-                            {canDelete ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(vendor)}
-                                className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                aria-label={`Delete ${vendor.name}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              rows={filtered}
+              rowKey={(v) => v.id}
+              defaultSort={{ key: 'name', direction: 'asc' }}
+            />
 
             <div className="md:hidden space-y-3">
               {filtered.map((vendor) => {

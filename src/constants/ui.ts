@@ -65,6 +65,10 @@ export const statSubtextClass = 'text-xs text-gray-500 dark:text-gray-400 mt-0.5
 export const tableWrapClass =
   'overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700';
 
+/** List pages: desktop table inside card toolbars */
+export const listTableWrapClass =
+  'hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700';
+
 export const tableClass = 'w-full text-sm';
 
 export const tableHeadRowClass =

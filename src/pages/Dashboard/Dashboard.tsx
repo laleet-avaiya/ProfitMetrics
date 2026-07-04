@@ -16,7 +16,6 @@ import { useNotification } from "../../hooks/useNotification";
 import { BRAND_NAME } from "../../constants/brand";
 import {
   emptyStateMessageClass,
-  filterRowClass,
   sectionDescriptionClass,
   sectionTitleClass,
 } from "../../constants/ui";
@@ -399,43 +398,40 @@ export function Dashboard() {
       />
 
       <Card className="space-y-4">
-        <div className="flex flex-col lg:flex-row gap-3 lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className={sectionTitleClass}>Period</p>
             <p className={sectionDescriptionClass}>{dateRange.label}</p>
           </div>
-          <div className={filterRowClass}>
-            <FilterSelect
-              value={preset}
-              onChange={(e) => setPreset(e.target.value as ReportPreset)}
-              aria-label="Dashboard date range"
-            >
-              {PRESET_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </FilterSelect>
-            {preset === "custom" && (
-              <>
-                <Input
-                  label="From"
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  fullWidth={false}
-                />
-                <Input
-                  label="To"
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  fullWidth={false}
-                />
-              </>
-            )}
-          </div>
+          <FilterSelect
+            value={preset}
+            onChange={(e) => setPreset(e.target.value as ReportPreset)}
+            aria-label="Dashboard date range"
+          >
+            {PRESET_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </FilterSelect>
         </div>
+
+        {preset === "custom" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md border-t border-gray-100 dark:border-gray-700/80 pt-3">
+            <Input
+              label="From"
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+            <Input
+              label="To"
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+          </div>
+        ) : null}
 
         {loading ? (
           <LoadingView message="Loading metrics…" size="md" className="py-10" />

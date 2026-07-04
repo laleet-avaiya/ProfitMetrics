@@ -8,11 +8,7 @@ import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableTruncateCellClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -104,6 +100,84 @@ export function Payments() {
     });
   };
 
+  const columns = useMemo<DataTableColumn<Payment>[]>(
+    () => [
+      {
+        key: 'date',
+        header: 'Date',
+        sortable: true,
+        sortValue: (p) => p.paymentDate,
+        render: (payment) => formatDateLocal(payment.paymentDate),
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        sortable: true,
+        sortValue: (p) => p.kind,
+        render: (payment) => paymentKindLabel(payment.kind),
+      },
+      {
+        key: 'mode',
+        header: 'Mode',
+        sortable: true,
+        sortValue: (p) => p.paymentMode ?? '',
+        render: (payment) => paymentModeLabel(payment.paymentMode),
+      },
+      {
+        key: 'source',
+        header: 'Source',
+        sortable: true,
+        sortValue: (p) => getPaymentDisplaySource(p),
+        truncate: true,
+        render: (payment) => (
+          <Link to={`/payments/${payment.id}`} className="hover:text-indigo-600 hover:underline">
+            {getPaymentDisplaySource(payment)}
+          </Link>
+        ),
+      },
+      {
+        key: 'reference',
+        header: 'Reference',
+        sortable: true,
+        sortValue: (p) => p.reference ?? '',
+        truncate: true,
+        render: (payment) => payment.reference ?? '—',
+      },
+      {
+        key: 'amount',
+        header: 'Amount',
+        align: 'right',
+        sortable: true,
+        sortValue: (p) => p.amount,
+        className: 'font-medium text-emerald-700',
+        render: (payment) => formatMoney(payment.amount, currency),
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (payment) => (
+          <div className="flex justify-end gap-1">
+            <button type="button" onClick={() => navigate(`/payments/${payment.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View payment">
+              <Eye className="w-4 h-4" />
+            </button>
+            {canUpdate ? (
+              <button type="button" onClick={() => navigate(`/payments/${payment.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit payment">
+                <Pencil className="w-4 h-4" />
+              </button>
+            ) : null}
+            {canDelete ? (
+              <button type="button" onClick={() => handleDelete(payment)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete payment">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [canUpdate, canDelete, currency, navigate]
+  );
+
   return (
     <SectionPage
       title="Payments"
@@ -162,56 +236,12 @@ export function Payments() {
           <EmptyState icon={Wallet} title="No payments yet" description="Record sale payments, direct receipts, or marketplace payouts." action={canCreate ? <Button variant="primary" onClick={() => navigate('/payments/new')}>Record payment</Button> : undefined} />
         ) : (
           <>
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-500">
-                  <th className={tableHeadCellClass}>Date</th>
-                  <th className={tableHeadCellClass}>Type</th>
-                  <th className={tableHeadCellClass}>Mode</th>
-                  <th className={tableHeadCellClass}>Source</th>
-                  <th className={tableHeadCellClass}>Reference</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Amount</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filtered.map((payment) => (
-                  <tr key={payment.id}>
-                    <td className={tableCellClass}>{formatDateLocal(payment.paymentDate)}</td>
-                    <td className={tableCellClass}>{paymentKindLabel(payment.kind)}</td>
-                    <td className={tableCellClass}>{paymentModeLabel(payment.paymentMode)}</td>
-                    <td className={tableTruncateCellClass}>
-                      <Link to={`/payments/${payment.id}`} className="hover:text-indigo-600 hover:underline">
-                        {getPaymentDisplaySource(payment)}
-                      </Link>
-                    </td>
-                    <td className={tableTruncateCellClass}>{payment.reference ?? '—'}</td>
-                    <td className={`${tableCellClass} text-right tabular-nums font-medium text-emerald-700`}>
-                      {formatMoney(payment.amount, currency)}
-                    </td>
-                    <td className={tableCellClass}>
-                      <div className="flex justify-end gap-1">
-                        <button type="button" onClick={() => navigate(`/payments/${payment.id}`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="View payment">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canUpdate ? (
-                          <button type="button" onClick={() => navigate(`/payments/${payment.id}/edit`)} className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit payment">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button type="button" onClick={() => handleDelete(payment)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Delete payment">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(p) => p.id}
+            defaultSort={{ key: 'date', direction: 'desc' }}
+          />
 
           <div className="md:hidden space-y-3">
             {filtered.map((payment) => (

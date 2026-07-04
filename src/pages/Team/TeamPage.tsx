@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import { PageHeader, PageShell } from "../../components/PageShell/PageShell";
 import { Button } from "../../components/Button/Button";
@@ -10,12 +10,10 @@ import { LoadingView } from "../../components/AppLoader/AppLoader";
 import { FormTabs } from "../../components/ui/FormTabs";
 import { RolePermissionsEditor } from "../../components/Team/RolePermissionsEditor";
 import {
-  tableCellClass,
-  tableClass,
-  tableHeadCellClass,
-  tableHeadRowClass,
-  tableWrapClass,
-} from "../../constants/ui";
+  DataTable,
+  embeddedTableWrapClass,
+  type DataTableColumn,
+} from "../../components/ui/DataTable";
 import { useAuth } from "../../hooks/useAuth";
 import { useModuleAccess, usePermissions } from "../../hooks/usePermissions";
 import { useNotification } from "../../hooks/useNotification";
@@ -195,6 +193,159 @@ export function TeamPage() {
     }
   };
 
+  const memberColumns = useMemo<DataTableColumn<CompanyMember>[]>(
+    () => [
+      {
+        key: "email",
+        header: "Member",
+        sortable: true,
+        sortValue: (member) => member.email,
+        render: (member) => {
+          const isSelf = member.userId === user?.uid;
+          return (
+            <>
+              <div className="font-medium text-gray-900 dark:text-white">
+                {member.email}
+              </div>
+              {isSelf ? (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  You
+                </div>
+              ) : null}
+            </>
+          );
+        },
+      },
+      {
+        key: "role",
+        header: "Role",
+        sortable: true,
+        sortValue: (member) => member.role,
+        render: (member) => {
+          const isSelf = member.userId === user?.uid;
+          if (isSelf) {
+            return (
+              <span className="inline-flex items-center gap-1 text-sm">
+                <Shield className="w-4 h-4" />
+                {roleLabel(member.role)}
+              </span>
+            );
+          }
+          if (canUpdate) {
+            return (
+              <Select
+                label=""
+                aria-label={`Role for ${member.email}`}
+                value={member.role}
+                onChange={(e) =>
+                  void handleRoleChange(
+                    member,
+                    e.target.value as CompanyMember["role"],
+                  )
+                }
+                options={COMPANY_ROLE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+              />
+            );
+          }
+          return (
+            <span className="inline-flex items-center gap-1 text-sm">
+              <Shield className="w-4 h-4" />
+              {roleLabel(member.role)}
+            </span>
+          );
+        },
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        render: (member) => {
+          const isSelf = member.userId === user?.uid;
+          if (isSelf || !canDelete) return null;
+          return (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void handleRemoveMember(member)}
+              className="text-red-600 hover:text-red-700 dark:text-red-400"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove
+            </Button>
+          );
+        },
+      },
+    ],
+    [user?.uid, canUpdate, canDelete],
+  );
+
+  const inviteColumns = useMemo<DataTableColumn<CompanyInvite>[]>(
+    () => [
+      {
+        key: "email",
+        header: "Email",
+        sortable: true,
+        sortValue: (invite) => invite.email,
+        render: (invite) => invite.email,
+      },
+      {
+        key: "role",
+        header: "Role",
+        sortable: true,
+        sortValue: (invite) => invite.role,
+        render: (invite) => roleLabel(invite.role),
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortable: true,
+        sortValue: (invite) => {
+          const hasAccount = inviteHasAccount[invite.id];
+          if (hasAccount === undefined) return "";
+          return hasAccount ? "has account" : "needs signup";
+        },
+        render: (invite) => {
+          const hasAccount = inviteHasAccount[invite.id];
+          return (
+            <span
+              className={
+                hasAccount === true
+                  ? "text-gray-600 dark:text-gray-400"
+                  : hasAccount === false
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-gray-500 dark:text-gray-500"
+              }
+            >
+              {hasAccount === undefined
+                ? "—"
+                : hasAccount
+                  ? "Has account — can sign in"
+                  : "Needs signup"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        render: (invite) =>
+          canDelete ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void handleRevokeInvite(invite)}
+              className="text-red-600 hover:text-red-700 dark:text-red-400"
+            >
+              Revoke
+            </Button>
+          ) : null,
+      },
+    ],
+    [inviteHasAccount, canDelete],
+  );
+
   if (loading) {
     return (
       <PageShell>
@@ -296,78 +447,13 @@ export function TeamPage() {
                 description="Invite your first teammate to collaborate."
               />
             ) : (
-              <div className={tableWrapClass}>
-                <table className={tableClass}>
-                  <thead>
-                    <tr className={tableHeadRowClass}>
-                      <th className={tableHeadCellClass}>Member</th>
-                      <th className={tableHeadCellClass}>Role</th>
-                      <th className={tableHeadCellClass}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map((member) => {
-                      const isSelf = member.userId === user?.uid;
-                      return (
-                        <tr key={member.id}>
-                          <td className={tableCellClass}>
-                            <div className="font-medium text-gray-900 dark:text-white">
-                              {member.email}
-                            </div>
-                            {isSelf ? (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                You
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className={tableCellClass}>
-                            {isSelf ? (
-                              <span className="inline-flex items-center gap-1 text-sm">
-                                <Shield className="w-4 h-4" />
-                                {roleLabel(member.role)}
-                              </span>
-                            ) : canUpdate ? (
-                              <Select
-                                label=""
-                                aria-label={`Role for ${member.email}`}
-                                value={member.role}
-                                onChange={(e) =>
-                                  void handleRoleChange(
-                                    member,
-                                    e.target.value as CompanyMember["role"],
-                                  )
-                                }
-                                options={COMPANY_ROLE_OPTIONS.map((option) => ({
-                                  value: option.value,
-                                  label: option.label,
-                                }))}
-                              />
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-sm">
-                                <Shield className="w-4 h-4" />
-                                {roleLabel(member.role)}
-                              </span>
-                            )}
-                          </td>
-                          <td className={tableCellClass}>
-                            {!isSelf && canDelete ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => void handleRemoveMember(member)}
-                                className="text-red-600 hover:text-red-700 dark:text-red-400"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Remove
-                              </Button>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={memberColumns}
+                rows={members}
+                rowKey={(member) => member.id}
+                defaultSort={{ key: "email", direction: "asc" }}
+                wrapClassName={embeddedTableWrapClass}
+              />
             )}
           </div>
 
@@ -377,60 +463,13 @@ export function TeamPage() {
                 <Mail className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 Pending invites ({invites.length})
               </div>
-              <div className={tableWrapClass}>
-                <table className={tableClass}>
-                  <thead>
-                    <tr className={tableHeadRowClass}>
-                      <th className={tableHeadCellClass}>Email</th>
-                      <th className={tableHeadCellClass}>Role</th>
-                      <th className={tableHeadCellClass}>Status</th>
-                      <th className={tableHeadCellClass}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invites.map((invite) => {
-                      const hasAccount = inviteHasAccount[invite.id];
-                      return (
-                        <tr key={invite.id}>
-                          <td className={tableCellClass}>{invite.email}</td>
-                          <td className={tableCellClass}>
-                            {roleLabel(invite.role)}
-                          </td>
-                          <td className={tableCellClass}>
-                            <span
-                              className={
-                                hasAccount === true
-                                  ? "text-gray-600 dark:text-gray-400"
-                                  : hasAccount === false
-                                    ? "text-amber-700 dark:text-amber-300"
-                                    : "text-gray-500 dark:text-gray-500"
-                              }
-                            >
-                              {hasAccount === undefined
-                                ? "—"
-                                : hasAccount
-                                  ? "Has account — can sign in"
-                                  : "Needs signup"}
-                            </span>
-                          </td>
-                          <td className={tableCellClass}>
-                            {canDelete ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => void handleRevokeInvite(invite)}
-                                className="text-red-600 hover:text-red-700 dark:text-red-400"
-                              >
-                                Revoke
-                              </Button>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={inviteColumns}
+                rows={invites}
+                rowKey={(invite) => invite.id}
+                defaultSort={{ key: "email", direction: "asc" }}
+                wrapClassName={embeddedTableWrapClass}
+              />
             </div>
           ) : null}
         </>

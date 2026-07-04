@@ -8,11 +8,7 @@ import { ListToolbar } from '../../components/ui/ListToolbar';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingView } from '../../components/AppLoader/AppLoader';
 import { FilterSelect } from '../../components/ui/FilterSelect';
-import {
-  tableCellClass,
-  tableHeadCellClass,
-  tableTruncateCellClass,
-} from '../../constants/ui';
+import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { useModuleAccess } from '../../hooks/usePermissions';
 import { AppModule } from '../../constants/permissions';
 import { useAuth } from '../../hooks/useAuth';
@@ -154,6 +150,130 @@ export function Purchases() {
     });
   };
 
+  const columns = useMemo<DataTableColumn<PurchaseOrder>[]>(
+    () => [
+      {
+        key: 'date',
+        header: 'Date',
+        sortable: true,
+        sortValue: (purchase) => purchase.purchaseDate,
+        className: 'text-gray-700 dark:text-gray-300',
+        render: (purchase) => formatDateLocal(purchase.purchaseDate),
+      },
+      {
+        key: 'poNumber',
+        header: 'PO #',
+        sortable: true,
+        sortValue: (purchase) => purchase.poNumber,
+        render: (purchase) => (
+          <Link
+            to={`/purchases/${purchase.id}`}
+            className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {purchase.poNumber}
+          </Link>
+        ),
+      },
+      {
+        key: 'reference',
+        header: 'Reference',
+        sortable: true,
+        sortValue: (purchase) => purchase.reference ?? '',
+        truncate: true,
+        className: 'font-mono text-xs text-gray-600 dark:text-gray-400',
+        render: (purchase) => purchase.reference ?? '—',
+      },
+      {
+        key: 'vendor',
+        header: 'Vendor',
+        sortable: true,
+        sortValue: (purchase) => purchase.vendorName ?? '',
+        truncate: true,
+        className: 'text-gray-600 dark:text-gray-400',
+        render: (purchase) => purchase.vendorName ?? '—',
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortable: true,
+        sortValue: (purchase) => purchase.status,
+        render: (purchase) => (
+          <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${statusTone(purchase.status)}`}>
+            {purchaseStatusLabel(purchase.status)}
+          </span>
+        ),
+      },
+      {
+        key: 'payment',
+        header: 'Payment',
+        sortable: true,
+        sortValue: (purchase) => purchase.paymentStatus,
+        render: (purchase) => (
+          <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${paymentTone(purchase.paymentStatus)}`}>
+            {purchasePaymentStatusLabel(purchase.paymentStatus)}
+          </span>
+        ),
+      },
+      {
+        key: 'total',
+        header: 'Total',
+        align: 'right',
+        sortable: true,
+        sortValue: (purchase) => purchase.total,
+        className: 'font-medium',
+        render: (purchase) => formatMoney(purchase.total, currency),
+      },
+      {
+        key: 'balance',
+        header: 'Balance',
+        align: 'right',
+        sortable: true,
+        sortValue: (purchase) => purchase.balanceDue,
+        className: 'text-rose-600 dark:text-rose-400',
+        render: (purchase) =>
+          purchase.balanceDue > 0 ? formatMoney(purchase.balanceDue, currency) : '—',
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (purchase) => (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => navigate(`/purchases/${purchase.id}`)}
+              className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label={`View ${purchase.poNumber}`}
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            {canUpdate ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/purchases/${purchase.id}/edit`)}
+                className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={`Edit ${purchase.poNumber}`}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            ) : null}
+            {canDelete ? (
+              <button
+                type="button"
+                onClick={() => handleDelete(purchase)}
+                className="p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                aria-label={`Delete ${purchase.poNumber}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [currency, canUpdate, canDelete, navigate]
+  );
+
   return (
     <SectionPage
       title="Purchases"
@@ -255,94 +375,12 @@ export function Purchases() {
           />
         ) : (
           <>
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-900/50 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  <th className={tableHeadCellClass}>Date</th>
-                  <th className={tableHeadCellClass}>PO #</th>
-                  <th className={tableHeadCellClass}>Reference</th>
-                  <th className={tableHeadCellClass}>Vendor</th>
-                  <th className={tableHeadCellClass}>Status</th>
-                  <th className={tableHeadCellClass}>Payment</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Total</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Balance</th>
-                  <th className={`${tableHeadCellClass} text-right`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filtered.map((purchase) => (
-                  <tr key={purchase.id} className="bg-white dark:bg-gray-800">
-                    <td className={`${tableCellClass} text-gray-700 dark:text-gray-300`}>
-                      {formatDateLocal(purchase.purchaseDate)}
-                    </td>
-                    <td className={tableCellClass}>
-                      <Link
-                        to={`/purchases/${purchase.id}`}
-                        className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                      >
-                        {purchase.poNumber}
-                      </Link>
-                    </td>
-                    <td className={`${tableTruncateCellClass} font-mono text-xs text-gray-600 dark:text-gray-400`}>
-                      {purchase.reference ?? '—'}
-                    </td>
-                    <td className={`${tableTruncateCellClass} text-gray-600 dark:text-gray-400`}>
-                      {purchase.vendorName ?? '—'}
-                    </td>
-                    <td className={tableCellClass}>
-                      <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${statusTone(purchase.status)}`}>
-                        {purchaseStatusLabel(purchase.status)}
-                      </span>
-                    </td>
-                    <td className={tableCellClass}>
-                      <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${paymentTone(purchase.paymentStatus)}`}>
-                        {purchasePaymentStatusLabel(purchase.paymentStatus)}
-                      </span>
-                    </td>
-                    <td className={`${tableCellClass} text-right tabular-nums font-medium`}>
-                      {formatMoney(purchase.total, currency)}
-                    </td>
-                    <td className={`${tableCellClass} text-right tabular-nums text-rose-600 dark:text-rose-400`}>
-                      {purchase.balanceDue > 0 ? formatMoney(purchase.balanceDue, currency) : '—'}
-                    </td>
-                    <td className={tableCellClass}>
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/purchases/${purchase.id}`)}
-                          className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                          aria-label={`View ${purchase.poNumber}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canUpdate ? (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/purchases/${purchase.id}/edit`)}
-                            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            aria-label={`Edit ${purchase.poNumber}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(purchase)}
-                            className="p-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                            aria-label={`Delete ${purchase.poNumber}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(purchase) => purchase.id}
+            defaultSort={{ key: 'date', direction: 'desc' }}
+          />
 
           <div className="md:hidden space-y-3">
             {filtered.map((purchase) => (
