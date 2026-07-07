@@ -2,8 +2,8 @@ import type { Company, Customer, Product, Sale } from '../types';
 import { firestoreService } from '../services/firestore';
 import { allocateNextSaleNumber } from './documentNumbers';
 import { buildSaleFromForm, type SaleFormState } from './saleHelpers';
-import { checkSaleStock, requireSyncSaleStock } from './saleStock';
-import { deleteSaleLinkedExpenses, syncSaleExpenses } from './saleExpenses';
+import { requireSyncSaleStock, restoreSaleStock } from './saleStock';
+import { syncSaleExpenses } from './saleExpenses';
 
 export interface CreateSaleResult {
   sale: Sale;
@@ -33,33 +33,32 @@ export async function createSaleRecord(
     orderNumber
   );
 
-  const stockCheck = await checkSaleStock(company.id, payload);
-  if (!stockCheck.ok) {
-    throw new Error(
-      `Insufficient stock for ${stockCheck.productName ?? 'product'}. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`
-    );
-  }
-
-  const created = await firestoreService.sales.create(company.id, payload, userId);
-
+  let stockApplied = false;
   try {
-    await requireSyncSaleStock(company.id, created, userId);
-    await firestoreService.sales.update(
-      company.id,
-      created.id,
-      { stockApplied: true, updatedAt: created.updatedAt },
-      userId
-    );
+    await requireSyncSaleStock(company.id, payload, userId);
+    stockApplied = true;
   } catch (stockErr) {
-    try {
-      await firestoreService.sales.delete(company.id, created.id, userId);
-      await deleteSaleLinkedExpenses(company.id, created.id, userId);
-    } catch (rollbackErr) {
-      console.error('Failed to roll back sale after stock error:', rollbackErr);
-    }
     throw stockErr instanceof Error
       ? stockErr
       : new Error('Could not update stock. The sale was not saved.');
+  }
+
+  let created: Sale;
+  try {
+    created = await firestoreService.sales.create(
+      company.id,
+      { ...payload, stockApplied: true },
+      userId
+    );
+  } catch (createErr) {
+    if (stockApplied) {
+      try {
+        await restoreSaleStock(company.id, payload, userId);
+      } catch (rollbackErr) {
+        console.error('Failed to roll back stock after sale create error:', rollbackErr);
+      }
+    }
+    throw createErr;
   }
 
   try {

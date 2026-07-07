@@ -52,9 +52,9 @@ import {
 import { SALE_PAYMENT_MODE_OPTIONS } from "../../constants/paymentModes";
 import { purchasePaymentStatusLabel } from "../../constants/purchaseStatuses";
 import { derivePaymentStatus } from "../../utils/purchaseHelpers";
+import { createSaleRecord } from "../../utils/createSaleRecord";
 import {
   previewNextSaleNumber,
-  allocateNextSaleNumber,
 } from "../../utils/documentNumbers";
 import { formatMoney } from "../../utils/profit";
 import { taxPercentLabel } from "../../utils/listingTax";
@@ -73,7 +73,6 @@ import { LineEconomicsPreview } from "../../components/LineEconomicsPreview/Line
 import { OutcomeChargeFields } from "../../components/OutcomeChargeFields/OutcomeChargeFields";
 import { utcToLocalDateInput } from "../../utils/firestoreDates";
 import {
-  deleteSaleLinkedExpenses,
   syncSaleExpenses,
 } from "../../utils/saleExpenses";
 import { checkSaleStock, requireSyncSaleStock } from "../../utils/saleStock";
@@ -454,27 +453,24 @@ export function SaleFormPage() {
 
     setSaving(true);
     try {
-      const customer = await resolveCustomer();
-      const orderNumber =
-        sale?.orderNumber ??
-        (await allocateNextSaleNumber(company.id, form.orderDate));
-      const productNames = new Map(formProducts.map((p) => [p.id, p.name]));
-      const productHsnCodes = new Map(
-        formProducts
-          .filter((p) => p.hsnCode)
-          .map((p) => [p.id, p.hsnCode as string]),
-      );
-      const payload = buildSaleFromForm(
-        form,
-        company.id,
-        productNames,
-        sale ?? undefined,
-        productHsnCodes,
-        customer,
-        orderNumber,
-      );
-
       if (isEditing && sale) {
+        const customer = await resolveCustomer();
+        const productNames = new Map(formProducts.map((p) => [p.id, p.name]));
+        const productHsnCodes = new Map(
+          formProducts
+            .filter((p) => p.hsnCode)
+            .map((p) => [p.id, p.hsnCode as string]),
+        );
+        const payload = buildSaleFromForm(
+          form,
+          company.id,
+          productNames,
+          sale,
+          productHsnCodes,
+          customer,
+          sale.orderNumber,
+        );
+
         const stockCheck = await checkSaleStock(company.id, payload, sale);
         if (!stockCheck.ok) {
           notification.error(
@@ -533,18 +529,13 @@ export function SaleFormPage() {
         notification.success("Sale updated");
         navigate(`/sales/${sale.id}`);
       } else {
-        const stockCheck = await checkSaleStock(company.id, payload);
-        if (!stockCheck.ok) {
-          notification.error(
-            `Insufficient stock for ${stockCheck.productName ?? "product"}. Available: ${stockCheck.available}, needed: ${stockCheck.needed}`,
-          );
-          setSaving(false);
-          return;
-        }
-        const created = await firestoreService.sales.create(
-          company.id,
-          payload,
+        const customer = await resolveCustomer();
+        const { sale: created, warnings } = await createSaleRecord(
+          company,
           user!.uid,
+          form,
+          formProducts,
+          customer,
         );
         const uploaded = await finalizePendingAttachments(
           company.orgId,
@@ -562,44 +553,8 @@ export function SaleFormPage() {
             user!.uid,
           );
         }
-        try {
-          await requireSyncSaleStock(company.id, created, user!.uid);
-          await firestoreService.sales.update(
-            company.id,
-            created.id,
-            { stockApplied: true, updatedAt: created.updatedAt },
-            user!.uid,
-          );
-        } catch (stockErr) {
-          console.error("Failed to sync sale stock:", stockErr);
-          try {
-            await firestoreService.sales.delete(
-              company.id,
-              created.id,
-              user!.uid,
-            );
-            await deleteSaleLinkedExpenses(company.id, created.id, user!.uid);
-          } catch (rollbackErr) {
-            console.error(
-              "Failed to roll back sale after stock error:",
-              rollbackErr,
-            );
-          }
-          notification.error(
-            stockErr instanceof Error
-              ? stockErr.message
-              : "Could not update stock. The sale was not saved.",
-          );
-          setSaving(false);
-          return;
-        }
-        try {
-          await syncSaleExpenses(company.id, created, user!.uid);
-        } catch (syncErr) {
-          console.error("Failed to sync sale expenses:", syncErr);
-          notification.error(
-            "Sale saved but linked expenses could not be created.",
-          );
+        if (warnings.length > 0) {
+          notification.error(warnings[0]);
         }
         notification.success("Sale logged");
         navigate(`/sales/${created.id}`);

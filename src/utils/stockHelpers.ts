@@ -173,18 +173,19 @@ export async function deductStock(
   productId: string,
   quantity: number,
   userId: string,
-  variantId?: string
+  variantId?: string,
+  prefetched?: ProductStock | null
 ): Promise<{ ok: true; stock: ProductStock } | { ok: false; available: number }> {
   const key = stockKey(productId, variantId);
   if (quantity <= 0) {
-    const existing = await firestoreService.stock.getByProductId(companyId, key);
+    const existing = prefetched ?? (await firestoreService.stock.getByProductId(companyId, key));
     if (!existing) {
       return { ok: true, stock: buildStockRecord(companyId, productId, '', 0, 0, 0, variantId) };
     }
     return { ok: true, stock: existing };
   }
 
-  const existing = await firestoreService.stock.getByProductId(companyId, key);
+  const existing = prefetched ?? (await firestoreService.stock.getByProductId(companyId, key));
   const available = existing?.quantityOnHand ?? 0;
 
   if (available < quantity) {

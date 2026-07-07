@@ -231,6 +231,22 @@ export const firestoreService = {
   expenses: {
     get: (companyId: string, id: string) => get<Expense>(companyId, COLLECTION_EXPENSES, id),
     getAll: (companyId: string) => getAll<Expense>(companyId, COLLECTION_EXPENSES),
+    getBySaleId: async (companyId: string, saleId: string): Promise<Expense[]> => {
+      const q = query(
+        collection(db, COLLECTION_EXPENSES),
+        where('companyId', '==', companyId),
+        where('saleId', '==', saleId)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs
+        .map((d) => {
+          const raw = { id: d.data().id ?? d.id, ...d.data() };
+          return withoutCompanyId(
+            convertTimestamps<Expense & { companyId?: string }>(raw as Record<string, unknown>)
+          );
+        })
+        .filter(isNotDeleted);
+    },
     create: ((companyId, expense, userId) =>
       create(companyId, COLLECTION_EXPENSES, expense, userId)) as CreateFn<Expense>,
     update: ((companyId, id, updates, userId) =>
@@ -311,6 +327,13 @@ export const firestoreService = {
       withDelete(companyId, COLLECTION_PAYMENTS, id, deletedBy)) as DeleteFn,
   },
   counters: {
+    /** Read the current counter value without incrementing. Returns null when unset. */
+    peek: async (companyId: string, key: string): Promise<number | null> => {
+      const ref = doc(db, COLLECTION_COUNTERS, `${companyId}_${key}`);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      return Number(snap.data().value ?? 0);
+    },
     /**
      * Atomically allocate the next sequence for a counter key. Runs in a
      * Firestore transaction so concurrent callers never receive the same value.

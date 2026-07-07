@@ -76,40 +76,86 @@ export async function allocateNextInvoiceNumber(companyId: string, invoiceDate: 
   return previewNextInvoiceNumber(companyId, invoiceDate);
 }
 
+async function counterFloorFromExisting(
+  prefix: DocumentPrefix,
+  year: number,
+  fetchNumbers: () => Promise<string[]>
+): Promise<number> {
+  const numbers = await fetchNumbers();
+  return nextSequenceFromExisting(prefix, year, numbers) - 1;
+}
+
+async function allocateFromCounter(
+  companyId: string,
+  prefix: DocumentPrefix,
+  year: number,
+  counterKey: string,
+  fetchNumbers: () => Promise<string[]>
+): Promise<string> {
+  let floor = 0;
+  const current = await firestoreService.counters.peek(companyId, counterKey);
+  if (current === null) {
+    floor = await counterFloorFromExisting(prefix, year, fetchNumbers);
+  }
+  const seq = await firestoreService.counters.next(companyId, counterKey, floor);
+  return formatDocumentNumber(prefix, year, seq);
+}
+
+async function previewFromCounter(
+  companyId: string,
+  prefix: DocumentPrefix,
+  year: number,
+  counterKey: string,
+  fetchNumbers: () => Promise<string[]>
+): Promise<string> {
+  const current = await firestoreService.counters.peek(companyId, counterKey);
+  if (current !== null) {
+    return formatDocumentNumber(prefix, year, current + 1);
+  }
+  const numbers = await fetchNumbers();
+  return allocateDocumentNumber(prefix, year, numbers);
+}
+
 export async function previewNextExpenseNumber(companyId: string, expenseDate: string): Promise<string> {
-  const expenses = await firestoreService.expenses.getAll(companyId);
   const year = yearFromLocalDateInput(expenseDate);
-  const numbers = expenses
-    .filter((e) => !e.deleted && e.expenseNumber)
-    .map((e) => e.expenseNumber!);
-  return allocateDocumentNumber('EXP', year, numbers);
+  return previewFromCounter(companyId, 'EXP', year, `EXP_${year}`, async () => {
+    const expenses = await firestoreService.expenses.getAll(companyId);
+    return expenses
+      .filter((e) => !e.deleted && e.expenseNumber)
+      .map((e) => e.expenseNumber!);
+  });
 }
 
 export async function allocateNextExpenseNumber(companyId: string, expenseDate: string): Promise<string> {
-  return previewNextExpenseNumber(companyId, expenseDate);
+  const year = yearFromLocalDateInput(expenseDate);
+  return allocateFromCounter(companyId, 'EXP', year, `EXP_${year}`, async () => {
+    const expenses = await firestoreService.expenses.getAll(companyId);
+    return expenses
+      .filter((e) => !e.deleted && e.expenseNumber)
+      .map((e) => e.expenseNumber!);
+  });
 }
 
 export async function previewNextSaleNumber(companyId: string, orderDate: string): Promise<string> {
-  const sales = await firestoreService.sales.getAll(companyId);
   const year = yearFromLocalDateInput(orderDate);
-  const numbers = sales
-    .filter((s) => !s.deleted && s.orderNumber)
-    .map((s) => s.orderNumber!);
-  return allocateDocumentNumber('ORD', year, numbers);
+  return previewFromCounter(companyId, 'ORD', year, `ORD_${year}`, async () => {
+    const sales = await firestoreService.sales.getAll(companyId);
+    return sales
+      .filter((s) => !s.deleted && s.orderNumber)
+      .map((s) => s.orderNumber!);
+  });
 }
 
 /**
  * Allocate the definitive order number at save time. Uses an atomic counter so
- * two concurrent sale creations can never collide on the same ORD number. The
- * existing max seeds the counter to stay consistent with pre-counter records.
+ * two concurrent sale creations can never collide on the same ORD number.
  */
 export async function allocateNextSaleNumber(companyId: string, orderDate: string): Promise<string> {
   const year = yearFromLocalDateInput(orderDate);
-  const sales = await firestoreService.sales.getAll(companyId);
-  const numbers = sales
-    .filter((s) => !s.deleted && s.orderNumber)
-    .map((s) => s.orderNumber!);
-  const floor = nextSequenceFromExisting('ORD', year, numbers) - 1;
-  const seq = await firestoreService.counters.next(companyId, `ORD_${year}`, floor);
-  return formatDocumentNumber('ORD', year, seq);
+  return allocateFromCounter(companyId, 'ORD', year, `ORD_${year}`, async () => {
+    const sales = await firestoreService.sales.getAll(companyId);
+    return sales
+      .filter((s) => !s.deleted && s.orderNumber)
+      .map((s) => s.orderNumber!);
+  });
 }

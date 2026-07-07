@@ -1,6 +1,6 @@
 import { normalizeSaleStatus } from '../constants/saleStatuses';
 import { firestoreService } from '../services/firestore';
-import type { Sale } from '../types';
+import type { ProductStock, Sale } from '../types';
 import { SaleStatus } from '../types';
 import { deductStock, restoreStock } from './stockHelpers';
 import { getSaleLines } from './saleLines';
@@ -81,6 +81,29 @@ function deductionDelta(previous?: Sale | null, next?: Sale | null): Map<string,
   return result;
 }
 
+async function fetchStockForChanges(
+  companyId: string,
+  changes: Map<string, StockDelta>
+): Promise<Map<string, ProductStock | null>> {
+  const entries = await Promise.all(
+    [...changes.keys()].map(async (key) => {
+      const stock = await firestoreService.stock.getByProductId(companyId, key);
+      return [key, stock] as const;
+    })
+  );
+  return new Map(entries);
+}
+
+function stockFailure(
+  available: number,
+  needed: number,
+  productName?: string,
+  variantLabel?: string
+): { ok: false; available: number; needed: number; productName?: string } {
+  const label = variantLabel ? `${productName} (${variantLabel})` : productName;
+  return { ok: false, available, needed, productName: label };
+}
+
 /** Sync stock levels when a sale is created or updated. */
 export async function syncSaleStock(
   companyId: string,
@@ -89,6 +112,17 @@ export async function syncSaleStock(
   previous?: Sale | null
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
+  if (changes.size === 0) return { ok: true };
+
+  const stockMap = await fetchStockForChanges(companyId, changes);
+
+  for (const [key, { productName, variantLabel, delta }] of changes) {
+    if (delta <= 0) continue;
+    const available = stockMap.get(key)?.quantityOnHand ?? 0;
+    if (available < delta) {
+      return stockFailure(available, delta, productName, variantLabel);
+    }
+  }
 
   for (const {
     productId,
@@ -99,11 +133,18 @@ export async function syncSaleStock(
     unitSellingPrice,
     delta,
   } of changes.values()) {
-    const label = variantLabel ? `${productName} (${variantLabel})` : productName;
+    const key = stockKey(productId, variantId);
     if (delta > 0) {
-      const result = await deductStock(companyId, productId, delta, userId, variantId);
+      const result = await deductStock(
+        companyId,
+        productId,
+        delta,
+        userId,
+        variantId,
+        stockMap.get(key)
+      );
       if (!result.ok) {
-        return { ok: false, available: result.available, needed: delta, productName: label };
+        return stockFailure(result.available, delta, productName, variantLabel);
       }
     } else if (delta < 0) {
       await restoreStock(
@@ -130,15 +171,15 @@ export async function checkSaleStock(
   previous?: Sale | null
 ): Promise<{ ok: true } | { ok: false; available: number; needed: number; productName?: string }> {
   const changes = deductionDelta(previous, sale);
+  if (changes.size === 0) return { ok: true };
+
+  const stockMap = await fetchStockForChanges(companyId, changes);
 
   for (const [key, { productName, variantLabel, delta }] of changes) {
     if (delta <= 0) continue;
-
-    const existing = await firestoreService.stock.getByProductId(companyId, key);
-    const available = existing?.quantityOnHand ?? 0;
+    const available = stockMap.get(key)?.quantityOnHand ?? 0;
     if (available < delta) {
-      const label = variantLabel ? `${productName} (${variantLabel})` : productName;
-      return { ok: false, available, needed: delta, productName: label };
+      return stockFailure(available, delta, productName, variantLabel);
     }
   }
 
@@ -176,25 +217,29 @@ export async function restoreSaleStock(
   sale: Sale,
   userId: string
 ): Promise<void> {
-  for (const {
-    productId,
-    variantId,
-    variantLabel,
-    productName,
-    qty,
-    unitPurchasePrice,
-    unitSellingPrice,
-  } of effectiveStockDeductions(sale).values()) {
-    await restoreStock(
-      companyId,
-      productId,
-      productName,
-      qty,
-      userId,
-      variantId,
-      variantLabel,
-      unitPurchasePrice,
-      unitSellingPrice
-    );
-  }
+  const deductions = [...effectiveStockDeductions(sale).values()];
+  await Promise.all(
+    deductions.map(
+      ({
+        productId,
+        variantId,
+        variantLabel,
+        productName,
+        qty,
+        unitPurchasePrice,
+        unitSellingPrice,
+      }) =>
+        restoreStock(
+          companyId,
+          productId,
+          productName,
+          qty,
+          userId,
+          variantId,
+          variantLabel,
+          unitPurchasePrice,
+          unitSellingPrice
+        )
+    )
+  );
 }

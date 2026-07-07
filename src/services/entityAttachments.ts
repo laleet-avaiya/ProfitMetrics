@@ -64,13 +64,11 @@ export async function uploadEntityAttachments(
   files: File[],
   userId: string
 ): Promise<EntityAttachment[]> {
-  const uploaded: EntityAttachment[] = [];
-  for (const file of files) {
-    uploaded.push(
-      await uploadEntityAttachment(orgId, companyId, collection, entityId, file, userId)
-    );
-  }
-  return uploaded;
+  return Promise.all(
+    files.map((file) =>
+      uploadEntityAttachment(orgId, companyId, collection, entityId, file, userId)
+    )
+  );
 }
 
 export async function deleteEntityAttachment(storagePath: string): Promise<void> {
