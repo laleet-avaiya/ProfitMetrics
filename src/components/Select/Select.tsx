@@ -14,6 +14,7 @@ interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'cla
   fullWidth?: boolean;
   options: { value: string; label: string }[];
   className?: string;
+  menuMinWidth?: number;
 }
 
 export function Select({
@@ -29,6 +30,7 @@ export function Select({
   name,
   id,
   onChange,
+  menuMinWidth,
 }: SelectProps) {
   const stringValue = value != null ? String(value) : '';
 
@@ -49,6 +51,7 @@ export function Select({
         disabled={disabled}
         required={required}
         placeholder={options.find((o) => o.value === '')?.label ?? 'Select…'}
+        menuMinWidth={menuMinWidth}
         controlClassName={`${selectControlClass} ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
       />
       {error && <p className={fieldErrorClass}>{error}</p>}

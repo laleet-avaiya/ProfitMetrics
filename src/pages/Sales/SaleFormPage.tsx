@@ -49,7 +49,7 @@ import {
   DELIVERY_MODE_OPTIONS,
   deliveryModeLabel,
 } from "../../constants/deliveryModes";
-import { PAYMENT_MODE_OPTIONS } from "../../constants/paymentModes";
+import { SALE_PAYMENT_MODE_OPTIONS } from "../../constants/paymentModes";
 import { purchasePaymentStatusLabel } from "../../constants/purchaseStatuses";
 import { derivePaymentStatus } from "../../utils/purchaseHelpers";
 import {
@@ -97,7 +97,7 @@ export function SaleFormPage() {
   const { saleId } = useParams<{ saleId: string }>();
   const navigate = useNavigate();
   const { company, user } = useAuth();
-  const { productPlatformOptions } = useCompanyMarketplaces();
+  const { getProductPlatformOptions } = useCompanyMarketplaces();
   const notification = useNotification();
   const isEditing = Boolean(saleId);
   const currency = company?.currency ?? "AED";
@@ -389,9 +389,6 @@ export function SaleFormPage() {
       if (line.productId && listings.length > 1 && !line.platformListingId) {
         err.platformListingId = "Select a listing";
       }
-      if (line.productId && listings.length === 0) {
-        err.platformListingId = `No ${form.platform} listing for this product`;
-      }
       if (
         line.productId &&
         product?.variants &&
@@ -401,6 +398,19 @@ export function SaleFormPage() {
         err.variantId = "Select a variant";
       }
       if (Object.keys(err).length > 0) lineErrors[line.id] = err;
+    }
+
+    const seenProductIds = new Map<string, string>();
+    for (const line of form.lines) {
+      if (!line.productId) continue;
+      const existingLineId = seenProductIds.get(line.productId);
+      if (existingLineId) {
+        const message = "Product already added on another row";
+        lineErrors[line.id] = { ...lineErrors[line.id], productId: message };
+        lineErrors[existingLineId] = { ...lineErrors[existingLineId], productId: message };
+      } else {
+        seenProductIds.set(line.productId, line.id);
+      }
     }
 
     if (Object.keys(lineErrors).length > 0) next.lines = lineErrors;
@@ -611,7 +621,6 @@ export function SaleFormPage() {
       product && form.platform
         ? getListingsForPlatform(product, form.platform)
         : [];
-    if (listings.length === 0) return false;
     if (listings.length > 1 && !line.platformListingId) return false;
     return true;
   });
@@ -668,13 +677,22 @@ export function SaleFormPage() {
         }
         actions={
           !noProducts ? (
-            <FormPageHeaderActions
-              formId="sale-form"
-              onCancel={() => navigate(cancelTo)}
-              saving={saving}
-              isEditing={isEditing}
-              createLabel="Log sale"
-            />
+            <div className="flex items-center gap-2">
+              {!isEditing ? (
+                <Link to="/sales/new">
+                  <Button type="button" variant="outline" size="sm">
+                    Spreadsheet entry
+                  </Button>
+                </Link>
+              ) : null}
+              <FormPageHeaderActions
+                formId="sale-form"
+                onCancel={() => navigate(cancelTo)}
+                saving={saving}
+                isEditing={isEditing}
+                createLabel="Log sale"
+              />
+            </div>
           ) : null
         }
       />
@@ -761,10 +779,9 @@ export function SaleFormPage() {
                   <Select
                     label="Marketplace"
                     value={form.platform}
-                    options={[
-                      { value: "", label: "Select marketplace…" },
-                      ...productPlatformOptions,
-                    ]}
+                    options={getProductPlatformOptions(undefined, {
+                      emptyLabel: "Select marketplace…",
+                    })}
                     onChange={(e) => handlePlatformChange(e.target.value)}
                     error={errors.platform}
                     required
@@ -924,6 +941,9 @@ export function SaleFormPage() {
                                 products={formProducts}
                                 currency={currency}
                                 canRemove={form.lines.length > 1}
+                                usedProductIds={form.lines
+                                  .filter((l) => l.id !== line.id && l.productId)
+                                  .map((l) => l.productId)}
                                 errors={errors.lines?.[line.id]}
                                 onChange={(patch) => updateLine(line.id, patch)}
                                 onEconomicsChange={(patch) =>
@@ -948,6 +968,9 @@ export function SaleFormPage() {
                             products={formProducts}
                             currency={currency}
                             canRemove={form.lines.length > 1}
+                            usedProductIds={form.lines
+                              .filter((l) => l.id !== line.id && l.productId)
+                              .map((l) => l.productId)}
                             errors={errors.lines?.[line.id]}
                             onChange={(patch) => updateLine(line.id, patch)}
                             onEconomicsChange={(patch) =>
@@ -1034,14 +1057,14 @@ export function SaleFormPage() {
                     <Select
                       label="Payment mode"
                       value={form.paymentMode}
-                      options={PAYMENT_MODE_OPTIONS.map((o) => ({
+                      options={SALE_PAYMENT_MODE_OPTIONS.map((o) => ({
                         value: o.value,
                         label: o.label,
                       }))}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          paymentMode: e.target.value as PaymentMode,
+                          paymentMode: e.target.value as PaymentMode | "",
                         }))
                       }
                     />

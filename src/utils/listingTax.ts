@@ -54,7 +54,13 @@ export function defaultPurchaseTaxFromSelling(
   purchaseTaxPercentage?: number,
   purchaseTaxMode?: TaxMode
 ): { purchaseTaxPercentage: number; purchaseTaxMode: TaxMode } {
-  if (taxType === TaxTypeEnum.NONE || sellingTaxPercentage <= 0) {
+  if (taxType === TaxTypeEnum.NONE) {
+    return {
+      purchaseTaxPercentage: 0,
+      purchaseTaxMode: TaxModeEnum.INCLUSIVE,
+    };
+  }
+  if (sellingTaxPercentage <= 0) {
     return {
       purchaseTaxPercentage: purchaseTaxPercentage ?? 0,
       purchaseTaxMode: purchaseTaxMode ?? TaxModeEnum.INCLUSIVE,
@@ -80,9 +86,11 @@ export function defaultPurchaseTaxFromSelling(
 
 /** Resolve listing tax fields with legacy fallbacks. */
 export function resolveListingTax(listing: ProductPlatformListing): ResolvedLineTax {
-  const sellingTaxPercentage = listing.sellingTaxPercentage ?? listing.taxPercentage ?? 0;
-  const sellingTaxMode = listing.sellingTaxMode ?? listing.taxMode ?? TaxModeEnum.INCLUSIVE;
   const taxType = listing.taxType ?? TaxTypeEnum.NONE;
+  const rawSellingTaxPercentage = listing.sellingTaxPercentage ?? listing.taxPercentage ?? 0;
+  const sellingTaxPercentage =
+    taxType === TaxTypeEnum.NONE ? 0 : rawSellingTaxPercentage;
+  const sellingTaxMode = listing.sellingTaxMode ?? listing.taxMode ?? TaxModeEnum.INCLUSIVE;
   const purchaseTax = defaultPurchaseTaxFromSelling(
     taxType,
     sellingTaxPercentage,
@@ -98,9 +106,11 @@ export function resolveListingTax(listing: ProductPlatformListing): ResolvedLine
     purchaseTaxMode: purchaseTax.purchaseTaxMode,
     sellingTaxPercentage,
     sellingTaxMode,
-    deliveryTaxPercentage: listing.deliveryTaxPercentage ?? 0,
+    deliveryTaxPercentage:
+      taxType === TaxTypeEnum.NONE ? 0 : (listing.deliveryTaxPercentage ?? 0),
     deliveryTaxMode: listing.deliveryTaxMode ?? TaxModeEnum.INCLUSIVE,
-    platformFeeTaxPercentage: listing.platformFeeTaxPercentage ?? 0,
+    platformFeeTaxPercentage:
+      taxType === TaxTypeEnum.NONE ? 0 : (listing.platformFeeTaxPercentage ?? 0),
     platformFeeTaxMode: listing.platformFeeTaxMode ?? TaxModeEnum.INCLUSIVE,
   };
 }
@@ -112,6 +122,7 @@ export function normalizeListingTax(listing: ProductPlatformListing): ProductPla
 
   return {
     ...listing,
+    taxType: resolved.taxType,
     platformFeeKind,
     purchaseTaxPercentage: resolved.purchaseTaxPercentage,
     purchaseTaxMode: resolved.purchaseTaxMode,

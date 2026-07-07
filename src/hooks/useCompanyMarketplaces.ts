@@ -14,8 +14,15 @@ export function useCompanyMarketplaces() {
   const summary = useMemo(() => formatMarketplaceSummary(marketplaces), [marketplaces]);
 
   const getProductPlatformOptions = useCallback(
-    (extraValues?: readonly string[]) =>
+    (
+      extraValues?: readonly string[],
+      selectOptions?: Omit<
+        NonNullable<Parameters<typeof getMarketplaceSelectOptions>[1]>,
+        'extraValues'
+      >
+    ) =>
       getMarketplaceSelectOptions(marketplaces, {
+        ...selectOptions,
         extraValues,
       }),
     [marketplaces]

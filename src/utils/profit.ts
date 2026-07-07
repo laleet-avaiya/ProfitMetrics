@@ -161,18 +161,28 @@ export function computeLineEconomics(input: LineEconomicsInput): LineEconomicsRe
     purchaseTaxAmount + deliveryTaxAmount + platformFeeTaxAmount
   );
 
-  const cogs = roundMoney(
-    computeTaxBase(purchasePerUnit, tax.purchaseTaxPercentage, tax.purchaseTaxMode) * qty
-  );
-  const shippingTotal = roundMoney(
-    computeTaxBase(deliveryPerUnit, tax.deliveryTaxPercentage, tax.deliveryTaxMode) * qty
-  );
-  const platformFeesBase = roundMoney(
-    computeTaxBase(unitPlatformFee, tax.platformFeeTaxPercentage, tax.platformFeeTaxMode) * qty
-  );
+  const cogs = tracksTax
+    ? roundMoney(
+        computeTaxBase(purchasePerUnit, tax.purchaseTaxPercentage, tax.purchaseTaxMode) * qty
+      )
+    : roundMoney(purchasePerUnit * qty);
+  const shippingTotal = tracksTax
+    ? roundMoney(
+        computeTaxBase(deliveryPerUnit, tax.deliveryTaxPercentage, tax.deliveryTaxMode) * qty
+      )
+    : roundMoney(deliveryPerUnit * qty);
+  const platformFeesBase = tracksTax
+    ? roundMoney(
+        computeTaxBase(
+          unitPlatformFee,
+          tax.platformFeeTaxPercentage,
+          tax.platformFeeTaxMode
+        ) * qty
+      )
+    : platformFees;
 
   let netRevenue = grossRevenue;
-  if (tax.sellingTaxMode === TaxModeEnum.INCLUSIVE) {
+  if (tracksTax && tax.sellingTaxMode === TaxModeEnum.INCLUSIVE) {
     netRevenue = roundMoney(grossRevenue - taxAmount);
   }
 

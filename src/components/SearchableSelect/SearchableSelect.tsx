@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -30,16 +31,17 @@ export interface SearchableSelectProps {
   id?: string;
   'aria-label'?: string;
   controlClassName?: string;
+  /** Minimum dropdown menu width in px (defaults to 240; also expands for long labels). */
+  menuMinWidth?: number;
 }
 
 /** Above sticky footers, modals, and layout chrome */
 const MENU_Z_INDEX = 10050;
 const MENU_GAP = 4;
-const MENU_MIN_WIDTH = 200;
+const MENU_MIN_WIDTH = 240;
 const SEARCH_BLOCK_HEIGHT = 49;
 const DEFAULT_LIST_MAX = 208;
 const MIN_LIST_HEIGHT = 96;
-const STICKY_FOOTER_RESERVE = 80;
 
 interface MenuPosition {
   top: number;
@@ -48,26 +50,32 @@ interface MenuPosition {
   maxListHeight: number;
 }
 
-function getViewportSize() {
-  return {
-    width: window.visualViewport?.width ?? window.innerWidth,
-    height: window.visualViewport?.height ?? window.innerHeight,
-    offsetTop: window.visualViewport?.offsetTop ?? 0,
-    offsetLeft: window.visualViewport?.offsetLeft ?? 0,
-  };
+function menuWidthForOptions(
+  triggerWidth: number,
+  options: SearchableSelectOption[],
+  placeholder: string,
+  menuMinWidth: number
+): number {
+  const longestChars = options.reduce(
+    (max, option) => Math.max(max, option.label.length),
+    placeholder.length
+  );
+  const estimated = longestChars * 7.5 + 56;
+  return Math.min(520, Math.max(triggerWidth, menuMinWidth, estimated));
 }
 
-function computeMenuPosition(trigger: DOMRect): MenuPosition {
-  const { width: vw, height: vh, offsetTop, offsetLeft } = getViewportSize();
-  const menuWidth = Math.max(trigger.width, MENU_MIN_WIDTH);
+/** Position a fixed portal menu from viewport-relative trigger bounds. */
+function computeMenuPosition(trigger: DOMRect, menuWidth: number): MenuPosition {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
 
-  let left = trigger.left - offsetLeft;
+  let left = trigger.left;
   if (left + menuWidth > vw - 8) {
     left = Math.max(8, vw - menuWidth - 8);
   }
 
-  const spaceBelow = vh - (trigger.bottom - offsetTop) - MENU_GAP - STICKY_FOOTER_RESERVE;
-  const spaceAbove = trigger.top - offsetTop - MENU_GAP;
+  const spaceBelow = vh - trigger.bottom - MENU_GAP;
+  const spaceAbove = trigger.top - MENU_GAP;
 
   const listMaxBelow = Math.min(
     DEFAULT_LIST_MAX,
@@ -78,15 +86,16 @@ function computeMenuPosition(trigger: DOMRect): MenuPosition {
     Math.max(MIN_LIST_HEIGHT, spaceAbove - SEARCH_BLOCK_HEIGHT)
   );
 
+  const minMenuHeight = SEARCH_BLOCK_HEIGHT + MIN_LIST_HEIGHT;
   const openUp =
-    spaceBelow < SEARCH_BLOCK_HEIGHT + MIN_LIST_HEIGHT && listMaxAbove > listMaxBelow;
+    spaceBelow < minMenuHeight && listMaxAbove >= MIN_LIST_HEIGHT && listMaxAbove > spaceBelow;
 
   if (openUp) {
     const maxListHeight = listMaxAbove;
     const menuHeight = SEARCH_BLOCK_HEIGHT + maxListHeight;
     return {
-      top: trigger.top - MENU_GAP - menuHeight,
-      left: left + offsetLeft,
+      top: Math.max(MENU_GAP, trigger.top - MENU_GAP - menuHeight),
+      left,
       width: menuWidth,
       maxListHeight,
     };
@@ -94,7 +103,7 @@ function computeMenuPosition(trigger: DOMRect): MenuPosition {
 
   return {
     top: trigger.bottom + MENU_GAP,
-    left: left + offsetLeft,
+    left,
     width: menuWidth,
     maxListHeight: listMaxBelow,
   };
@@ -116,6 +125,7 @@ export function SearchableSelect({
   id,
   'aria-label': ariaLabel,
   controlClassName = '',
+  menuMinWidth = MENU_MIN_WIDTH,
 }: SearchableSelectProps) {
   const listboxId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -138,8 +148,9 @@ export function SearchableSelect({
   const updateMenuPosition = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setMenuStyle(computeMenuPosition(rect));
-  }, []);
+    const width = menuWidthForOptions(rect.width, options, placeholder, menuMinWidth);
+    setMenuStyle(computeMenuPosition(rect, width));
+  }, [menuMinWidth, options, placeholder]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -149,16 +160,21 @@ export function SearchableSelect({
 
   const openMenu = useCallback(() => {
     if (disabled) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const width = menuWidthForOptions(rect.width, options, placeholder, menuMinWidth);
+      setMenuStyle(computeMenuPosition(rect, width));
+    }
     setOpen(true);
-    requestAnimationFrame(() => {
-      updateMenuPosition();
-    });
-  }, [disabled, updateMenuPosition]);
+  }, [disabled, menuMinWidth, options, placeholder]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+  }, [open, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return;
-
-    updateMenuPosition();
 
     const handleScrollOrResize = () => updateMenuPosition();
     const handlePointerDown = (event: MouseEvent) => {
@@ -221,11 +237,16 @@ export function SearchableSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => (open ? close() : openMenu())}
-        className={`inline-flex items-center justify-between gap-2 text-left ${controlClassName} ${
+        className={`inline-flex w-full min-w-0 items-center justify-between gap-2 text-left ${controlClassName} ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
         }`.trim()}
       >
-        <span className={`truncate ${selected ? '' : 'text-gray-500 dark:text-gray-400'}`}>
+        <span
+          className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap ${
+            selected ? '' : 'text-gray-500 dark:text-gray-400'
+          }`}
+          title={selected?.label ?? placeholder}
+        >
           {selected?.label ?? placeholder}
         </span>
         <ChevronDown
@@ -281,7 +302,7 @@ export function SearchableSelect({
                           role="option"
                           aria-selected={isSelected}
                           onClick={() => pick(option.value)}
-                          className={`w-full text-left px-3 py-2.5 text-sm truncate transition-colors touch-manipulation ${
+                          className={`w-full text-left px-3 py-2.5 text-sm whitespace-normal break-words transition-colors touch-manipulation ${
                             isSelected
                               ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
                               : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'

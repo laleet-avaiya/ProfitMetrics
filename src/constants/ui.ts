@@ -37,6 +37,18 @@ export const inlineInputControlClass = `${controlBaseClass} h-9 px-3 w-[8.75rem]
 /** Compact controls inside data tables */
 export const tableInputControlClass = `${controlBaseClass} h-8 px-2 w-full min-w-0 text-sm`;
 
+/** Wider dropdowns inside spreadsheet tables — full cell width, readable labels */
+export const spreadsheetSelectControlClass = `${controlBaseClass} h-8 px-2.5 w-full min-w-[11rem] text-sm`;
+
+/** Percent / small numeric fields in spreadsheet cells */
+export const spreadsheetNumberControlClass = `${controlBaseClass} h-8 px-2.5 w-full min-w-[5.5rem] text-sm tabular-nums`;
+
+/** Currency and amount fields in spreadsheet cells */
+export const spreadsheetMoneyControlClass = `${controlBaseClass} h-8 px-2.5 w-full min-w-[7rem] text-sm tabular-nums text-right`;
+
+/** Quantity field in spreadsheet cells */
+export const spreadsheetQtyControlClass = `${controlBaseClass} h-8 px-2 w-full min-w-[4.5rem] text-sm tabular-nums text-center`;
+
 export const textareaControlClass = `${controlBaseClass} min-h-[72px] px-3 py-2 resize-y`;
 
 export const cardClass =

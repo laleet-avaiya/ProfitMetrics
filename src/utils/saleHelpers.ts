@@ -125,7 +125,7 @@ export interface SaleFormState {
   orderDeliveryTaxMode: TaxMode;
   lines: SaleLineFormState[];
   status: SaleStatus;
-  paymentMode: PaymentMode;
+  paymentMode: PaymentMode | '';
   paymentStatus: PurchasePaymentStatus;
   returnCharges: number;
   returnTaxPercentage: number;
@@ -221,7 +221,7 @@ export function emptySaleForm(): SaleFormState {
     orderDeliveryTaxMode: TaxMode.INCLUSIVE,
     lines: [emptySaleLineForm()],
     status: SaleStatusEnum.DELIVERED,
-    paymentMode: PaymentMode.BANK_ACCOUNT,
+    paymentMode: '',
     paymentStatus: PurchasePaymentStatus.UNPAID,
     returnCharges: 0,
     returnTaxPercentage: 0,
@@ -257,6 +257,41 @@ export function economicsFromListing(listing: ProductPlatformListing): SaleFormE
     platformFeeTaxMode: resolved.platformFeeTaxMode,
     taxAmountManual: false,
   });
+}
+
+/** Pick listing + economics when a product is added to a sale line. */
+export function resolveProductSaleSelection(
+  product: Product,
+  platform: string
+): Pick<SaleLineFormState, 'platformListingId' | 'economics'> {
+  if (platform.trim()) {
+    const exact = getListingsForPlatform(product, platform);
+    if (exact.length === 1) {
+      return {
+        platformListingId: exact[0].id,
+        economics: economicsFromListing(exact[0]),
+      };
+    }
+    if (exact.length > 1) {
+      return {
+        platformListingId: '',
+        economics: defaultEconomics(),
+      };
+    }
+  }
+
+  const configured = (product.platformListings ?? []).filter((listing) => listing.platform.trim());
+  if (configured.length > 0) {
+    return {
+      platformListingId: '',
+      economics: economicsFromListing(configured[0]),
+    };
+  }
+
+  return {
+    platformListingId: '',
+    economics: defaultEconomics(),
+  };
 }
 
 function economicsFromSaleRecord(economics: SaleLineEconomics, qty: number): SaleFormEconomics {
@@ -348,7 +383,7 @@ export function saleToForm(sale: Sale): SaleFormState {
       sale.orderDeliveryTaxMode ?? firstEconomics.deliveryTaxMode ?? TaxMode.INCLUSIVE,
     lines: lines.map(lineFormFromSaleLine),
     status,
-    paymentMode: sale.paymentMode ?? PaymentMode.BANK_ACCOUNT,
+    paymentMode: sale.paymentMode ?? '',
     paymentStatus: normalizeSalePaymentStatus(sale.paymentStatus),
     returnCharges: sale.returnCharges ?? 0,
     returnTaxPercentage: sale.returnTaxPercentage ?? firstEconomics.deliveryTaxPercentage ?? 0,
@@ -368,16 +403,26 @@ export function getInitialListingForProduct(
   product: Product,
   platform?: string
 ): ProductPlatformListing | null {
-  const listings = product.platformListings ?? [];
-  if (platform) {
-    const match = listings.filter((l) => l.platform === platform);
-    return match.length === 1 ? match[0] : null;
-  }
+  const listings = getSaleListingsForPlatform(product, platform ?? '');
   return listings.length === 1 ? listings[0] : null;
 }
 
 export function getListingsForPlatform(product: Product, platform: string): ProductPlatformListing[] {
   return (product.platformListings ?? []).filter((l) => l.platform === platform);
+}
+
+/** Platform listings for a sale row — falls back to the product's only listing when needed. */
+export function getSaleListingsForPlatform(
+  product: Product,
+  platform: string
+): ProductPlatformListing[] {
+  const platformListings = getListingsForPlatform(product, platform);
+  if (platformListings.length > 0) return platformListings;
+
+  const configured = (product.platformListings ?? []).filter((l) => l.platform.trim());
+  if (configured.length === 1) return configured;
+
+  return [];
 }
 
 export function getActiveProducts(products: Product[]): Product[] {
@@ -709,7 +754,7 @@ export function buildSaleFromForm(
     customerName: customerSnapshot?.name,
     customer: customerSnapshot,
     status: normalizeSaleStatus(form.status),
-    paymentMode: form.paymentMode,
+    paymentMode: form.paymentMode || undefined,
     paymentStatus,
     ...outcomeFields,
     economics: buildOrderEconomicsSnapshot(form, preview),

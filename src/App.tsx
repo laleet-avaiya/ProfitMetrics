@@ -11,6 +11,7 @@ import { ProductFormPage } from './pages/Products/ProductFormPage';
 import { ProductDetailPage } from './pages/Products/ProductDetailPage';
 import { Products } from './pages/Products/Products';
 import { SaleFormPage } from './pages/Sales/SaleFormPage';
+import { BulkSaleEntryPage } from './pages/Sales/BulkSaleEntryPage';
 import { SaleDetailPage } from './pages/Sales/SaleDetailPage';
 import { SalePrintPage } from './pages/Sales/SalePrintPage';
 import { Sales } from './pages/Sales/Sales';
@@ -78,7 +79,8 @@ function App() {
         <Route path="/products/:productId/edit" element={<ModuleWriteRoute module={AppModule.PRODUCTS} action="update"><ProductFormPage /></ModuleWriteRoute>} />
         <Route path="/products/:productId" element={<ModuleRoute module={AppModule.PRODUCTS}><ProductDetailPage /></ModuleRoute>} />
         <Route path="/sales" element={<ModuleRoute module={AppModule.SALES}><Sales /></ModuleRoute>} />
-        <Route path="/sales/new" element={<ModuleWriteRoute module={AppModule.SALES} action="create"><SaleFormPage /></ModuleWriteRoute>} />
+        <Route path="/sales/new" element={<ModuleWriteRoute module={AppModule.SALES} action="create"><BulkSaleEntryPage /></ModuleWriteRoute>} />
+        <Route path="/sales/new/full" element={<ModuleWriteRoute module={AppModule.SALES} action="create"><SaleFormPage /></ModuleWriteRoute>} />
         <Route path="/sales/:saleId/edit" element={<ModuleWriteRoute module={AppModule.SALES} action="update"><SaleFormPage /></ModuleWriteRoute>} />
         <Route path="/sales/:saleId/print" element={<ModuleRoute module={AppModule.SALES}><SalePrintPage /></ModuleRoute>} />
         <Route path="/sales/:saleId" element={<ModuleRoute module={AppModule.SALES}><SaleDetailPage /></ModuleRoute>} />

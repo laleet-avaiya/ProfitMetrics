@@ -5,20 +5,21 @@ import { Input } from '../Input/Input';
 import { Select } from '../Select/Select';
 import { SearchableSelect } from '../SearchableSelect/SearchableSelect';
 import { SectionHeading, SectionLinePreview } from '../SectionLinePreview/SectionLinePreview';
-import type { Product } from '../../types';
-import { DeliveryMode, PlatformFeeKind, TaxType } from '../../types';
+import type { Product, TaxMode } from '../../types';
+import { DeliveryMode, PlatformFeeKind, TaxMode as TaxModeEnum, TaxType } from '../../types';
 import { platformFeeKindOptions, taxPercentLabel } from '../../utils/listingTax';
 import {
   autoTaxPerUnit,
   economicsFromListing,
   getListingsForPlatform,
+  resolveProductSaleSelection,
   syncPurchaseTaxDefaults,
   type SaleFormEconomics,
   type SaleFormState,
   type SaleLineFormState,
 } from '../../utils/saleHelpers';
 import { computeLineEconomics, formatMoney } from '../../utils/profit';
-import { selectControlClass, tableCellClass, tableInputControlClass } from '../../constants/ui';
+import { selectControlClass, spreadsheetMoneyControlClass, spreadsheetNumberControlClass, spreadsheetQtyControlClass, spreadsheetSelectControlClass, tableCellClass, tableInputControlClass } from '../../constants/ui';
 
 const taxTypeOptions = [
   { value: TaxType.NONE, label: 'None' },
@@ -66,7 +67,34 @@ interface SaleLineEditorProps {
   onChange: (patch: Partial<SaleLineFormState>) => void;
   onEconomicsChange: (patch: Partial<SaleFormEconomics>) => void;
   onRemove: () => void;
-  layout?: 'card' | 'table';
+  layout?: 'card' | 'table' | 'spreadsheet';
+  /** Product IDs already chosen on other lines — hidden from this row's picker. */
+  usedProductIds?: string[];
+}
+
+function CompactTaxModeSelect({
+  value,
+  disabled,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  value: TaxMode;
+  disabled?: boolean;
+  onChange: (mode: TaxMode) => void;
+  'aria-label'?: string;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as TaxMode)}
+      className={`${spreadsheetSelectControlClass} min-w-[6.5rem]`}
+      aria-label={ariaLabel ?? 'Tax mode'}
+    >
+      <option value={TaxModeEnum.INCLUSIVE}>Inclusive</option>
+      <option value={TaxModeEnum.EXCLUSIVE}>Exclusive</option>
+    </select>
+  );
 }
 
 export function SaleLineEditor({
@@ -82,6 +110,7 @@ export function SaleLineEditor({
   onEconomicsChange,
   onRemove,
   layout = 'card',
+  usedProductIds = [],
 }: SaleLineEditorProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -91,7 +120,7 @@ export function SaleLineEditor({
   );
 
   const platformListings = useMemo(() => {
-    if (!selectedProduct || !platform) return [];
+    if (!selectedProduct || !platform.trim()) return [];
     return getListingsForPlatform(selectedProduct, platform);
   }, [selectedProduct, platform]);
 
@@ -159,14 +188,13 @@ export function SaleLineEditor({
       onChange({ productId, platformListingId: '', variantId: '', variantLabel: '' });
       return;
     }
-    const listings = getListingsForPlatform(product, platform);
-    const listing = listings.length === 1 ? listings[0] : null;
+    const selection = resolveProductSaleSelection(product, platform);
     onChange({
       productId,
       variantId: '',
       variantLabel: '',
-      platformListingId: listing?.id ?? '',
-      economics: listing ? economicsFromListing(listing) : line.economics,
+      platformListingId: selection.platformListingId,
+      economics: selection.economics,
     });
   };
 
@@ -192,16 +220,18 @@ export function SaleLineEditor({
     });
   };
 
-  const productOptions = useMemo(
-    () => [
+  const productOptions = useMemo(() => {
+    const used = new Set(usedProductIds.filter((id) => id && id !== line.productId));
+    return [
       { value: '', label: 'Select product…' },
-      ...products.map((p) => ({
-        value: p.id,
-        label: p.sku ? `${p.name} (${p.sku})` : p.name,
-      })),
-    ],
-    [products]
-  );
+      ...products
+        .filter((p) => !used.has(p.id))
+        .map((p) => ({
+          value: p.id,
+          label: p.sku ? `${p.name} (${p.sku})` : p.name,
+        })),
+    ];
+  }, [products, usedProductIds, line.productId]);
 
   const advancedFields = (
     <div className="space-y-3">
@@ -371,6 +401,294 @@ export function SaleLineEditor({
       ) : null}
     </div>
   );
+
+  if (layout === 'spreadsheet') {
+    const profitClass =
+      linePreview.profit >= 0
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-600 dark:text-red-400';
+    const isIndividualDelivery = deliveryMode === DeliveryMode.INDIVIDUAL;
+
+    return (
+      <tr className="border-t border-gray-100 dark:border-gray-700/80 hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
+        <td className={`${tableCellClass} w-10 text-xs text-gray-500 tabular-nums text-center`}>
+          {index + 1}
+        </td>
+        <td className={`${tableCellClass} min-w-[18rem]`}>
+          <SearchableSelect
+            options={productOptions}
+            value={line.productId}
+            onChange={(e) => handleProductChange(e.target.value)}
+            disabled={!platform}
+            placeholder="Product…"
+            menuMinWidth={320}
+            controlClassName={`${spreadsheetSelectControlClass} min-w-[17rem] ${errors?.productId ? 'border-red-500' : ''}`}
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[12rem]`}>
+          {hasVariants ? (
+            <SearchableSelect
+              options={variantOptions}
+              value={line.variantId}
+              onChange={(e) => handleVariantChange(e.target.value)}
+              disabled={!selectedProduct}
+              placeholder="Variant…"
+              menuMinWidth={260}
+              controlClassName={`${spreadsheetSelectControlClass} min-w-[11rem] ${errors?.variantId ? 'border-red-500' : ''}`}
+            />
+          ) : (
+            <span className="text-xs text-gray-400">—</span>
+          )}
+        </td>
+        <td className={`${tableCellClass} min-w-[12rem]`}>
+          {showListingSelect ? (
+            <SearchableSelect
+              options={[{ value: '', label: 'Listing…' }, ...listingOptions]}
+              value={line.platformListingId}
+              onChange={(e) => handleListingChange(e.target.value)}
+              disabled={!selectedProduct}
+              placeholder="Listing…"
+              menuMinWidth={260}
+              controlClassName={`${spreadsheetSelectControlClass} min-w-[11rem] ${errors?.platformListingId ? 'border-red-500' : ''}`}
+            />
+          ) : (
+            <span className="text-xs text-gray-400">—</span>
+          )}
+        </td>
+        <td className={`${tableCellClass} min-w-[5rem]`}>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={line.quantity || ''}
+            onChange={(e) =>
+              onChange({ quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })
+            }
+            className={spreadsheetQtyControlClass}
+            aria-label="Quantity"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={line.economics.purchasePrice || ''}
+            onChange={(e) =>
+              patchEconomics({ purchasePrice: parseNumber(e.target.value) })
+            }
+            className={spreadsheetMoneyControlClass}
+            aria-label="Cost"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={line.economics.sellingPrice || ''}
+            onChange={(e) =>
+              patchEconomics({ sellingPrice: parseNumber(e.target.value) })
+            }
+            className={spreadsheetMoneyControlClass}
+            aria-label="Selling price"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          <select
+            value={line.economics.taxType}
+            onChange={(e) =>
+              patchEconomics({
+                taxType: e.target.value as SaleFormEconomics['taxType'],
+              })
+            }
+            className={spreadsheetSelectControlClass}
+            aria-label="Tax type"
+          >
+            {taxTypeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className={`${tableCellClass} min-w-[6rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!tracksTax}
+            value={line.economics.purchaseTaxPercentage || ''}
+            onChange={(e) =>
+              patchEconomics({ purchaseTaxPercentage: parseNumber(e.target.value) })
+            }
+            className={spreadsheetNumberControlClass}
+            aria-label="Input tax percent"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[6.5rem]`}>
+          <CompactTaxModeSelect
+            value={line.economics.purchaseTaxMode}
+            disabled={!tracksTax}
+            onChange={(mode) => patchEconomics({ purchaseTaxMode: mode })}
+            aria-label="Input tax mode"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[6rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!tracksTax}
+            value={line.economics.sellingTaxPercentage || ''}
+            onChange={(e) =>
+              patchEconomics({ sellingTaxPercentage: parseNumber(e.target.value) })
+            }
+            className={spreadsheetNumberControlClass}
+            aria-label="Output tax percent"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[6.5rem]`}>
+          <CompactTaxModeSelect
+            value={line.economics.sellingTaxMode}
+            disabled={!tracksTax}
+            onChange={(mode) =>
+              patchEconomics({ sellingTaxMode: mode, taxMode: mode })
+            }
+            aria-label="Output tax mode"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!tracksTax}
+            value={displayedTaxPerUnit || ''}
+            onChange={(e) =>
+              patchEconomics({
+                taxAmountPerUnit: parseNumber(e.target.value),
+                taxAmountManual: true,
+              })
+            }
+            className={spreadsheetMoneyControlClass}
+            aria-label="Output tax per unit"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[8.5rem]`}>
+          <select
+            value={feeKind}
+            onChange={(e) => {
+              const kind = e.target.value as PlatformFeeKind;
+              patchEconomics({
+                platformFeeKind: kind,
+                platformFee:
+                  kind === PlatformFeeKind.FIXED ? line.economics.platformFee : undefined,
+                platformFeePercent:
+                  kind === PlatformFeeKind.PERCENT
+                    ? line.economics.platformFeePercent
+                    : undefined,
+              });
+            }}
+            className={spreadsheetSelectControlClass}
+            aria-label="Platform fee type"
+          >
+            {platformFeeKindOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          {feeKind === PlatformFeeKind.FIXED ? (
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={line.economics.platformFee ?? ''}
+              onChange={(e) =>
+                patchEconomics({
+                  platformFee: e.target.value ? parseNumber(e.target.value) : undefined,
+                  platformFeePercent: undefined,
+                })
+              }
+              className={spreadsheetMoneyControlClass}
+              aria-label="Platform fee amount"
+            />
+          ) : (
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={line.economics.platformFeePercent ?? ''}
+              onChange={(e) =>
+                patchEconomics({
+                  platformFeePercent: e.target.value
+                    ? parseNumber(e.target.value)
+                    : undefined,
+                  platformFee: undefined,
+                })
+              }
+              className={spreadsheetNumberControlClass}
+              aria-label="Platform fee percent"
+            />
+          )}
+        </td>
+        <td className={`${tableCellClass} min-w-[7.5rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!isIndividualDelivery}
+            value={line.economics.shippingCost || ''}
+            onChange={(e) => patchEconomics({ shippingCost: parseNumber(e.target.value) })}
+            className={spreadsheetMoneyControlClass}
+            aria-label="Delivery per unit"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[6rem]`}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!tracksTax || !isIndividualDelivery}
+            value={line.economics.deliveryTaxPercentage || ''}
+            onChange={(e) =>
+              patchEconomics({ deliveryTaxPercentage: parseNumber(e.target.value) })
+            }
+            className={spreadsheetNumberControlClass}
+            aria-label="Delivery tax percent"
+          />
+        </td>
+        <td className={`${tableCellClass} min-w-[6.5rem]`}>
+          <CompactTaxModeSelect
+            value={line.economics.deliveryTaxMode}
+            disabled={!tracksTax || !isIndividualDelivery}
+            onChange={(mode) => patchEconomics({ deliveryTaxMode: mode })}
+            aria-label="Delivery tax mode"
+          />
+        </td>
+        <td
+          className={`${tableCellClass} w-24 text-right text-xs font-semibold tabular-nums ${profitClass}`}
+        >
+          {line.productId ? formatMoney(linePreview.profit, currency) : '—'}
+        </td>
+        <td className={`${tableCellClass} w-12 text-center`}>
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+              aria-label="Remove item"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          ) : null}
+        </td>
+      </tr>
+    );
+  }
 
   if (layout === 'table') {
     const profitClass =
